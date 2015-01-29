@@ -482,10 +482,16 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
     function_tables_impls = []
 
     for sig in last_forwarded_json['Functions']['tables'].iterkeys():
-      args = ','.join(['a' + str(i) for i in range(1, len(sig))])
-      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
-      coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
-      ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
+      if sig != "o":
+        args = ','.join(['a' + str(i) for i in range(1, len(sig))])
+        arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
+        coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
+        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
+      else:
+        args = ""
+        arg_coercions = "var args = Array.prototype.slice.call(arguments);"
+        coerced_args = "args.slice(1)"
+        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}].apply(null, %s)' % (sig, sig, coerced_args), sig[0], settings)
       function_tables_impls.append('''
   function dynCall_%s(index%s%s) {
     index = index|0;
@@ -960,6 +966,11 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
     named_globals = '\n'.join(['var %s = %s;' % (k, v) for k, v in metadata['namedGlobals'].iteritems()])
     pre = pre.replace('// === Body ===', '// === Body ===\n' + named_globals + '\n')
 
+    # objc
+    pre += "var EMSCRIPTEN_OBJC_METADATA = {\n"
+    pre += ',\n'.join(['"%s": %s' % (k, v) for k, v in metadata['objc'].iteritems()])
+    pre += "\n};\n"
+
     #if DEBUG: outfile.write('// pre\n')
     outfile.write(pre)
     pre = None
@@ -1078,7 +1089,8 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
             if sig[0] == 'f': code = '+' + code
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
-          Counter.pre.append(make_func(item + '__wrapper', code, params, coercions))
+          if sig != "o":
+            Counter.pre.append(make_func(item + '__wrapper', code, params, coercions))
           return item + '__wrapper'
         return item if not newline else (item + '\n')
       if settings['ASSERTIONS'] >= 2:
@@ -1186,10 +1198,16 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
     function_tables_impls = []
 
     for sig in last_forwarded_json['Functions']['tables'].iterkeys():
-      args = ','.join(['a' + str(i) for i in range(1, len(sig))])
-      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
-      coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
-      ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
+      if sig != "o":
+        args = ','.join(['a' + str(i) for i in range(1, len(sig))])
+        arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
+        coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
+        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
+      else:
+        args = ""
+        arg_coercions = "var args = Array.prototype.slice.call(arguments);"
+        coerced_args = "args.slice(1)"
+        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}].apply(null, %s)' % (sig, sig, coerced_args), sig[0], settings)
       function_tables_impls.append('''
   function dynCall_%s(index%s%s) {
     index = index|0;
