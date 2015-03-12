@@ -1842,10 +1842,21 @@ class JS:
 
   @staticmethod
   def make_invoke(sig, named=True):
-    args = ','.join(['a' + str(i) for i in range(1, len(sig))])
-    args = 'index' + (',' if args else '') + args
-    # C++ exceptions are numbers, and longjmp is a string 'longjmp'
-    ret = '''function%s(%s) {
+    if sig == "o":
+      ret = '''function invoke_o(index) {
+  try {
+    var args = Array.prototype.slice.call(arguments);
+    return Module["dynCall_o"].apply(null, args.slice(1));
+  } catch(e) {
+    if (typeof e !== 'number' && e !== 'longjmp') throw e;
+    asm["setThrew"](1, 0);
+  }
+}'''
+    else:
+      args = ','.join(['a' + str(i) for i in range(1, len(sig))])
+      args = 'index' + (',' if args else '') + args
+      # C++ exceptions are numbers, and longjmp is a string 'longjmp'
+      ret = '''function%s(%s) {
   try {
     %sModule["dynCall_%s"](%s);
   } catch(e) {
