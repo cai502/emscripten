@@ -56,6 +56,7 @@ extern "C" {
 
 
 #define PTHREAD_MUTEX_INITIALIZER {{{0}}}
+#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER {{{0}}}
 #define PTHREAD_RWLOCK_INITIALIZER {{{0}}}
 #define PTHREAD_COND_INITIALIZER {{{0}}}
 #define PTHREAD_ONCE_INIT 0
@@ -112,6 +113,7 @@ int pthread_cond_init(pthread_cond_t *__restrict, const pthread_condattr_t *__re
 int pthread_cond_destroy(pthread_cond_t *);
 int pthread_cond_wait(pthread_cond_t *__restrict, pthread_mutex_t *__restrict);
 int pthread_cond_timedwait(pthread_cond_t *__restrict, pthread_mutex_t *__restrict, const struct timespec *__restrict);
+int pthread_cond_timedwait_relative_np(pthread_cond_t *__restrict, pthread_mutex_t *__restrict, const struct timespec *__restrict);
 int pthread_cond_broadcast(pthread_cond_t *);
 int pthread_cond_signal(pthread_cond_t *);
 
@@ -215,6 +217,8 @@ int pthread_getaffinity_np(pthread_t, size_t, struct cpu_set_t *);
 int pthread_setaffinity_np(pthread_t, size_t, const struct cpu_set_t *);
 int pthread_getattr_np(pthread_t, pthread_attr_t *);
 #endif
+int pthread_setname_np(const char *name);
+int pthread_getname_np(pthread_t thread, const char *name, size_t len);
 
 #ifdef __cplusplus
 }
