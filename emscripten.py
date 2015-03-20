@@ -482,16 +482,10 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
     function_tables_impls = []
 
     for sig in last_forwarded_json['Functions']['tables'].iterkeys():
-      if sig != "o":
-        args = ','.join(['a' + str(i) for i in range(1, len(sig))])
-        arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
-        coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
-        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
-      else:
-        args = ""
-        arg_coercions = "var args = Array.prototype.slice.call(arguments);"
-        coerced_args = "args.slice(1)"
-        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}].apply(null, %s)' % (sig, sig, coerced_args), sig[0], settings)
+      args = ','.join(['a' + str(i) for i in range(1, len(sig))])
+      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
+      coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
+      ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
       function_tables_impls.append('''
   function dynCall_%s(index%s%s) {
     index = index|0;
@@ -1089,8 +1083,7 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
             if sig[0] == 'f': code = '+' + code
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
-          if sig != "o":
-            Counter.pre.append(make_func(item + '__wrapper', code, params, coercions))
+          Counter.pre.append(make_func(item + '__wrapper', code, params, coercions))
           return item + '__wrapper'
         return item if not newline else (item + '\n')
       if settings['ASSERTIONS'] >= 2:
@@ -1198,16 +1191,10 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
     function_tables_impls = []
 
     for sig in last_forwarded_json['Functions']['tables'].iterkeys():
-      if sig != "o":
-        args = ','.join(['a' + str(i) for i in range(1, len(sig))])
-        arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
-        coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
-        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
-      else:
-        args = ""
-        arg_coercions = "var args = Array.prototype.slice.call(arguments);"
-        coerced_args = "args.slice(1)"
-        ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}].apply(null, %s)' % (sig, sig, coerced_args), sig[0], settings)
+      args = ','.join(['a' + str(i) for i in range(1, len(sig))])
+      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(1, len(sig))])
+      coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
+      ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
       function_tables_impls.append('''
   function dynCall_%s(index%s%s) {
     index = index|0;
@@ -1232,6 +1219,48 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
       if settings.get('DLOPEN_SUPPORT'):
         asm_setup += '\n' + shared.JS.make_extcall(sig) + '\n'
         basic_funcs.append('extCall_%s' % sig)
+    
+    for msgFunc in metadata['objCMessageFuncs']:
+      function_tables.append(msgFunc)
+      
+      (item, sig) = msgFunc.rsplit('_', 1)
+      
+      # check args
+      assert len(sig) >= 3
+      assert sig[1:3] == "ii"
+      is_void = sig[0] == "v"
+      args = ''.join([',a' + str(i) for i in range(3, len(sig))])
+      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(3, len(sig))])
+      coerced_args = ''.join([','+shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(3, len(sig))])
+      
+      if item == "_objc_msgSend":
+        function_tables_impls.append('''
+  function %s(self,sel%s) {
+    self=self|0; sel=sel|0;%s
+    if(!self) return%s;
+    var cls = HEAP32[(self+0)>>2]|0;
+    var imp = _cache_getImp(cls|0, sel|0)|0;
+    if(!imp) {
+      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
+    }
+    %sdynCall_%s(imp|0,self|0,sel|0%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
+      elif item == "_objc_msgSendSuper2":
+        function_tables_impls.append('''
+  function %s(objcSuper,sel%s) {
+    objcSuper=objcSuper|0; sel=sel|0;%s
+    var self = HEAP32[(objcSuper+0)>>2]|0;
+    var cls = HEAP32[(objcSuper+4)>>2]|0;
+    var superCls = HEAP32[(cls+4)>>2]|0;
+    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    if(!imp) {
+      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
+    }
+    %sdynCall_%s(imp|0,self|0,sel|0%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+
 
     def quote(prop):
       if settings['CLOSURE_COMPILER'] == 2:
