@@ -1198,6 +1198,8 @@ class Building:
 
   @staticmethod
   def link(files, target, force_archive_contents=False):
+    force_archive_contents = True # it's buggy!
+
     actual_files = []
     # Tracking unresolveds is necessary for .a linking, see below.
     # Specify all possible entry points to seed the linking process.

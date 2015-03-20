@@ -419,6 +419,7 @@ try:
   proxy_to_worker = False
   default_object_extension = '.o'
   valid_abspaths = []
+  frameworks = []
 
   def is_valid_abspath(path_name):
     # Any path that is underneath the emscripten repository root must be ok.
@@ -668,6 +669,10 @@ try:
       if not default_object_extension.startswith('.'):
         default_object_extension = '.' + default_object_extension
       newargs[i+1] = ''
+    elif newargs[i] == '-framework':
+      frameworks.append(newargs[i+1])
+      newargs[i] = ''
+      newargs[i+1] = ''
 
   if should_exit:
     sys.exit(0)
@@ -733,6 +738,8 @@ try:
   has_header_inputs = False
   lib_dirs = [shared.path_from_root('system', 'local', 'lib'),
               shared.path_from_root('system', 'lib')]
+  framework_dirs = []
+
   for i in range(len(newargs)): # find input files XXX this a simple heuristic. we should really analyze based on a full understanding of gcc params,
                                 # right now we just assume that what is left contains no more |-x OPT| things
     arg = newargs[i]
@@ -788,6 +795,9 @@ try:
     elif arg.startswith('-l'):
       libs.append((i, arg[2:]))
       newargs[i] = ''
+    elif arg.startswith('-F'):
+      framework_dirs.append(arg[2:])
+      # don't remove, it should be passed to not only linker but also compiler
     elif arg.startswith('-Wl,'):
       # Multiple comma separated link flags can be specified. Create fake
       # fractional indices for these: -Wl,a,b,c,d at index 4 becomes:
@@ -832,6 +842,20 @@ try:
       if found: break
     if not found and lib not in ['GL', 'GLU', 'glut', 'SDL']: # whitelist our default libraries
       logging.warning('emcc: cannot find library "%s"', lib)
+
+  for framework in frameworks:
+    logging.debug('looking for framework "%s"', framework)
+    found = False
+    for framework_dir in framework_dirs:
+      path = os.path.join(framework_dir, framework + ".framework", framework)
+      print path
+      if os.path.exists(path):
+        logging.debug('found framework "%s" at %s', framework, path)
+        input_files.append((i, path))
+        found = True
+        break
+    if not found:
+      logging.warning('emcc: cannot find framework "%s"', framework)
 
   # If not compiling to JS, then we are compiling to an intermediate bitcode objects or library, so
   # ignore dynamic linking, since multiple dynamic linkings can interfere with each other
