@@ -764,6 +764,9 @@ if USE_EMSDK:
   CXX_INCLUDE_PATHS = [path_from_root('system', 'include', 'libcxx')
   ]
   
+  OBJC_FRAMEWORK_PATHS = [path_from_root('system', 'frameworks')
+  ]
+ 
   C_OPTS = ['-nostdinc', '-Xclang', '-nobuiltininc', '-Xclang', '-nostdsysteminc',
   ]
   
@@ -772,8 +775,14 @@ if USE_EMSDK:
     for path in paths:
       result += ['-Xclang', '-isystem' + path]
     return result
+
+  def framework_directive(paths):
+    result = []
+    for path in paths:
+      result += ['-Xclang', '-iframework' + path]
+    return result
   
-  EMSDK_OPTS = C_OPTS + include_directive(C_INCLUDE_PATHS) + include_directive(CXX_INCLUDE_PATHS)
+  EMSDK_OPTS = C_OPTS + include_directive(C_INCLUDE_PATHS) + include_directive(CXX_INCLUDE_PATHS) + framework_directive(OBJC_FRAMEWORK_PATHS)
 
   EMSDK_OPTS += COMPILER_STANDARDIZATION_OPTS
   # For temporary compatibility, treat 'le32-unknown-nacl' as 'asmjs-unknown-emscripten'.
