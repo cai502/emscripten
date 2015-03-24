@@ -1,2 +1,3 @@
-libclosure.a
-libobjc4.a
+lib*.a
+pkgconfig
+icu

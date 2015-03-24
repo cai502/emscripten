@@ -1246,6 +1246,19 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
     %sdynCall_%s(imp|0,self|0,sel|0%s);
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
+      elif item == "_objc_msgSendSuper":
+        function_tables_impls.append('''
+  function %s(objcSuper,sel%s) {
+    objcSuper=objcSuper|0; sel=sel|0;%s
+    var self = HEAP32[(objcSuper+0)>>2]|0;
+    var superCls = HEAP32[(objcSuper+4)>>2]|0;
+    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    if(!imp) {
+      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
+    }
+    %sdynCall_%s(imp|0,self|0,sel|0%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSendSuper2":
         function_tables_impls.append('''
   function %s(objcSuper,sel%s) {
