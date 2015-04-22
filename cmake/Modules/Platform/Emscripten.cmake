@@ -104,7 +104,15 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
-set(CMAKE_SYSTEM_INCLUDE_PATH "${EMSCRIPTEN_ROOT_PATH}/system/include")
+set(CMAKE_SYSTEM_INCLUDE_PATH "${EMSCRIPTEN_ROOT_PATH}/system/include"
+  "${EMSCRIPTEN_ROOT_PATH}/system/include/compat"
+  "${EMSCRIPTEN_ROOT_PATH}/system/include/libc"
+  "${EMSCRIPTEN_ROOT_PATH}/system/include/emscripten"
+  "${EMSCRIPTEN_ROOT_PATH}/system/local/include")
+
+set(CMAKE_SYSTEM_PREFIX_PATH "${EMSCRIPTEN_ROOT_PATH}/system/lib"
+  "${EMSCRIPTEN_ROOT_PATH}/system/local/lib")
+
 
 # We would prefer to specify a standard set of Clang+Emscripten-friendly common convention for suffix files, especially for CMake executable files,
 # but if these are adjusted, ${CMAKE_ROOT}/Modules/CheckIncludeFile.cmake will fail, since it depends on being able to compile output files with predefined names.

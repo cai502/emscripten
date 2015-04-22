@@ -105,6 +105,7 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
        'intscan.c',
        'floatscan.c',
        'shgetc.c',
+       'libc.c',
       ]],
       ['math', [
        '__expo2.c',
