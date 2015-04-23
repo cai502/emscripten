@@ -257,7 +257,7 @@ def render_function(class_name, func_name, sigs, return_type, non_pointer, copy,
     body += '  ' + cache + '\n'
   mid_js += [r'''function%s(%s) {
 %s
-}''' % ((' ' + func_name) if constructor else '', ', '.join(args), body[:-1])]
+};''' % ((' ' + func_name) if constructor else '', ', '.join(args), body[:-1])]
 
   # C
 
@@ -319,7 +319,7 @@ def render_function(class_name, func_name, sigs, return_type, non_pointer, copy,
     %sEM_ASM_%s({
       var self = Module['getCache'](Module['%s'])[$0];
       if (!self.hasOwnProperty('%s')) throw 'a JSImplementation must implement all functions, you forgot %s::%s.';
-      %sself.%s(%s)%s;
+      %sself['%s'](%s)%s;
     }, (int)this%s);
   }''' % (c_return_type, func_name, dec_args,
           basic_return, 'INT' if c_return_type not in C_FLOATS else 'DOUBLE',
@@ -381,7 +381,7 @@ for name in names:
         continue
     if not constructor:
       mid_js += [r'''
-%s.prototype['%s'] = ''' % (name, m.identifier.name)]
+%s.prototype['%s'] = %s.prototype.%s = ''' % (name, m.identifier.name, name, m.identifier.name)]
     sigs = {}
     return_type = None
     for ret, args in m.signatures():
@@ -427,7 +427,7 @@ for name in names:
 
     get_name = 'get_' + attr
     mid_js += [r'''
-  %s.prototype['%s']= ''' % (name, get_name)]
+  %s.prototype['%s'] = %s.prototype.%s = ''' % (name, get_name, name, get_name)]
     render_function(name,
                     get_name, get_sigs, m.type.name,
                     None,
@@ -441,7 +441,7 @@ for name in names:
     if not m.readonly:
       set_name = 'set_' + attr
       mid_js += [r'''
-    %s.prototype['%s']= ''' % (name, set_name)]
+    %s.prototype['%s'] = %s.prototype.%s = ''' % (name, set_name, name, set_name)]
       render_function(name,
                       set_name, set_sigs, 'Void',
                       None,
@@ -454,7 +454,7 @@ for name in names:
 
   if not interface.getExtendedAttribute('NoDelete'):
     mid_js += [r'''
-  %s.prototype['__destroy__'] = ''' % name]
+  %s.prototype['__destroy__'] = %s.prototype.__destroy__ = ''' % (name, name)]
     render_function(name,
                     '__destroy__', { 0: [] }, 'Void',
                     None,
@@ -474,9 +474,11 @@ public:
 };
 ''' % (name, type_to_c(js_impl, non_pointing=True), '\n'.join(js_impl_methods))]
 
+deferred_js = []
+
 for name, enum in enums.iteritems():
   mid_c += ['\n// ' + name + '\n']
-  mid_js += ['\n// ' + name + '\n']
+  deferred_js += ['\n', '// ' + name + '\n']
   for value in enum.values():
     function_id = "%s_%s" % (name, value.split('::')[-1])
     mid_c += [r'''%s EMSCRIPTEN_KEEPALIVE emscripten_enum_%s() {
@@ -486,21 +488,29 @@ for name, enum in enums.iteritems():
     symbols = value.split('::')
     if len(symbols) == 1:
       identifier = symbols[0]
-      mid_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
+      deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
     elif len(symbols) == 2:
       [namespace, identifier] = symbols
       if namespace in interfaces:
         # namespace is a class
-        mid_js += ["Module['%s']['%s'] = _emscripten_enum_%s();\n" % \
+        deferred_js += ["Module['%s']['%s'] = _emscripten_enum_%s();\n" % \
                   (namespace, identifier, function_id)]
       else:
         # namespace is a namespace, so the enums get collapsed into the top level namespace.
-        mid_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
+        deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
     else:
       throw ("Illegal enum value %s" % value)
 
 mid_c += ['\n}\n\n']
-mid_js += ['\n']
+mid_js += ['''
+(function() {
+  function setupEnums() {
+    %s
+  }
+  if (Module['calledRun']) setupEnums();
+  else addOnPreMain(setupEnums);
+})();
+''' % '\n    '.join(deferred_js)]
 
 # Write
 

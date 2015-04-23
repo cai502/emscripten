@@ -12,7 +12,7 @@ from tools.shared import *
 # 5: 10 seconds
 DEFAULT_ARG = '4'
 
-TEST_REPS = 2
+TEST_REPS = 3
 
 CORE_BENCHMARKS = True # core benchmarks vs full regression suite
 
@@ -133,8 +133,10 @@ except:
 try:
   benchmarkers_error = ''
   benchmarkers = [
+    #NativeBenchmarker(default_native_name, os.path.join(default_native, 'clang'), os.path.join(default_native, 'clang++')),
     #NativeBenchmarker('clang', CLANG_CC, CLANG),
-    NativeBenchmarker(default_native_name, os.path.join(default_native, 'clang'), os.path.join(default_native, 'clang++')),
+    #NativeBenchmarker('clang-3.6', os.path.join(LLVM_3_6, 'clang'), os.path.join(LLVM_3_6, 'clang++')),
+    #NativeBenchmarker(default_native_name, os.path.join(default_native, 'clang'), os.path.join(default_native, 'clang++')),
     #NativeBenchmarker('clang-3.2-O3', os.path.join(default_native, 'clang'), os.path.join(default_native, 'clang++'), ['-O3']),
     #NativeBenchmarker('clang-3.3', os.path.join(LLVM_3_3, 'clang'), os.path.join(LLVM_3_3, 'clang++')),
     #NativeBenchmarker('clang-3.4', os.path.join(LLVM_3_4, 'clang'), os.path.join(LLVM_3_4, 'clang++')),

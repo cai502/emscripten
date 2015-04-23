@@ -264,7 +264,7 @@ class sanity(RunnerCore):
 
     restore()
 
-    self.check_working([EMCC, 'tests/hello_world.cpp', '-s', 'INIT_HEAP=1'], '''Compiler settings are incompatible with fastcomp. You can fall back to the older compiler core, although that is not recommended, see https://github.com/kripken/emscripten/wiki/LLVM-Backend''')
+    self.check_working([EMCC, 'tests/hello_world.cpp', '-s', 'INIT_HEAP=1'], '''Compiler settings are incompatible with fastcomp. You can fall back to the older compiler core, although that is not recommended''')
 
   def test_node(self):
     NODE_WARNING = 'node version appears too old'
@@ -482,6 +482,8 @@ fi
     try_delete(CANONICAL_TEMP_DIR)
 
   def test_relooper(self):
+    return self.skip('non-fastcomp is deprecated and fails in 3.5')
+
     assert os.environ.get('EMCC_FAST_COMPILER') is None
 
     try:
@@ -574,43 +576,56 @@ fi
     from tools import system_libs
     PORTS_DIR = system_libs.Ports.get_dir()
 
-    for i in [0, 1]:
-      print i
-      if i == 0:
-        try_delete(PORTS_DIR)
-      else:
-        self.do([PYTHON, EMCC, '--clear-ports'])
-      assert not os.path.exists(PORTS_DIR)
-      if i == 0: Cache.erase() # test with cache erased and without
+    for compiler in [EMCC, EMXX]:
+      print compiler
 
-      # Building a file that doesn't need ports should not trigger anything
-      output = self.do([EMCC, path_from_root('tests', 'hello_world_sdl.cpp')])
-      assert RETRIEVING_MESSAGE not in output
-      assert BUILDING_MESSAGE not in output
-      assert not os.path.exists(PORTS_DIR)
+      for i in [0, 1]:
+        print i
+        if i == 0:
+          try_delete(PORTS_DIR)
+        else:
+          self.do([PYTHON, compiler, '--clear-ports'])
+        assert not os.path.exists(PORTS_DIR)
+        if i == 0: Cache.erase() # test with cache erased and without
 
-      # Building a file that need a port does trigger stuff
-      output = self.do([EMCC, path_from_root('tests', 'hello_world_sdl.cpp'), '-s', 'USE_SDL=2'])
-      assert RETRIEVING_MESSAGE in output, output
-      assert BUILDING_MESSAGE in output, output
-      assert os.path.exists(PORTS_DIR)
+        # Building a file that doesn't need ports should not trigger anything
+        output = self.do([compiler, path_from_root('tests', 'hello_world_sdl.cpp')])
+        assert RETRIEVING_MESSAGE not in output
+        assert BUILDING_MESSAGE not in output
+        assert not os.path.exists(PORTS_DIR)
 
-      def second_use():
-        # Using it again avoids retrieve and build
-        output = self.do([EMCC, path_from_root('tests', 'hello_world_sdl.cpp'), '-s', 'USE_SDL=2'])
-        assert RETRIEVING_MESSAGE not in output, output
-        assert BUILDING_MESSAGE not in output, output
+        # Building a file that need a port does trigger stuff
+        output = self.do([compiler, path_from_root('tests', 'hello_world_sdl.cpp'), '-s', 'USE_SDL=2'])
+        assert RETRIEVING_MESSAGE in output, output
+        assert BUILDING_MESSAGE in output, output
+        assert os.path.exists(PORTS_DIR)
 
-      second_use()
+        def second_use():
+          # Using it again avoids retrieve and build
+          output = self.do([compiler, path_from_root('tests', 'hello_world_sdl.cpp'), '-s', 'USE_SDL=2'])
+          assert RETRIEVING_MESSAGE not in output, output
+          assert BUILDING_MESSAGE not in output, output
 
-      # if the version isn't sufficient, we retrieve and rebuild
-      open(os.path.join(PORTS_DIR, 'sdl2', 'SDL2-master', 'version.txt'), 'w').write('1') # current is >= 2, so this is too old
-      output = self.do([EMCC, path_from_root('tests', 'hello_world_sdl.cpp'), '-s', 'USE_SDL=2'])
-      assert RETRIEVING_MESSAGE in output, output
-      assert BUILDING_MESSAGE in output, output
-      assert os.path.exists(PORTS_DIR)
+        second_use()
 
-      second_use()
+        # if the version isn't sufficient, we retrieve and rebuild
+        subdir = os.listdir(os.path.join(PORTS_DIR, 'sdl2'))[0]
+        os.rename(os.path.join(PORTS_DIR, 'sdl2', subdir), os.path.join(PORTS_DIR, 'sdl2', 'old-subdir'))
+        import zipfile
+        z = zipfile.ZipFile(os.path.join(PORTS_DIR, 'sdl2' + '.zip'), 'w')
+        if not os.path.exists('old-sub'):
+          os.mkdir('old-sub')
+        open(os.path.join('old-sub', 'a.txt'), 'w').write('waka')
+        open(os.path.join('old-sub', 'b.txt'), 'w').write('waka')
+        z.write(os.path.join('old-sub', 'a.txt'))
+        z.write(os.path.join('old-sub', 'b.txt'))
+        z.close()
+        output = self.do([compiler, path_from_root('tests', 'hello_world_sdl.cpp'), '-s', 'USE_SDL=2'])
+        assert RETRIEVING_MESSAGE in output, output
+        assert BUILDING_MESSAGE in output, output
+        assert os.path.exists(PORTS_DIR)
+
+        second_use()
 
   def test_native_optimizer(self):
     restore()
@@ -724,4 +739,53 @@ fi
       for lib in result_libs:
         print '    verify', lib
         assert os.path.exists(Cache.get_path(lib))
+
+  def test_d8_path(self):
+    """ Test that running JS commands works for node, d8, and jsc and is not path dependent """
+    # Fake some JS engines
+    restore()
+
+    sample_script = path_from_root('tests', 'print_args.js')
+
+    # Note that the path contains 'd8'.
+    test_path = path_from_root('tests', 'fake', 'abcd8765')
+    if not os.path.exists(test_path):
+      os.makedirs(test_path)
+
+    try:
+      os.environ['EM_IGNORE_SANITY'] = '1'
+      jsengines = [('d8',     V8_ENGINE),
+                   ('d8_g',   V8_ENGINE),
+                   ('js',     SPIDERMONKEY_ENGINE),
+                   ('node',   NODE_JS),
+                   ('nodejs', NODE_JS)]
+      for filename, engine in jsengines:
+        if type(engine) is list:
+          engine = engine[0]
+        if engine == '':
+            print 'WARNING: Not testing engine %s, not configured.' % (filename)
+            continue
+
+        print filename, engine
+
+        test_engine_path = os.path.join(test_path, filename)
+        f = open(test_engine_path, 'w')
+        f.write('#!/bin/sh\n')
+        f.write('%s $@\n' % (engine))
+        f.close()
+        os.chmod(test_engine_path, stat.S_IREAD | stat.S_IWRITE | stat.S_IEXEC)
+
+        try:
+          out = jsrun.run_js(sample_script, engine=test_engine_path, args=['--foo'], full_output=True, assert_returncode=0)
+        except Exception as e:
+          if 'd8' in filename:
+            assert False, 'Your d8 version does not correctly parse command-line arguments, please upgrade or delete from ~/.emscripten config file: %s' % (e)
+          else:
+            assert False, 'Error running script command: %s' % (e)
+
+        self.assertEqual('0: --foo', out.strip())
+
+    finally:
+      del os.environ['EM_IGNORE_SANITY']
+
 

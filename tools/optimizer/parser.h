@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <iostream>
+#include <algorithm>
 
 #include <stdio.h>
 
@@ -21,6 +22,7 @@ extern IString TOPLEVEL,
                ASSIGN,
                NAME,
                VAR,
+               CONST,
                CONDITIONAL,
                BINARY,
                RETURN,
@@ -156,14 +158,19 @@ class Parser {
 
   static bool hasChar(const char* list, char x) { while (*list) if (*list++ == x) return true; return false; }
 
+  static bool is32Bit(double x) {
+    return x == (int)x || x == (unsigned int)x;
+  }
+
   // An atomic fragment of something. Stops at a natural boundary.
   enum FragType {
     KEYWORD = 0,
     OPERATOR = 1,
     IDENT = 2,
     STRING = 3, // without quotes
-    NUMBER = 4,
-    SEPARATOR = 5
+    INT = 4,
+    DOUBLE = 5,
+    SEPARATOR = 6
   };
 
   struct Frag {
@@ -177,6 +184,10 @@ class Parser {
 #endif
     int size;
     FragType type;
+
+    bool isNumber() const {
+      return type == INT || type == DOUBLE;
+    }
 
     explicit Frag(char* src) {
       assert(!isSpace(*src));
@@ -219,8 +230,13 @@ class Parser {
         } else {
           num = strtod(start, &src);
         }
+        // asm.js must have a '.' for double values. however, we also tolerate
+        // uglify's tendency to emit without a '.' (and fix it later with a +).
+        // for valid asm.js input, the '.' should be enough, and for uglify
+        // in the emscripten optimizer pipeline, we use simple_ast where INT/DOUBLE
+        // is quite the same at this point anyhow
+        type = (std::find(start, src, '.') == src && is32Bit(num)) ? INT : DOUBLE;
         assert(src > start);
-        type = NUMBER;
       } else if (hasChar(OPERATOR_INITS, *src)) {
         switch (*src) {
           case '!': str = src[1] == '=' ? NE : L_NOT; break;
@@ -278,7 +294,8 @@ class Parser {
       }
       case IDENT:
       case STRING:
-      case NUMBER: {
+      case INT:
+      case DOUBLE: {
         src = skipSpace(src);
         if (frag.type == IDENT) return parseAfterIdent(frag, src, seps);
         else return parseExpression(parseFrag(frag), src, seps);
@@ -301,7 +318,8 @@ class Parser {
     switch (frag.type) {
       case IDENT:  return Builder::makeName(frag.str);
       case STRING: return Builder::makeString(frag.str);
-      case NUMBER: return Builder::makeNumber(frag.num);
+      case INT:    return Builder::makeInt(uint32_t(frag.num));
+      case DOUBLE: return Builder::makeDouble(frag.num);
       default: assert(0);
     }
     return nullptr;
@@ -311,6 +329,7 @@ class Parser {
     src = skipSpace(src);
     if (frag.str == FUNCTION) return parseFunction(frag, src, seps);
     else if (frag.str == VAR) return parseVar(frag, src, seps);
+    else if (frag.str == CONST) return parseVar(frag, src, seps);
     else if (frag.str == RETURN) return parseReturn(frag, src, seps);
     else if (frag.str == IF) return parseIf(frag, src, seps);
     else if (frag.str == DO) return parseDo(frag, src, seps);
@@ -359,7 +378,7 @@ class Parser {
   }
 
   NodeRef parseVar(Frag& frag, char*& src, const char* seps) {
-    NodeRef ret = Builder::makeVar();
+    NodeRef ret = Builder::makeVar(frag.str == CONST);
     while (1) {
       src = skipSpace(src);
       if (*src == ';') break;
@@ -457,7 +476,7 @@ class Parser {
           src = skipSpace(src);
           NodeRef arg;
           Frag value(src);
-          if (value.type == NUMBER) {
+          if (value.isNumber()) {
             arg = parseFrag(value);
             src += value.size;
           } else {
@@ -466,7 +485,7 @@ class Parser {
             src += value.size;
             src = skipSpace(src);
             Frag value2(src);
-            assert(value2.type == NUMBER);
+            assert(value2.isNumber());
             arg = Builder::makePrefix(MINUS, parseFrag(value2));
             src += value2.size;
           }
@@ -506,7 +525,14 @@ class Parser {
     if (*src == '[') return parseExpression(parseIndexing(parseFrag(frag), src), src, seps);
     if (*src == ':' && expressionPartsStack.back().size() == 0) {
       src++;
-      return Builder::makeLabel(frag.str, parseElement(src, seps));
+      src = skipSpace(src);
+      NodeRef inner;
+      if (*src == '{') { // context lets us know this is not an object, but a block
+        inner = parseBracketedBlock(src);
+      } else {
+        inner = parseElement(src, seps);
+      }
+      return Builder::makeLabel(frag.str, inner);
     }
     if (*src == '.') return parseExpression(parseDotting(parseFrag(frag), src), src, seps);
     return parseExpression(parseFrag(frag), src, seps);
@@ -657,6 +683,14 @@ class Parser {
     printf("|\n");
   }
 
+  NodeRef makeBinary(NodeRef left, IString op, NodeRef right) {
+    if (op == PERIOD) {
+      return Builder::makeDot(left, right);
+    } else {
+      return Builder::makeBinary(left, op ,right);
+    }
+  }
+
   NodeRef parseExpression(ExpressionElement initial, char*&src, const char* seps) {
     //dump("parseExpression", src);
     ExpressionParts& parts = expressionPartsStack.back();
@@ -703,7 +737,7 @@ class Parser {
             IString op = parts[i].getOp();
             if (!ops.ops.has(op)) continue;
             if (ops.type == OperatorClass::Binary && i > 0 && i < (int)parts.size()-1) {
-              parts[i] = Builder::makeBinary(parts[i-1].getNode(), op, parts[i+1].getNode());
+              parts[i] = makeBinary(parts[i-1].getNode(), op, parts[i+1].getNode());
               parts.erase(parts.begin() + i + 1);
               parts.erase(parts.begin() + i - 1);
             } else if (ops.type == OperatorClass::Prefix && i < (int)parts.size()-1) {
@@ -729,7 +763,7 @@ class Parser {
             IString op = parts[i].getOp();
             if (!ops.ops.has(op)) continue;
             if (ops.type == OperatorClass::Binary && i > 0 && i < (int)parts.size()-1) {
-              parts[i] = Builder::makeBinary(parts[i-1].getNode(), op, parts[i+1].getNode());
+              parts[i] = makeBinary(parts[i-1].getNode(), op, parts[i+1].getNode());
               parts.erase(parts.begin() + i + 1);
               parts.erase(parts.begin() + i - 1);
               i--;
@@ -787,6 +821,11 @@ class Parser {
   }
 
   NodeRef parseElementOrStatement(char*& src, const char *seps) {
+    src = skipSpace(src);
+    if (*src == ';') {
+      src++;
+      return Builder::makeBlock(); // we don't need the brackets here, but oh well
+    }
     NodeRef ret = parseElement(src, seps);
     src = skipSpace(src);
     if (*src == ';') {

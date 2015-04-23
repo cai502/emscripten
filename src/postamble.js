@@ -16,7 +16,8 @@ if (memoryInitializer) {
 #endif
   } else {
     addRunDependency('memory initializer');
-    Browser.asyncLoad(memoryInitializer, function(data) {
+    function applyMemoryInitializer(data) {
+      if (data.byteLength) data = new Uint8Array(data);
 #if USE_TYPED_ARRAYS == 2
 #if ASSERTIONS
       for (var i = 0; i < data.length; i++) {
@@ -28,9 +29,31 @@ if (memoryInitializer) {
       allocate(data, 'i8', ALLOC_NONE, STATIC_BASE);
 #endif
       removeRunDependency('memory initializer');
-    }, function(data) {
-      throw 'could not load memory initializer ' + memoryInitializer;
-    });
+    }
+    var request = Module['memoryInitializerRequest'];
+    if (request) {
+      // a network request has already been created, just use that
+      if (request.response) {
+        setTimeout(function() {
+          applyMemoryInitializer(request.response);
+        }, 0); // it's already here; but, apply it asynchronously
+      } else {
+        request.addEventListener('load', function() { // wait for it
+          if (request.status !== 200 && request.status !== 0) {
+            console.warn('a problem seems to have happened with Module.memoryInitializerRequest, status: ' + request.status);
+          }
+          if (!request.response || typeof request.response !== 'object' || !request.response.byteLength) {
+            console.warn('a problem seems to have happened with Module.memoryInitializerRequest response (expected ArrayBuffer): ' + request.response);
+          }
+          applyMemoryInitializer(request.response);
+        });
+      }
+    } else {
+      // fetch it from the network ourselves
+      Browser.asyncLoad(memoryInitializer, applyMemoryInitializer, function() {
+        throw 'could not load memory initializer ' + memoryInitializer;
+      });
+    }
   }
 }
 
@@ -48,7 +71,7 @@ var calledMain = false;
 
 dependenciesFulfilled = function runCaller() {
   // If run has never been called, and we should call run (INVOKE_RUN is true, and Module.noInitialRun is not false)
-  if (!Module['calledRun'] && shouldRunNow) run();
+  if (!Module['calledRun']) run();
   if (!Module['calledRun']) dependenciesFulfilled = runCaller; // try this again later, after new deps are fulfilled
 }
 
@@ -142,9 +165,9 @@ function run(args) {
       Module.printErr('pre-main prep time: ' + (Date.now() - preloadStartTime) + ' ms');
     }
 
-    if (Module['_main'] && shouldRunNow) {
-      Module['callMain'](args);
-    }
+    if (Module['onRuntimeInitialized']) Module['onRuntimeInitialized']();
+
+    if (Module['_main'] && shouldRunNow) Module['callMain'](args);
 
     postRun();
   }
@@ -166,7 +189,7 @@ Module['run'] = Module.run = run;
 function exit(status) {
   if (Module['noExitRuntime']) {
 #if ASSERTIONS
-    Module.printErr('exit(' + status + ') called, but noExitRuntime, so not exiting');
+    Module.printErr('exit(' + status + ') called, but noExitRuntime, so not exiting (you can use emscripten_force_exit, if you want to force a true shutdown)');
 #endif
     return;
   }
@@ -177,6 +200,8 @@ function exit(status) {
 
   // exit the runtime
   exitRuntime();
+
+  if (Module['onExit']) Module['onExit'](status);
 
 #if NODE_STDOUT_FLUSH_WORKAROUND
   if (ENVIRONMENT_IS_NODE) {
@@ -203,10 +228,15 @@ function exit(status) {
 }
 Module['exit'] = Module.exit = exit;
 
-function abort(text) {
-  if (text) {
-    Module.print(text);
-    Module.printErr(text);
+var abortDecorators = [];
+
+function abort(what) {
+  if (what !== undefined) {
+    Module.print(what);
+    Module.printErr(what);
+    what = JSON.stringify(what)
+  } else {
+    what = '';
   }
 
   ABORT = true;
@@ -218,7 +248,11 @@ function abort(text) {
   var extra = '';
 #endif
 
-  throw 'abort() at ' + stackTrace() + extra;
+  var output = 'abort(' + what + ') at ' + stackTrace() + extra;
+  abortDecorators.forEach(function(decorator) {
+    output = decorator(output, what);
+  });
+  throw output;
 }
 Module['abort'] = Module.abort = abort;
 
@@ -266,7 +300,7 @@ function messageResender() {
 }
 
 var buffer = 0, bufferSize = 0;
-var inWorkerCall = false, workerResponded = false, workerCallbackId = -1;
+var workerResponded = false, workerCallbackId = -1;
 
 onmessage = function onmessage(msg) {
   // if main has not yet been called (mem init file, other async things), buffer messages
@@ -292,7 +326,6 @@ onmessage = function onmessage(msg) {
     HEAPU8.set(data, buffer);
   }
 
-  inWorkerCall = true;
   workerResponded = false;
   workerCallbackId = msg.data['callbackId'];
   if (data) {
@@ -300,7 +333,6 @@ onmessage = function onmessage(msg) {
   } else {
     func(0, 0);
   }
-  inWorkerCall = false;
 }
 
 #endif

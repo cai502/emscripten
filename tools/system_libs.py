@@ -1,4 +1,4 @@
-import os, json, logging
+import os, json, logging, zipfile
 import shared
 from subprocess import Popen, CalledProcessError
 import multiprocessing
@@ -56,8 +56,6 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
 
   def build_libc(lib_filename, files, lib_opts):
     o_s = []
-    prev_cxx = os.environ.get('EMMAKEN_CXX')
-    if prev_cxx: os.environ['EMMAKEN_CXX'] = ''
     musl_internal_includes = ['-I', shared.path_from_root('system', 'lib', 'libc', 'musl', 'src', 'internal'), '-I', shared.path_from_root('system', 'lib', 'libc', 'musl', 'arch', 'js')]
     commands = []
     # Hide several musl warnings that produce a lot of spam to unit test build server logs.
@@ -68,7 +66,6 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
       commands.append([shared.PYTHON, shared.EMCC, shared.path_from_root('system', 'lib', src), '-o', o] + musl_internal_includes + default_opts + c_opts + lib_opts)
       o_s.append(o)
     run_commands(commands)
-    if prev_cxx: os.environ['EMMAKEN_CXX'] = prev_cxx
     shared.Building.link(o_s, in_temp(lib_filename))
     return in_temp(lib_filename)
 
@@ -316,6 +313,10 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
         'wcswidth.c',
         'wctrans.c',
         'wcwidth.c',
+       ]],
+       ['dirent', [
+        'alphasort.c',
+        'scandir.c',
        ]],
        ['legacy', [
         'err.c',
@@ -648,11 +649,8 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
 
   # gl
   def create_gl():
-    prev_cxx = os.environ.get('EMMAKEN_CXX')
-    if prev_cxx: os.environ['EMMAKEN_CXX'] = ''
     o = in_temp('gl.o')
     check_call([shared.PYTHON, shared.EMCC, shared.path_from_root('system', 'lib', 'gl.c'), '-o', o])
-    if prev_cxx: os.environ['EMMAKEN_CXX'] = prev_cxx
     return o
 
   # Setting this in the environment will avoid checking dependencies and make building big projects a little faster
@@ -782,7 +780,7 @@ class Ports:
   name_cache = set()
 
   @staticmethod
-  def fetch_project(name, url, expected_version):
+  def fetch_project(name, url, subdir):
     fullname = os.path.join(Ports.get_dir(), name)
 
     if name not in Ports.name_cache: # only mention each port once in log
@@ -795,6 +793,36 @@ class Ports:
       unpacked = False
 
     def retrieve():
+      # if EMCC_LOCAL_PORTS is set, we use a local directory as our ports. This is useful
+      # for testing. This env var should be in format
+      #     name=dir|tag,name=dir|tag
+      # e.g.
+      #     sdl2=/home/username/dev/ports/SDL2|SDL2-version_5
+      # so you could run
+      #     EMCC_LOCAL_PORTS="sdl2=/home/alon/Dev/ports/SDL2|SDL2-version_5" ./tests/runner.py browser.test_sdl2_mouse
+      # note that tag must be the tag in sdl.py, it is where we store to (not where we load from, we just load the local dir)
+      local_ports = os.environ.get('EMCC_LOCAL_PORTS')
+      if local_ports:
+        local_ports = map(lambda pair: pair.split('='), local_ports.split(','))
+        for local in local_ports:
+          if name == local[0]:
+            path, subdir = local[1].split('|')
+            logging.warning('grabbing local port: ' + name + ' from ' + path + ', into ' + subdir)
+            # zip up the directory, so it looks the same as if we downloaded a zip from the remote server
+            z = zipfile.ZipFile(fullname + '.zip', 'w')
+            def add_dir(p):
+              for f in os.listdir(p):
+                full = os.path.join(p, f)
+                if os.path.isdir(full):
+                  add_dir(full)
+                else:
+                  if not f.startswith('.'): # ignore hidden files, including .git/ etc.
+                    z.write(full, os.path.join(subdir, os.path.relpath(full, path)))
+            add_dir(path)
+            z.close()
+            State.retrieved = True
+            return
+      # retrieve from remote server
       logging.warning('retrieving port: ' + name + ' from ' + url)
       import urllib2
       f = urllib2.urlopen(url)
@@ -802,9 +830,17 @@ class Ports:
       open(fullname + '.zip', 'wb').write(data)
       State.retrieved = True
 
+    def check_tag():
+      # find subdir/version.txt
+      z = zipfile.ZipFile(fullname + '.zip', 'r')
+      names = z.namelist()
+      if not (names[0].startswith(subdir + '/') or names[0].startswith(subdir + '\\')):
+        # current zip file is old, force a retrieve
+        return False
+      return True
+
     def unpack():
       logging.warning('unpacking port: ' + name)
-      import zipfile
       shared.safe_ensure_dirs(fullname)
       z = zipfile.ZipFile(fullname + '.zip', 'r')
       try:
@@ -815,22 +851,6 @@ class Ports:
         os.chdir(cwd)
       State.unpacked = True
 
-    def check_version(expected_version):
-      try:
-        ok = False
-        if not os.path.exists(fullname): return False
-        subdir = os.listdir(fullname)
-        if len(subdir) != 1: return False
-        subdir = subdir[0] # each port has a singleton subdir
-        f = os.path.join(fullname, subdir, 'version.txt')
-        if not os.path.exists(f): return False # no version, need an update
-        version = open(f).read()
-        version = int(version)
-        ok = True
-      finally:
-        if not ok: logging.error('error when checking port version for ' + name)
-      return version >= expected_version
-
     # main logic
 
     if not os.path.exists(fullname + '.zip'):
@@ -839,14 +859,12 @@ class Ports:
     if not os.path.exists(fullname):
       unpack()
 
-    if not check_version(expected_version):
-      # fetch a newer version
-      assert not State.retrieved, 'just retrieved port ' + name + ', but not a new enough version?'
+    if not check_tag():
+      logging.warning('local copy of port is not correct, retrieving from remote server')
       shared.try_delete(fullname)
       shared.try_delete(fullname + '.zip')
       retrieve()
       unpack()
-      assert check_version(expected_version), 'just retrieved replacement port ' + name + ', but not a new enough version?'
 
     if State.unpacked:
       # we unpacked a new version, clear the build in the cache

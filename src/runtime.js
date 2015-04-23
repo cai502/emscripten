@@ -67,7 +67,7 @@ var RuntimeGenerator = {
   dynamicAlloc: function(size) {
     if (ASSERTIONS) size = '(assert(DYNAMICTOP > 0),' + size + ')'; // dynamic area must be ready
     var ret = RuntimeGenerator.alloc(size, 'DYNAMIC', INIT_HEAP);
-    if (USE_TYPED_ARRAYS) ret += '; if (DYNAMICTOP >= TOTAL_MEMORY) enlargeMemory();'
+    if (USE_TYPED_ARRAYS) ret += '; if (DYNAMICTOP >= TOTAL_MEMORY) { var success = enlargeMemory(); if (!success) return 0; }'
     return ret;
   },
 
@@ -194,6 +194,21 @@ var Runtime = {
 #endif
 
   STACK_ALIGN: {{{ STACK_ALIGN }}},
+
+  // This must be called before reading a double or i64 vararg. It will bump the pointer properly.
+  // It also does an assert on i32 values, so it's nice to call it before all varargs calls.
+  prepVararg: function(ptr, type) {
+    if (type === 'double' || type === 'i64') {
+      // move so the load is aligned
+      if (ptr & 7) {
+        assert((ptr & 7) === 4);
+        ptr += 4;
+      }
+    } else {
+      assert((ptr & 3) === 0);
+    }
+    return ptr;
+  },
 
   // type can be a native type or a struct (or null, for structs we only look at size here)
   getAlignSize: function(type, size, vararg) {
@@ -405,38 +420,7 @@ var Runtime = {
 #endif
   },
 
-  getAsmConst: function(code, numArgs) {
-    // code is a constant string on the heap, so we can cache these
-    if (!Runtime.asmConstCache) Runtime.asmConstCache = {};
-    var func = Runtime.asmConstCache[code];
-    if (func) return func;
-    var args = [];
-    for (var i = 0; i < numArgs; i++) {
-      args.push(String.fromCharCode(36) + i); // $0, $1 etc
-    }
-    var source = Pointer_stringify(code);
-    if (source[0] === '"') {
-      // tolerate EM_ASM("..code..") even though EM_ASM(..code..) is correct
-      if (source.indexOf('"', 1) === source.length-1) {
-        source = source.substr(1, source.length-2);
-      } else {
-        // something invalid happened, e.g. EM_ASM("..code($0)..", input)
-        abort('invalid EM_ASM input |' + source + '|. Please use EM_ASM(..code..) (no quotes) or EM_ASM({ ..code($0).. }, input) (to input values)');
-      }
-    }
-#if NO_DYNAMIC_EXECUTION == 0
-    try {
-      // Module is the only 'upvar', which we provide directly. We also provide FS for legacy support.
-      var evalled = eval('(function(Module, FS) { return function(' + args.join(',') + '){ ' + source + ' } })')(Module, typeof FS !== 'undefined' ? FS : null);
-    } catch(e) {
-      Module.printErr('error in executing inline EM_ASM code: ' + e + ' on: \n\n' + source + '\n\nwith args |' + args + '| (make sure to use the right one out of EM_ASM, EM_ASM_ARGS, etc.)');
-      throw e;
-    }
-#else
-    abort('NO_DYNAMIC_EXECUTION was set, cannot eval, so EM_ASM is not functional');
-#endif
-    return Runtime.asmConstCache[code] = evalled;
-  },
+  asmConsts: [],
 
   warnOnce: function(text) {
     if (!Runtime.warnOnce.shown) Runtime.warnOnce.shown = {};
@@ -460,72 +444,6 @@ var Runtime = {
       };
     }
     return sigCache[func];
-  },
-
-  // Returns a processor of UTF.
-  // processCChar() receives characters from a C-like UTF representation and returns JS string fragments.
-  // See RFC3629 for details, the bytes are assumed to be valid UTF-8
-  // processJSString() receives a JS string and returns a C-like UTF representation in an array
-  UTF8Processor: function() {
-    var buffer = [];
-    var needed = 0;
-    this.processCChar = function (code) {
-      code = code & 0xFF;
-
-      if (buffer.length == 0) {
-        if ((code & 0x80) == 0x00) {        // 0xxxxxxx
-          return String.fromCharCode(code);
-        }
-        buffer.push(code);
-        if ((code & 0xE0) == 0xC0) {        // 110xxxxx
-          needed = 1;
-        } else if ((code & 0xF0) == 0xE0) { // 1110xxxx
-          needed = 2;
-        } else {                            // 11110xxx
-          needed = 3;
-        }
-        return '';
-      }
-
-      if (needed) {
-        buffer.push(code);
-        needed--;
-        if (needed > 0) return '';
-      }
-
-      var c1 = buffer[0];
-      var c2 = buffer[1];
-      var c3 = buffer[2];
-      var c4 = buffer[3];
-      var ret;
-      if (buffer.length == 2) {
-        ret = String.fromCharCode(((c1 & 0x1F) << 6)  | (c2 & 0x3F));
-      } else if (buffer.length == 3) {
-        ret = String.fromCharCode(((c1 & 0x0F) << 12) | ((c2 & 0x3F) << 6)  | (c3 & 0x3F));
-      } else {
-        // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
-        var codePoint = ((c1 & 0x07) << 18) | ((c2 & 0x3F) << 12) |
-                        ((c3 & 0x3F) << 6)  | (c4 & 0x3F);
-        ret = String.fromCharCode(
-          (((codePoint - 0x10000) / 0x400)|0) + 0xD800,
-          (codePoint - 0x10000) % 0x400 + 0xDC00);
-      }
-      buffer.length = 0;
-      return ret;
-    }
-    this.processJSString = function processJSString(string) {
-      /* TODO: use TextEncoder when present,
-        var encoder = new TextEncoder();
-        encoder['encoding'] = "utf-8";
-        var utf8Array = encoder['encode'](aMsg.data);
-      */
-      string = unescape(encodeURIComponent(string));
-      var ret = [];
-      for (var i = 0; i < string.length; i++) {
-        ret.push(string.charCodeAt(i));
-      }
-      return ret;
-    }
   },
 
 #if RETAIN_COMPILER_SETTINGS

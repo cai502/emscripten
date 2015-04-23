@@ -125,11 +125,11 @@ var LibraryJSEvents = {
 
     isInternetExplorer: function() { return navigator.userAgent.indexOf('MSIE') !== -1 || navigator.appVersion.indexOf('Trident/') > 0; },
 
-    // Removes all event handlers on the given DOM element of the given type. Pass in eventType == undefined/null to remove all event handlers regardless of the type.
+    // Removes all event handlers on the given DOM element of the given type. Pass in eventTypeString == undefined/null to remove all event handlers regardless of the type.
     removeAllHandlersOnTarget: function(target, eventTypeString) {
       for(var i = 0; i < JSEvents.eventHandlers.length; ++i) {
         if (JSEvents.eventHandlers[i].target == target && 
-          (!eventType || eventTypeString == JSEvents.eventHandlers[i].eventTypeString)) {
+          (!eventTypeString || eventTypeString == JSEvents.eventHandlers[i].eventTypeString)) {
            JSEvents._removeHandler(i--);
          }
       }
@@ -266,7 +266,7 @@ var LibraryJSEvents = {
 
       var eventHandler = {
         target: target,
-        allowsDeferredCalls: eventTypeString != 'mousemove', // Mouse move events do not allow fullscreen/pointer lock requests to be handled in them!
+        allowsDeferredCalls: eventTypeString != 'mousemove' && eventTypeString != 'mouseenter' && eventTypeString != 'mouseleave', // Mouse move events do not allow fullscreen/pointer lock requests to be handled in them!
         eventTypeString: eventTypeString,
         callbackfunc: callbackfunc,
         handlerFunc: handlerFunc,
@@ -633,8 +633,13 @@ var LibraryJSEvents = {
       target.style.height = cssHeight + 'px';
 
       if (strategy.filteringMode == {{{ cDefine('EMSCRIPTEN_FULLSCREEN_FILTERING_NEAREST') }}}) {
+        target.style.imageRendering = 'optimizeSpeed';
         target.style.imageRendering = '-moz-crisp-edges';
-        target.style['-ms-interpolation-mode'] = 'nearest-neighbor';
+        target.style.imageRendering = '-o-crisp-edges';
+        target.style.imageRendering = '-webkit-optimize-contrast';
+        target.style.imageRendering = 'optimize-contrast';
+        target.style.imageRendering = 'crisp-edges';
+        target.style.imageRendering = 'pixelated';
       }
 
       var dpiScale = (strategy.canvasResolutionScaleMode == {{{ cDefine('EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_HIDEF') }}}) ? window.devicePixelRatio : 1;
@@ -1238,7 +1243,6 @@ var LibraryJSEvents = {
     var oldDocumentOverflow = document.documentElement.style.overflow; // Chrome, Firefox
     var oldDocumentScroll = document.body.scroll; // IE
     var oldImageRendering = canvas.style.imageRendering;
-    var oldInterpolationMode = canvas.style['-ms-interpolation-mode'];
 
     function restoreOldStyle() {
       var fullscreenElement = document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
@@ -1270,7 +1274,6 @@ var LibraryJSEvents = {
         document.documentElement.style.overflow = oldDocumentOverflow; // Chrome, Firefox
         document.body.scroll = oldDocumentScroll; // IE
         canvas.style.imageRendering = oldImageRendering;
-        canvas.style['-ms-interpolation-mode'] = oldInterpolationMode;
         if (canvas.GLctxObject) canvas.GLctxObject.GLctx.viewport(0, 0, oldWidth, oldHeight);
 
         if (__currentFullscreenStrategy.canvasResizedCallback) {
@@ -1536,10 +1539,10 @@ var LibraryJSEvents = {
   },
 
   emscripten_get_pointerlock_status: function(pointerlockStatus) {
+    if (pointerlockStatus) JSEvents.fillPointerlockChangeEventData(pointerlockStatus);
     if (!document.body.requestPointerLock && !document.body.mozRequestPointerLock && !document.body.webkitRequestPointerLock && !document.body.msRequestPointerLock) {
       return {{{ cDefine('EMSCRIPTEN_RESULT_NOT_SUPPORTED') }}};
     }
-    JSEvents.fillPointerlockChangeEventData(pointerlockStatus);  
     return {{{ cDefine('EMSCRIPTEN_RESULT_SUCCESS') }}};
   },
 
@@ -1667,9 +1670,16 @@ var LibraryJSEvents = {
     if (index < 0 || index >= gamepads.length) {
       return {{{ cDefine('EMSCRIPTEN_RESULT_INVALID_PARAM') }}};
     }
-    if (typeof gamepads[index] === 'undefined') {
+    // For previously disconnected gamepads there should be a null at the index.
+    // This is because gamepads must keep their original position in the array.
+    // For example, removing the first of two gamepads produces [null, gamepad].
+    // Older implementations of the Gamepad API used undefined instead of null.
+    // The following check works because null and undefined evaluate to false.
+    if (!gamepads[index]) {
+      // There is a "false" but no gamepad at index because it was disconnected.
       return {{{ cDefine('EMSCRIPTEN_RESULT_NO_DATA') }}};
     }
+    // There should be a gamepad at index which can be queried.
     JSEvents.fillGamepadEventData(gamepadState, gamepads[index]);
     return {{{ cDefine('EMSCRIPTEN_RESULT_SUCCESS') }}};
   },
@@ -1712,6 +1722,7 @@ var LibraryJSEvents = {
     {{{ makeSetValue('attributes', C_STRUCTS.EmscriptenWebGLContextAttributes.enableExtensionsByDefault, 1, 'i32') }}};
   },
 
+  emscripten_webgl_create_context__deps: ['$GL'],
   emscripten_webgl_create_context: function(target, attributes) {
     var contextAttributes = {};
     contextAttributes.alpha = !!{{{ makeGetValue('attributes', C_STRUCTS.EmscriptenWebGLContextAttributes.alpha, 'i32') }}};

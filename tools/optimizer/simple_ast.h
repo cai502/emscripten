@@ -571,6 +571,10 @@ struct JSPrinter {
       size = std::max(1024, size*2) + safety;
       if (!buffer) {
         buffer = (char*)malloc(size);
+        if (!buffer) {
+          printf("Out of memory allocating %d bytes for output buffer!", size);
+          assert(0);
+        }
       } else {
         char *buf = (char*)realloc(buffer, size);
         if (!buf) {
@@ -593,7 +597,7 @@ struct JSPrinter {
   void emit(const char *s) {
     maybeSpace(*s);
     int len = strlen(s);
-    ensure(len);
+    ensure(len+1);
     strcpy(buffer + used, s);
     used += len;
   }
@@ -727,7 +731,14 @@ struct JSPrinter {
   }
 
   void printToplevel(Ref node) {
-    printStats(node[1]);
+    if (node[1]->size() > 0) {
+      printStats(node[1]);
+    } else {
+      // this is an empty toplevel. this should normally not happen, but
+      // can occur in very un-LLVM-optimized code. emit a ; because otherwise
+      // we can end up with e.g. if ()  else f() (nothing in the if-true block)
+      emit(';');
+    }
   }
 
   void printBlock(Ref node) {
@@ -1105,6 +1116,11 @@ struct JSPrinter {
     emit(';');
   }
 
+  static bool ifHasElse(Ref node) {
+    assert(node[0] == IF);
+    return node->size() >= 4 && !!node[3];
+  }
+
   void printIf(Ref node) {
     emit("if");
     safeSpace();
@@ -1113,8 +1129,23 @@ struct JSPrinter {
     emit(')');
     space();
     // special case: we need braces to save us from ambiguity, if () { if () } else. otherwise else binds to inner if
-    bool hasElse = node->size() >= 4 && !!node[3];
-    bool needBraces = node[2][0] == IF && (node[2]->size() == 3 || !node[2][3]) && hasElse;
+    // also need to recurse for                                if () { if () { } else { if () } else
+    // (note that this is only a problem if the if body has a single element in it, not a block or such, as then
+    // the block would be braced)
+    // this analysis is a little conservative - it assumes any child if could be confused with us, which implies
+    // all other braces vanished (the worst case for us, we are not saved by other braces).
+    bool needBraces = false;
+    bool hasElse = ifHasElse(node);
+    if (hasElse) {
+      Ref child = node[2];
+      while (child[0] == IF) {
+        if (!ifHasElse(child)) {
+          needBraces = true;
+          break;
+        }
+        child = child[3]; // continue into the else
+      }
+    }
     if (needBraces) {
       emit('{');
       indent++;
@@ -1295,9 +1326,12 @@ public:
     }
   }
 
-  static Ref makeNumber(double num) {
+  static Ref makeDouble(double num) {
     return &makeRawArray()->push_back(makeRawString(NUM))
                            .push_back(&arena.alloc()->setNumber(num));
+  }
+  static Ref makeInt(uint32_t num) {
+    return makeDouble(double(num));
   }
 
   static Ref makeBinary(Ref left, IString op, Ref right) {
@@ -1310,11 +1344,6 @@ public:
       return &makeRawArray()->push_back(makeRawString(SEQ))
                              .push_back(left)
                              .push_back(right);
-    } else if (op == PERIOD) {
-      assert(right[0] == NAME);
-      return &makeRawArray()->push_back(makeRawString(DOT))
-                             .push_back(left)
-                             .push_back(makeRawString(right[1]->getIString()));
     } else {
       return &makeRawArray()->push_back(makeRawString(BINARY))
                              .push_back(makeRawString(op))
@@ -1341,7 +1370,7 @@ public:
     func[2]->push_back(makeRawString(arg));
   }
 
-  static Ref makeVar() {
+  static Ref makeVar(bool is_const) {
     return &makeRawArray()->push_back(makeRawString(VAR))
                            .push_back(makeRawArray());
   }
@@ -1435,6 +1464,11 @@ public:
     return &makeRawArray()->push_back(makeRawString(DOT))
                            .push_back(obj)
                            .push_back(makeRawString(key));
+  }
+
+  static Ref makeDot(Ref obj, Ref key) {
+    assert(key[0] == NAME);
+    return makeDot(obj, key[1]->getIString());
   }
 
   static Ref makeNew(Ref call) {

@@ -456,7 +456,6 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
     if settings['PRECISE_F32']: maths += ['Math.fround']
 
     basic_funcs = ['abort', 'assert', 'asmPrintInt', 'asmPrintFloat'] + [m.replace('.', '_') for m in math_envs]
-    if settings['RESERVED_FUNCTION_POINTERS'] > 0: basic_funcs.append('jsCall')
     if settings['SAFE_HEAP']: basic_funcs += ['SAFE_HEAP_LOAD', 'SAFE_HEAP_STORE', 'SAFE_FT_MASK']
     if settings['CHECK_HEAP_ALIGN']: basic_funcs += ['CHECK_ALIGN_2', 'CHECK_ALIGN_4', 'CHECK_ALIGN_8']
     if settings['ASSERTIONS']:
@@ -495,7 +494,7 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
 ''' % (sig, ',' if len(sig) > 1 else '', args, arg_coercions, ret))
 
       for i in range(settings['RESERVED_FUNCTION_POINTERS']):
-        jsret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('jsCall(%d%s%s)' % (i, ',' if coerced_args else '', coerced_args), sig[0], settings)
+        jsret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('jsCall_%s(%d%s%s)' % (sig, i, ',' if coerced_args else '', coerced_args), sig[0], settings)
         function_tables_impls.append('''
   function jsCall_%s_%s(%s) {
     %s
@@ -506,6 +505,9 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
       shared.Settings.copy(settings)
       asm_setup += '\n' + shared.JS.make_invoke(sig) + '\n'
       basic_funcs.append('invoke_%s' % sig)
+      if settings.get('RESERVED_FUNCTION_POINTERS'):
+        asm_setup += '\n' + shared.JS.make_jscall(sig) + '\n'
+        basic_funcs.append('jsCall_%s' % sig)
       if settings.get('DLOPEN_SUPPORT'):
         asm_setup += '\n' + shared.JS.make_extcall(sig) + '\n'
         basic_funcs.append('extCall_%s' % sig)
@@ -785,7 +787,6 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
     if settings['GLOBAL_BASE'] >= 0:
       backend_args += ['-emscripten-global-base=%d' % settings['GLOBAL_BASE']]
     backend_args += ['-O' + str(settings['OPT_LEVEL'])]
-    backend_args += ['-emscripten-max-setjmps=%d' % settings['MAX_SETJMPS']]
     if DEBUG:
       logging.debug('emscript: llvm backend: ' + ' '.join(backend_args))
       t = time.time()
@@ -958,7 +959,20 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
 
     # Add named globals
     named_globals = '\n'.join(['var %s = %s;' % (k, v) for k, v in metadata['namedGlobals'].iteritems()])
-    pre = pre.replace('// === Body ===', '// === Body ===\n' + named_globals + '\n')
+    asm_consts = [0]*len(metadata['asmConsts'])
+    for k, v in metadata['asmConsts'].iteritems():
+      const = str(v)
+      if const[0] == '"' and const[-1] == '"':
+        const = const[1:-1]
+      const = '{ ' + const + ' }'
+      i = 0
+      args = []
+      while ('$' + str(i)) in const:
+        args.append('$' + str(i))
+        i += 1
+      const = 'function(' + ', '.join(args ) + ') ' + const
+      asm_consts[int(k)] = const
+    pre = pre.replace('// === Body ===', '// === Body ===\n' + named_globals + '\nRuntime.asmConsts = [' + ', '.join(asm_consts) + '];\n')
 
     # objc
     pre += "var EMSCRIPTEN_OBJC_METADATA = {\n"
@@ -989,9 +1003,8 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
       contents = m.groups(0)[0]
       outfile.write(contents + '\n')
       return ''
-    funcs_js[1] = re.sub(r'/\* PRE_ASM \*/(.*)\n', lambda m: move_preasm(m), funcs_js[1])
-
-    funcs_js += ['\n// EMSCRIPTEN_END_FUNCS\n']
+    if not settings['BOOTSTRAPPING_STRUCT_INFO']:
+      funcs_js[1] = re.sub(r'/\* PRE_ASM \*/(.*)\n', lambda m: move_preasm(m), funcs_js[1])
 
     class Counter:
       i = 0
@@ -1056,6 +1069,9 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
             if proper_sig[0] != 'v':
               # proper sig has a return, which the wrapper may or may not use
               proper_code = shared.JS.make_coercion(proper_code, proper_sig[0], settings)
+              if proper_sig[0] != sig[0]:
+                # first coercion ensured we call the target ok; this one ensures we return the right type in the wrapper
+                proper_code = shared.JS.make_coercion(proper_code, sig[0], settings, convert_from=proper_sig[0])
               if sig[0] != 'v':
                 proper_code = 'return ' + proper_code
             else:
@@ -1094,36 +1110,38 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
     infos = [make_table(sig, raw) for sig, raw in last_forwarded_json['Functions']['tables'].iteritems()]
     Counter.pre = []
 
-    function_tables_defs = '\n'.join([info[0] for info in infos]) + '\n// EMSCRIPTEN_END_FUNCS\n' + '\n'.join([info[1] for info in infos])
+    function_tables_defs = '\n'.join([info[0] for info in infos]) + '\n\n// EMSCRIPTEN_END_FUNCS\n' + '\n'.join([info[1] for info in infos])
 
     asm_setup = ''
-    maths = ['Math.' + func for func in ['floor', 'abs', 'sqrt', 'pow', 'cos', 'sin', 'tan', 'acos', 'asin', 'atan', 'atan2', 'exp', 'log', 'ceil', 'imul']]
+    maths = ['Math.' + func for func in ['floor', 'abs', 'sqrt', 'pow', 'cos', 'sin', 'tan', 'acos', 'asin', 'atan', 'atan2', 'exp', 'log', 'ceil', 'imul', 'min', 'clz32']]
     simdfloattypes = ['float32x4']
     simdinttypes = ['int32x4']
     simdtypes = simdfloattypes + simdinttypes
-    simdfuncs = ['add', 'sub', 'neg', 'mul',
+    simdfuncs = ['check', 'add', 'sub', 'neg', 'mul',
                  'equal', 'lessThan', 'greaterThan',
                  'notEqual', 'lessThanOrEqual', 'greaterThanOrEqual',
                  'select', 'and', 'or', 'xor', 'not',
                  'splat', 'swizzle', 'shuffle',
                  'withX', 'withY', 'withZ', 'withW',
-                 'load', 'store']
+                 'load', 'store', 'loadX', 'storeX', 'loadXY', 'storeXY', 'loadXYZ', 'storeXYZ']
     simdfloatfuncs = simdfuncs + ['div', 'min', 'max', 'minNum', 'maxNum', 'sqrt',
-                                  'abs', 'fromInt32x4', 'fromInt32x4Bits'];
+                                  'abs', 'fromInt32x4', 'fromInt32x4Bits',
+                                  'reciprocalApproximation', 'reciprocalSqrtApproximation'];
     simdintfuncs = simdfuncs + ['fromFloat32x4', 'fromFloat32x4Bits',
                                 'shiftRightArithmeticByScalar',
                                 'shiftRightLogicalByScalar',
                                 'shiftLeftByScalar'];
-    fundamentals = ['Math', 'Int8Array', 'Int16Array', 'Int32Array', 'Uint8Array', 'Uint16Array', 'Uint32Array', 'Float32Array', 'Float64Array']
+    fundamentals = ['Math', 'Int8Array', 'Int16Array', 'Int32Array', 'Uint8Array', 'Uint16Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'NaN', 'Infinity']
     if metadata['simd']:
         fundamentals += ['SIMD']
     if settings['ALLOW_MEMORY_GROWTH']: fundamentals.append('byteLength')
-    math_envs = ['Math.min'] # TODO: move min to maths
+    math_envs = []
 
-    if settings['PRECISE_F32']: maths += ['Math.fround']
+    provide_fround = settings['PRECISE_F32'] or settings['SIMD']
+
+    if provide_fround: maths += ['Math.fround']
 
     basic_funcs = ['abort', 'assert'] + [m.replace('.', '_') for m in math_envs]
-    if settings['RESERVED_FUNCTION_POINTERS'] > 0: basic_funcs.append('jsCall')
     if settings['SAFE_HEAP']: basic_funcs += ['SAFE_HEAP_LOAD', 'SAFE_HEAP_STORE', 'SAFE_FT_MASK']
     if settings['CHECK_HEAP_ALIGN']: basic_funcs += ['CHECK_ALIGN_2', 'CHECK_ALIGN_4', 'CHECK_ALIGN_8']
     if settings['ASSERTIONS']:
@@ -1162,15 +1180,13 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
                      '"); ' + extra + ' abort(x) }\n'
 
     basic_vars = ['STACKTOP', 'STACK_MAX', 'tempDoublePtr', 'ABORT']
-    basic_float_vars = ['NaN', 'Infinity']
+    basic_float_vars = []
 
     if metadata.get('preciseI64MathUsed'):
-      basic_vars += ['cttz_i8', 'ctlz_i8']
+      basic_vars += ['cttz_i8']
     else:
       if forwarded_json['Functions']['libraryFunctions'].get('_llvm_cttz_i32'):
         basic_vars += ['cttz_i8']
-      if forwarded_json['Functions']['libraryFunctions'].get('_llvm_ctlz_i32'):
-        basic_vars += ['ctlz_i8']
 
     if settings.get('DLOPEN_SUPPORT'):
       for sig in last_forwarded_json['Functions']['tables'].iterkeys():
@@ -1186,6 +1202,11 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
       basic_vars += ['___async', '___async_unwind', '___async_retval', '___async_cur_frame']
       asm_runtime_funcs += ['setAsync']
 
+    if settings.get('EMTERPRETIFY'):
+      asm_runtime_funcs += ['emterpret']
+      if settings.get('EMTERPRETIFY_ASYNC'):
+        asm_runtime_funcs += ['setAsyncState', 'emtStackSave']
+
     # function tables
     function_tables = ['dynCall_' + table for table in last_forwarded_json['Functions']['tables']]
     function_tables_impls = []
@@ -1196,26 +1217,29 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
       coerced_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(1, len(sig))])
       ret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}](%s)' % (sig, sig, coerced_args), sig[0], settings)
       function_tables_impls.append('''
-  function dynCall_%s(index%s%s) {
-    index = index|0;
-    %s
-    %s;
-  }
+function dynCall_%s(index%s%s) {
+  index = index|0;
+  %s
+  %s;
+}
 ''' % (sig, ',' if len(sig) > 1 else '', args, arg_coercions, ret))
 
       ffi_args = ','.join([shared.JS.make_coercion('a' + str(i), sig[i], settings, ffi_arg=True) for i in range(1, len(sig))])
       for i in range(settings['RESERVED_FUNCTION_POINTERS']):
-        jsret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('jsCall(%d%s%s)' % (i, ',' if ffi_args else '', ffi_args), sig[0], settings, ffi_result=True)
+        jsret = ('return ' if sig[0] != 'v' else '') + shared.JS.make_coercion('jsCall_%s(%d%s%s)' % (sig, i, ',' if ffi_args else '', ffi_args), sig[0], settings, ffi_result=True)
         function_tables_impls.append('''
-  function jsCall_%s_%s(%s) {
-    %s
-    %s;
-  }
+function jsCall_%s_%s(%s) {
+  %s
+  %s;
+}
 
 ''' % (sig, i, args, arg_coercions, jsret))
       shared.Settings.copy(settings)
       asm_setup += '\n' + shared.JS.make_invoke(sig) + '\n'
       basic_funcs.append('invoke_%s' % sig)
+      if settings.get('RESERVED_FUNCTION_POINTERS'):
+        asm_setup += '\n' + shared.JS.make_jscall(sig) + '\n'
+        basic_funcs.append('jsCall_%s' % sig)
       if settings.get('DLOPEN_SUPPORT'):
         asm_setup += '\n' + shared.JS.make_extcall(sig) + '\n'
         basic_funcs.append('extCall_%s' % sig)
@@ -1324,7 +1348,11 @@ def emscript_fast(infile, settings, outfile, libraries=[], compiler_engine=None,
 
     if settings['POINTER_MASKING']:
       for i in [0, 1, 2, 3]:
-        asm_global_vars += '  var MASK%d=%d;\n' % (i, (settings['TOTAL_MEMORY']-1) & (~((2**i)-1)));
+        if settings['POINTER_MASKING_DYNAMIC']:
+          asm_global_vars += '  const MASK%d=env' % i + access_quote('MASK%d' % i) + '|0;\n';
+          basic_vars += ['MASK%d' %i]
+        else:
+          asm_global_vars += '  const MASK%d=%d;\n' % (i, (settings['TOTAL_MEMORY']-1) & (~((2**i)-1)));
 
     # sent data
     the_global = '{ ' + ', '.join(['"' + math_fix(s) + '": ' + s for s in fundamentals]) + ' }'
@@ -1409,15 +1437,19 @@ var asm = (function(global, env, buffer) {
      access_quote('Uint16Array'),
      access_quote('Uint32Array'),
      access_quote('Float32Array'),
-     access_quote('Float64Array'))) + '\n' + asm_global_vars + '''
+     access_quote('Float64Array'))) + '\n' + asm_global_vars + ('''
   var __THREW__ = 0;
   var threwValue = 0;
   var setjmpId = 0;
   var undef = 0;
-  var nan = +env.NaN, inf = +env.Infinity;
+  var nan = global%s, inf = global%s;
   var tempInt = 0, tempBigInt = 0, tempBigIntP = 0, tempBigIntS = 0, tempBigIntR = 0.0, tempBigIntI = 0, tempBigIntD = 0, tempValue = 0, tempDouble = 0.0;
-''' + ''.join(['''
-  var tempRet%d = 0;''' % i for i in range(10)]) + '\n' + asm_global_funcs] + ['  var tempFloat = %s;\n' % ('Math_fround(0)' if settings.get('PRECISE_F32') else '0.0')] + (['  const f0 = Math_fround(0);\n'] if settings.get('PRECISE_F32') else []) + ['' if not settings['ALLOW_MEMORY_GROWTH'] else '''
+''' % (access_quote('NaN'), access_quote('Infinity'))) + ''.join(['''
+  var tempRet%d = 0;''' % i for i in range(10)]) + '\n' + asm_global_funcs] + \
+  ['  var tempFloat = %s;\n' % ('Math_fround(0)' if provide_fround else '0.0')] + \
+  ['  var asyncState = 0;\n' if settings.get('EMTERPRETIFY_ASYNC') else ''] + \
+  (['  const f0 = Math_fround(0);\n'] if provide_fround else []) + \
+  ['' if not settings['ALLOW_MEMORY_GROWTH'] else '''
 function _emscripten_replace_memory(newBuffer) {
   if ((byteLength(newBuffer) & 0xffffff || byteLength(newBuffer) <= 0xffffff) || byteLength(newBuffer) > 0x80000000) return false;
   HEAP8 = new Int8View(newBuffer);
@@ -1431,7 +1463,12 @@ function _emscripten_replace_memory(newBuffer) {
   buffer = newBuffer;
   return true;
 }
-'''] + ['''
+'''] + \
+  ['' if not settings['POINTER_MASKING'] or settings['POINTER_MASKING_DYNAMIC'] else '''
+function _declare_heap_length() {
+  return HEAP8[%s] | 0;
+}
+  ''' % (settings['TOTAL_MEMORY'] + settings['POINTER_MASKING_OVERFLOW'] - 1)] + ['''
 // EMSCRIPTEN_START_FUNCS
 function stackAlloc(size) {
   size = size|0;
@@ -1452,7 +1489,20 @@ function stackRestore(top) {
 ''' + ('''
 function setAsync() {
   ___async = 1;
-}''' if need_asyncify else '') + '''
+}''' if need_asyncify else '') + ('''
+function emterpret(pc) { // this will be replaced when the emterpreter code is generated; adding it here allows validation until then
+  pc = pc | 0;
+  assert(0);
+}
+''' if settings['EMTERPRETIFY'] else '') + ('''
+function setAsyncState(x) {
+  x = x | 0;
+  asyncState = x;
+}
+function emtStackSave() {
+  return EMTSTACKTOP|0;
+}
+''' if settings['EMTERPRETIFY_ASYNC'] else '') + '''
 function setThrew(threw, value) {
   threw = threw|0;
   value = value|0;
@@ -1494,7 +1544,7 @@ function getTempRet0() {
 // EMSCRIPTEN_END_ASM
 (%s, %s, buffer);
 %s;
-''' % (pre_tables + '\n'.join(function_tables_impls) + '\n' + function_tables_defs.replace('\n', '\n  '), exports,
+''' % (pre_tables + '\n'.join(function_tables_impls) + '\n' + function_tables_defs, exports,
        'Module' + access_quote('asmGlobalArg'),
        'Module' + access_quote('asmLibraryArg'),
        receiving)]
@@ -1568,6 +1618,9 @@ Runtime.getTempRet0 = asm['getTempRet0'];
 
 if os.environ.get('EMCC_FAST_COMPILER') != '0':
   emscript = emscript_fast
+else:
+  logging.critical('Non-fastcomp compiler is no longer available, please use fastcomp or an older version of emscripten')
+  sys.exit(1)
 
 def main(args, compiler_engine, cache, jcache, relooper, temp_files, DEBUG, DEBUG_CACHE):
   # Prepare settings for serialization to JSON.
@@ -1592,8 +1645,10 @@ def main(args, compiler_engine, cache, jcache, relooper, temp_files, DEBUG, DEBU
   settings.setdefault('STRUCT_INFO', cache.get_path('struct_info.compiled.json'))
   struct_info = settings.get('STRUCT_INFO')
 
-  if not os.path.exists(struct_info):
+  if not os.path.exists(struct_info) and not settings.get('BOOTSTRAPPING_STRUCT_INFO'):
+    if DEBUG: logging.debug('  emscript: bootstrapping struct info...')
     shared.Building.ensure_struct_info(struct_info)
+    if DEBUG: logging.debug('  emscript: bootstrapping struct info complete')
 
   emscript(args.infile, settings, args.outfile, libraries, compiler_engine=compiler_engine,
            jcache=jcache, temp_files=temp_files, DEBUG=DEBUG, DEBUG_CACHE=DEBUG_CACHE)

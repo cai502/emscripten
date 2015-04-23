@@ -9,6 +9,8 @@ if emscripten_browser:
   cmd = shlex.split(emscripten_browser)
   def run_in_other_browser(url):
     Popen(cmd + [url])
+  if EM_BUILD_VERBOSE_LEVEL >= 3:
+    print >> sys.stderr, "using Emscripten browser: " + str(cmd)
   webbrowser.open_new = run_in_other_browser
 
 class interactive(BrowserCore):
@@ -33,6 +35,9 @@ class interactive(BrowserCore):
 
   def test_sdl_wm_togglefullscreen(self):
     self.btest('sdl_wm_togglefullscreen.c', expected='1', args=['-s', 'NO_EXIT_RUNTIME=1'])
+
+  def test_sdl2_togglefullscreen(self):
+    self.btest('sdl_togglefullscreen.c', expected='1', args=['-s', 'USE_SDL=2', '-s', 'NO_EXIT_RUNTIME=1'])
 
   def test_sdl_audio(self):
     shutil.copyfile(path_from_root('tests', 'sounds', 'alarmvictory_1.ogg'), os.path.join(self.get_dir(), 'sound.ogg'))
@@ -107,3 +112,6 @@ class interactive(BrowserCore):
       assert os.path.exists(program)
       Popen([PYTHON, EMCC, '-O2', program, '-o', 'page.html']).communicate()
       self.run_browser('page.html', 'You should hear "Hello World!"')
+
+  def test_vr(self):
+    self.btest(path_from_root('tests', 'test_vr.c'), expected='0')

@@ -57,8 +57,10 @@ function preprocess(text) {
           ret += '\n' + preprocess(included) + '\n'
         }
       } else if (line[2] == 'l') { // else
+        assert(showStack.length > 0);
         showStack.push(!showStack.pop());
       } else if (line[2] == 'n') { // endif
+        assert(showStack.length > 0);
         showStack.pop();
       } else {
         throw "Unclear preprocessor command: " + line;
@@ -2646,17 +2648,6 @@ function getTypeFromHeap(suffix) {
     case 'F64': return 'double';
     default: throw 'getTypeFromHeap? ' + suffix;
   }
-}
-
-// Generates code that prints without printf(), but just putchar (so can be directly inline in asm.js)
-function makePrintChars(s, sep) {
-  sep = sep || ';';
-  var ret = '';
-  for (var i = 0; i < s.length; i++) {
-    ret += '_putchar(' + s.charCodeAt(i) + ')' + sep;
-  }
-  ret += '_putchar(10)';
-  return ret;
 }
 
 function parseAlign(text) { // parse ", align \d+"

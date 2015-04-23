@@ -263,16 +263,21 @@ def listify(x):
   if type(x) is not list: return [x]
   return x
 
+def fix_js_engine(old, new):
+  global JS_ENGINES
+  JS_ENGINES = map(lambda x: new if x == old else x, JS_ENGINES)
+  return new
+
 try:
-  SPIDERMONKEY_ENGINE = listify(SPIDERMONKEY_ENGINE)
+  SPIDERMONKEY_ENGINE = fix_js_engine(SPIDERMONKEY_ENGINE, listify(SPIDERMONKEY_ENGINE))
 except:
   pass
 try:
-  NODE_JS = listify(NODE_JS)
+  NODE_JS = fix_js_engine(NODE_JS, listify(NODE_JS))
 except:
   pass
 try:
-  V8_ENGINE = listify(V8_ENGINE)
+  V8_ENGINE = fix_js_engine(V8_ENGINE, listify(V8_ENGINE))
 except:
   pass
 
@@ -292,9 +297,16 @@ if EM_POPEN_WORKAROUND and os.name == 'nt':
   logging.debug('Installing Popen workaround handler to avoid bug http://bugs.python.org/issue3905')
   Popen = WindowsPopen
 
+# Verbosity level control for any intermediate subprocess spawns from the compiler. Useful for internal debugging.
+# 0: disabled.
+# 1: Log stderr of subprocess spawns.
+# 2: Log stdout and stderr of subprocess spawns. Print out subprocess commands that were executed.
+# 3: Log stdout and stderr, and pass VERBOSE=1 to CMake configure steps.
+EM_BUILD_VERBOSE_LEVEL = int(os.getenv('EM_BUILD_VERBOSE')) if os.getenv('EM_BUILD_VERBOSE') != None else 0
+
 # Expectations
 
-EXPECTED_LLVM_VERSION = (3,4)
+EXPECTED_LLVM_VERSION = (3, 6)
 
 actual_clang_version = None
 
@@ -454,8 +466,12 @@ def check_sanity(force=False):
     # some warning, mostly not fatal checks - do them even if EM_IGNORE_SANITY is on
     check_llvm_version()
     check_node_version()
-    if os.environ.get('EMCC_FAST_COMPILER') != '0':
-      fastcomp_ok = check_fastcomp()
+
+    if os.environ.get('EMCC_FAST_COMPILER') == '0':
+      logging.critical('Non-fastcomp compiler is no longer available, please use fastcomp or an older version of emscripten')
+      sys.exit(1)
+
+    fastcomp_ok = check_fastcomp()
 
     if os.environ.get('EM_IGNORE_SANITY'):
       logging.info('EM_IGNORE_SANITY set, ignoring sanity checks')
@@ -565,6 +581,9 @@ def get_clang_native_args():
     sdk_path = osx_find_native_sdk_path()
     if sdk_path:
       CACHED_CLANG_NATIVE_ARGS = ['-isysroot', osx_find_native_sdk_path()]
+  elif os.name == 'nt':
+    CACHED_CLANG_NATIVE_ARGS = ['-DWIN32']
+    # TODO: If Windows.h et al. are needed, will need to add something like '-isystemC:/Program Files (x86)/Microsoft SDKs/Windows/v7.1A/Include'.
   return CACHED_CLANG_NATIVE_ARGS
 
 CLANG_CC=os.path.expanduser(build_clang_tool_path('clang'))
@@ -612,6 +631,18 @@ def safe_ensure_dirs(dirname):
     # handle this atomically in Python 2.x.
     # There is an additional option for Python 3.x, though.
 
+# Returns a path to EMSCRIPTEN_TEMP_DIR, creating one if it didn't exist.
+def get_emscripten_temp_dir():
+  global configuration, EMSCRIPTEN_TEMP_DIR
+  if not EMSCRIPTEN_TEMP_DIR:
+    EMSCRIPTEN_TEMP_DIR = tempfile.mkdtemp(prefix='emscripten_temp_', dir=configuration.TEMP_DIR)
+    def prepare_to_clean_temp(d):
+      def clean_temp():
+        try_delete(d)
+      atexit.register(clean_temp)
+    prepare_to_clean_temp(EMSCRIPTEN_TEMP_DIR) # this global var might change later
+  return EMSCRIPTEN_TEMP_DIR
+
 class Configuration:
   def __init__(self, environ=os.environ):
     self.DEBUG = environ.get('EMCC_DEBUG')
@@ -642,7 +673,7 @@ class Configuration:
 
   def get_temp_files(self):
     return tempfiles.TempFiles(
-      tmp=self.TEMP_DIR if not self.DEBUG else self.EMSCRIPTEN_TEMP_DIR,
+      tmp=self.TEMP_DIR if not self.DEBUG else get_emscripten_temp_dir(),
       save_debug_files=os.environ.get('EMCC_DEBUG_SAVE'))
 
 def apply_configuration():
@@ -660,14 +691,6 @@ def set_logging():
   logger = logging.getLogger()
   logger.setLevel(logging.DEBUG if os.environ.get('EMCC_DEBUG') else logging.INFO)
 set_logging()
-
-if not EMSCRIPTEN_TEMP_DIR:
-  EMSCRIPTEN_TEMP_DIR = tempfile.mkdtemp(prefix='emscripten_temp_', dir=configuration.TEMP_DIR)
-  def prepare_to_clean_temp(d):
-    def clean_temp():
-      try_delete(d)
-    atexit.register(clean_temp)
-  prepare_to_clean_temp(EMSCRIPTEN_TEMP_DIR) # this global var might change later
 
 # EM_CONFIG stuff
 
@@ -702,9 +725,7 @@ except:
 # Target choice. Must be synced with src/settings.js (TARGET_*)
 def get_llvm_target():
   if os.environ.get('EMCC_FAST_COMPILER') == '0':
-    if not os.environ.get('EMCC_LLVM_TARGET'):
-      os.environ['EMCC_LLVM_TARGET'] = 'le32-unknown-nacl'
-    return os.environ.get('EMCC_LLVM_TARGET')
+    return 'unavailable-non-fastcomp'
   return os.environ.get('EMCC_LLVM_TARGET') or 'asmjs-unknown-emscripten'
 LLVM_TARGET = get_llvm_target()
 
@@ -805,12 +826,9 @@ else:
 try:
   if SPIDERMONKEY_ENGINE:
     new_spidermonkey = SPIDERMONKEY_ENGINE
-    if 'gcparam' not in str(new_spidermonkey):
-      new_spidermonkey += ['-e', "gcparam('maxBytes', 1024*1024*1024);"] # Our very large files need lots of gc heap
     if '-w' not in str(new_spidermonkey):
       new_spidermonkey += ['-w']
-    JS_ENGINES = map(lambda x: new_spidermonkey if x == SPIDERMONKEY_ENGINE else x, JS_ENGINES)
-    SPIDERMONKEY_ENGINE = new_spidermonkey
+    SPIDERMONKEY_ENGINE = fix_js_engine(SPIDERMONKEY_ENGINE, new_spidermonkey)
 except NameError:
   pass
 
@@ -835,6 +853,11 @@ def check_engine(engine):
   except Exception, e:
     print 'Checking JS engine %s failed. Check %s. Details: %s' % (str(engine), EM_CONFIG, str(e))
     return False
+
+def make_js_command(filename, engine=None, *args):
+  if engine is None:
+    engine = JS_ENGINES[0]
+  return jsrun.make_command(filename, engine, *args)
 
 def run_js(filename, engine=None, *args, **kw):
   if engine is None:
@@ -928,7 +951,9 @@ class Settings2(type):
       # Apply additional settings. First -O, then -s
       for i in range(len(args)):
         if args[i].startswith('-O'):
-          level = eval(args[i][2])
+          v = args[i][2]
+          if v in ['s', 'z']: v = '2'
+          level = eval(v)
           self.apply_opt_level(level)
       for i in range(len(args)):
         if args[i] == '-s':
@@ -1028,6 +1053,7 @@ class Building:
     env['PKG_CONFIG_LIBDIR'] = path_from_root('system', 'local', 'lib', 'pkgconfig') + os.path.pathsep + path_from_root('system', 'lib', 'pkgconfig')
     env['PKG_CONFIG_PATH'] = os.environ.get ('EM_PKG_CONFIG_PATH') or ''
     env['EMSCRIPTEN'] = path_from_root()
+    env['PATH'] = path_from_root('system', 'bin') + os.pathsep + env['PATH']
     return env
 
   # Finds the given executable 'program' in PATH. Operates like the Unix tool 'which'.
@@ -1058,6 +1084,17 @@ class Building:
 
     return None
 
+  # Returns a clone of the given environment with all directories that contain sh.exe removed from the PATH.
+  # Used to work around CMake limitation with MinGW Makefiles, where sh.exe is not allowed to be present.
+  @staticmethod
+  def remove_sh_exe_from_path(env):
+    env = env.copy()
+    if not WINDOWS: return env
+    path = env['PATH'].split(';')
+    path = filter(lambda p: not os.path.exists(os.path.join(p, 'sh.exe')), path)
+    env['PATH'] = ';'.join(path)
+    return env
+  
   @staticmethod
   def handle_CMake_toolchain(args, env):
 
@@ -1075,8 +1112,13 @@ class Building:
     # pulling in a native Visual Studio, or Unix Makefiles.
     if WINDOWS and not '-G' in args and Building.which('mingw32-make'):
       args += ['-G', 'MinGW Makefiles']
- 
-    return args
+
+    # CMake has a requirement that it wants sh.exe off PATH if MinGW Makefiles is being used. This happens quite often,
+    # so do this automatically on behalf of the user. See http://www.cmake.org/Wiki/CMake_MinGW_Compiler_Issues
+    if WINDOWS and 'MinGW Makefiles' in args:
+      env = Building.remove_sh_exe_from_path(env)
+
+    return (args, env)
 
   @staticmethod
   def configure(args, stdout=None, stderr=None, env=None):
@@ -1087,13 +1129,14 @@ class Building:
     if 'cmake' in args[0]:
       # Note: EMMAKEN_JUST_CONFIGURE shall not be enabled when configuring with CMake. This is because CMake
       #       does expect to be able to do config-time builds with emcc.
-      args = Building.handle_CMake_toolchain(args, env)
+      args, env = Building.handle_CMake_toolchain(args, env)
     else:
       # When we configure via a ./configure script, don't do config-time compilation with emcc, but instead
       # do builds natively with Clang. This is a heuristic emulation that may or may not work. 
       env['EMMAKEN_JUST_CONFIGURE'] = '1'
     try:
-      process = Popen(args, stdout=stdout, stderr=stderr, env=env)
+      if EM_BUILD_VERBOSE_LEVEL >= 3: print >> sys.stderr, 'configure: ' + str(args)
+      process = Popen(args, stdout=None if EM_BUILD_VERBOSE_LEVEL >= 2 else stdout, stderr=None if EM_BUILD_VERBOSE_LEVEL >= 1 else stderr, env=env)
       process.communicate()
     except Exception, e:
       logging.error('Exception thrown when invoking Popen in configure with args: "%s"!' % ' '.join(args))
@@ -1113,13 +1156,19 @@ class Building:
     #args += ['VERBOSE=1']
 
     # On Windows prefer building with mingw32-make instead of make, if it exists.
-    if WINDOWS and args[0] == 'make':
-      mingw32_make = Building.which('mingw32-make')
-      if mingw32_make:
-        args[0] = mingw32_make
+    if WINDOWS:
+      if args[0] == 'make':
+        mingw32_make = Building.which('mingw32-make')
+        if mingw32_make:
+          args[0] = mingw32_make
+
+      if 'mingw32-make' in args[0]:
+        env = Building.remove_sh_exe_from_path(env)
 
     try:
-      process = Popen(args, stdout=stdout, stderr=stderr, env=env)
+      # On Windows, run the execution through shell to get PATH expansion and executable extension lookup, e.g. 'sdl2-config' will match with 'sdl2-config.bat' in PATH.
+      if EM_BUILD_VERBOSE_LEVEL >= 3: print >> sys.stderr, 'make: ' + str(args)
+      process = Popen(args, stdout=None if EM_BUILD_VERBOSE_LEVEL >= 2 else stdout, stderr=None if EM_BUILD_VERBOSE_LEVEL >= 1 else stderr, env=env, shell=WINDOWS)
       process.communicate()
     except Exception, e:
       logging.error('Exception thrown when invoking Popen in make with args: "%s"!' % ' '.join(args))
@@ -1160,13 +1209,12 @@ class Building:
     #  except:
     #    pass
     env = Building.get_building_env(native)
-    verbose_level = int(os.getenv('EM_BUILD_VERBOSE')) if os.getenv('EM_BUILD_VERBOSE') != None else 0
     for k, v in env_init.iteritems():
       env[k] = v
     if configure: # Useful in debugging sometimes to comment this out (and the lines below up to and including the |link| call)
       try:
-        Building.configure(configure + configure_args, env=env, stdout=open(os.path.join(project_dir, 'configure_'), 'w') if verbose_level < 2 else None,
-                                                                stderr=open(os.path.join(project_dir, 'configure_err'), 'w') if verbose_level < 1 else None)
+        Building.configure(configure + configure_args, env=env, stdout=open(os.path.join(project_dir, 'configure_'), 'w') if EM_BUILD_VERBOSE_LEVEL < 2 else None,
+                                                                stderr=open(os.path.join(project_dir, 'configure_err'), 'w') if EM_BUILD_VERBOSE_LEVEL < 1 else None)
       except subprocess.CalledProcessError, e:
         pass # Ignore exit code != 0
     def open_make_out(i, mode='r'):
@@ -1175,15 +1223,15 @@ class Building:
     def open_make_err(i, mode='r'):
       return open(os.path.join(project_dir, 'make_err' + str(i)), mode)
 
-    if verbose_level >= 3:
+    if EM_BUILD_VERBOSE_LEVEL >= 3:
       make_args += ['VERBOSE=1']
 
     for i in range(2): # FIXME: Sad workaround for some build systems that need to be run twice to succeed (e.g. poppler)
       with open_make_out(i, 'w') as make_out:
         with open_make_err(i, 'w') as make_err:
           try:
-            Building.make(make + make_args, stdout=make_out if verbose_level < 2 else None,
-                                            stderr=make_err if verbose_level < 1 else None, env=env)
+            Building.make(make + make_args, stdout=make_out if EM_BUILD_VERBOSE_LEVEL < 2 else None,
+                                            stderr=make_err if EM_BUILD_VERBOSE_LEVEL < 1 else None, env=env)
           except subprocess.CalledProcessError, e:
             pass # Ignore exit code != 0
       try:
@@ -1195,7 +1243,7 @@ class Building:
         break
       except Exception, e:
         if i > 0:
-          if verbose_level == 0:
+          if EM_BUILD_VERBOSE_LEVEL == 0:
             # Due to the ugly hack above our best guess is to output the first run
             with open_make_err(0) as ferr:
               for line in ferr:
@@ -1260,11 +1308,23 @@ class Building:
 
       cwd = os.getcwd()
       try:
-        temp_dir = os.path.join(EMSCRIPTEN_TEMP_DIR, 'ar_output_' + str(os.getpid()) + '_' + str(len(temp_dirs)))
+        emscripten_temp_dir = get_emscripten_temp_dir()
+        temp_dir = os.path.join(emscripten_temp_dir, 'ar_output_' + str(os.getpid()) + '_' + str(len(temp_dirs)))
         temp_dirs.append(temp_dir)
         safe_ensure_dirs(temp_dir)
         os.chdir(temp_dir)
         contents = filter(lambda x: len(x) > 0, Popen([LLVM_AR, 't', f], stdout=PIPE).communicate()[0].split('\n'))
+        # llvm-ar appears to just use basenames inside archives. as a result, files with the same basename
+        # will trample each other when we extract them. to help warn of such situations, we warn if there
+        # are duplicate entries in the archive
+        if len(contents) != len(set(contents)):
+          logging.warning('loading from archive %s, which has duplicate entries (files with identical base names). this is dangerous as only the last will be taken into account, and you may see surprising undefined symbols later. you should rename source files to avoid this problem (or avoid .a archives, and just link bitcode together to form libraries for later linking)' % f)
+          warned = set()
+          for i in range(len(contents)):
+            curr = contents[i]
+            if curr not in warned and curr in contents[i+1:]:
+              logging.warning('   duplicate: %s' % curr)
+              warned.add(curr)
         if len(contents) == 0:
           logging.debug('Archive %s appears to be empty (recommendation: link an .so instead of .a)' % f)
         else:
@@ -1402,7 +1462,7 @@ class Building:
     #opts += ['-debug-pass=Arguments']
     if get_clang_version() >= '3.4':
       if not Settings.SIMD:
-        opts += ['-disable-vectorize']
+        opts += ['-disable-loop-vectorization', '-disable-slp-vectorization', '-vectorize-loops=false', '-vectorize-slp=false', '-vectorize-slp-aggressive=false']
       else:
         opts += ['-bb-vectorize-vector-bits=128', '-force-vector-width=4']
 
@@ -1838,6 +1898,26 @@ class JS:
     ret = '''function%s(%s) {
   %sModule["dynCall_%s"](%s);
 }''' % ((' extCall_' + sig) if named else '', args, 'return ' if sig[0] != 'v' else '', sig, args)
+
+    if Settings.DLOPEN_SUPPORT and Settings.ASSERTIONS:
+      # guard against cross-module stack leaks
+      ret = ret.replace(') {\n', ''') {
+  try {
+    var preStack = asm.stackSave();
+''').replace(';\n}', ''';
+  } finally {
+    assert(asm.stackSave() == preStack);
+  }
+}''')
+    return ret
+
+  @staticmethod
+  def make_jscall(sig, named=True):
+    fnargs = ','.join(['a' + str(i) for i in range(1, len(sig))])
+    args = 'index' + (',' if fnargs else '') + fnargs
+    ret = '''function%s(%s) {
+    %sRuntime.functionPointers[index](%s);
+}''' % ((' jsCall_' + sig) if named else '', args, 'return ' if sig[0] != 'v' else '', fnargs)
 
     if Settings.DLOPEN_SUPPORT and Settings.ASSERTIONS:
       # guard against cross-module stack leaks

@@ -95,7 +95,8 @@ var LibrarySDL = {
     
     eventHandler: null,
     eventHandlerContext: null,
-    
+    eventHandlerTemp: 0,
+
     keyCodes: { // DOM code ==> SDL code. See https://developer.mozilla.org/en/Document_Object_Model_%28DOM%29/KeyboardEvent and SDL_keycode.h
       // For keys that don't have unicode value, we map DOM codes with the corresponding scan codes + 1024 (using "| 1 << 10")
       16: 225 | 1<<10, // shift
@@ -190,6 +191,7 @@ var LibrarySDL = {
       220: 92, // back slash
       221: 93, // close square bracket
       222: 39, // quote
+      224: 227 | 1<<10, // meta (command/windows)      
     },
 
     scanCodes: { // SDL keycode ==> SDL scancode. See SDL_scancode.h
@@ -841,11 +843,8 @@ var LibrarySDL = {
     flushEventsToHandler: function() {
       if (!SDL.eventHandler) return;
 
-      // All SDLEvents take the same amount of memory
-      var sdlEventPtr = allocate({{{ C_STRUCTS.SDL_KeyboardEvent.__size__ }}}, "i8", ALLOC_STACK);
-
-      while (SDL.pollEvent(sdlEventPtr)) {
-        Runtime.dynCall('iii', SDL.eventHandler, [SDL.eventHandlerContext, sdlEventPtr]);
+      while (SDL.pollEvent(SDL.eventHandlerTemp)) {
+        Runtime.dynCall('iii', SDL.eventHandler, [SDL.eventHandlerContext, SDL.eventHandlerTemp]);
       }
     },
 
@@ -1594,9 +1593,43 @@ var LibrarySDL = {
         var data32 = new Uint32Array(data.buffer);
         if (isScreen && SDL.defaults.opaqueFrontBuffer) {
           num = data32.length;
-          while (dst < num) {
-            // HEAP32[src++] is an optimization. Instead, we could do {{{ makeGetValue('buffer', 'dst', 'i32') }}};
-            data32[dst++] = HEAP32[src++] | 0xff000000;
+          // logically we need to do
+          //      while (dst < num) {
+          //          data32[dst++] = HEAP32[src++] | 0xff000000
+          //      }
+          // the following code is faster though, because
+          // .set() is almost free - easily 10x faster due to
+          // native memcpy efficiencies, and the remaining loop
+          // just stores, not load + store, so it is faster
+          data32.set(HEAP32.subarray(src, src + num));
+          var data8 = new Uint8Array(data.buffer);
+          var i = 3;
+          var j = i + 4*num;
+          if (num % 8 == 0) {
+            // unrolling gives big speedups
+            while (i < j) {
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+            }
+           } else {
+            while (i < j) {
+              data8[i] = 0xff;
+              i = i + 4 | 0;
+            }
           }
         } else {
           data32.set(HEAP32.subarray(src, src + data32.length));
@@ -1648,15 +1681,24 @@ var LibrarySDL = {
     // We actually do the whole screen in Unlock...
   },
 
+#if EMTERPRETIFY_ASYNC == 0
   SDL_Delay: function(delay) {
     if (!ENVIRONMENT_IS_WORKER) abort('SDL_Delay called on the main thread! Potential infinite loop, quitting.');
     // horrible busy-wait, but in a worker it at least does not block rendering
     var now = Date.now();
     while (Date.now() - now < delay) {}
   },
+#else
+  SDL_Delay__deps: ['emscripten_sleep'],
+  SDL_Delay: function(delay) {
+    _emscripten_sleep(delay);
+  },
+#endif
 
   SDL_WM_SetCaption: function(title, icon) {
-    title = title && Pointer_stringify(title);
+    if (title && typeof Module['setWindowTitle'] !== 'undefined') {
+      Module['setWindowTitle'](Pointer_stringify(title));
+    }
     icon = icon && Pointer_stringify(icon);
   },
 
@@ -1735,8 +1777,8 @@ var LibrarySDL = {
 
   SDL_SetError: function() {},
 
-  SDL_Malloc: 'malloc',
-  SDL_Free: 'free',
+  SDL_malloc: 'malloc',
+  SDL_free: 'free',
 
   SDL_CreateRGBSurface: function(flags, width, height, depth, rmask, gmask, bmask, amask) {
     return SDL.makeSurface(width, height, flags, false, 'CreateRGBSurface', rmask, gmask, bmask, amask);
@@ -1967,6 +2009,9 @@ var LibrarySDL = {
   emscripten_SDL_SetEventHandler: function(handler, userdata) {
     SDL.eventHandler = handler;
     SDL.eventHandlerContext = userdata;
+
+    // All SDLEvents take the same amount of memory
+    if (!SDL.eventHandlerTemp) SDL.eventHandlerTemp = _malloc({{{ C_STRUCTS.SDL_KeyboardEvent.__size__ }}});
   },
 
   SDL_SetColors: function(surf, colors, firstColor, nColors) {
@@ -2223,6 +2268,9 @@ var LibrarySDL = {
 
   // SDL_Audio
 
+#if EMTERPRETIFY_ASYNC
+  SDL_OpenAudio__deps: ['$EmterpreterAsync'],
+#endif
   SDL_OpenAudio: function(desired, obtained) {
     try {
       SDL.audio = {
@@ -2291,11 +2339,10 @@ var LibrarySDL = {
       SDL.audio.queueNewAudioData = function SDL_queueNewAudioData() {
         if (!SDL.audio) return;
 
-        var secsUntilNextPlayStart = SDL.audio.nextPlayTime - SDL.audioContext['currentTime'];
-
         for(var i = 0; i < SDL.audio.numSimultaneouslyQueuedBuffers; ++i) {
           // Only queue new data if we don't have enough audio data already in queue. Otherwise skip this time slot
           // and wait to queue more in the next time the callback is run.
+          var secsUntilNextPlayStart = SDL.audio.nextPlayTime - SDL.audioContext['currentTime'];
           if (secsUntilNextPlayStart >= SDL.audio.bufferingDelay + SDL.audio.bufferDurationSecs*SDL.audio.numSimultaneouslyQueuedBuffers) return;
 
           // Ask SDL audio data from the user code.
@@ -2304,6 +2351,14 @@ var LibrarySDL = {
           SDL.audio.pushAudio(SDL.audio.buffer, SDL.audio.bufferSize);
         }
       } 
+
+#if EMTERPRETIFY_ASYNC
+      var yieldCallback = function() {
+        if (SDL.audio && SDL.audio.queueNewAudioData) SDL.audio.queueNewAudioData();
+      };
+      SDL.audio.yieldCallback = yieldCallback;
+      EmterpreterAsync.yieldCallbacks.push(yieldCallback);
+#endif
 
       // Create a callback function that will be routinely called to ask more audio data from the user application.
       SDL.audio.caller = function SDL_audioCaller() {
@@ -2442,6 +2497,11 @@ var LibrarySDL = {
   SDL_CloseAudio__deps: ['SDL_PauseAudio', 'free'],
   SDL_CloseAudio: function() {
     if (SDL.audio) {
+#if EMTERPRETIFY_ASYNC
+      EmterpreterAsync.yieldCallbacks = EmterpreterAsync.yieldCallbacks.filter(function(callback) {
+        return callback !== SDL.audio.yieldCallback;
+      });
+#endif
       _SDL_PauseAudio(1);
       _free(SDL.audio.buffer);
       SDL.audio = null;

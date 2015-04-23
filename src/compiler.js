@@ -147,7 +147,11 @@ if (settings_file) {
     var value = settings[key];
     if (value[0] == '@') {
       // response file type thing, workaround for large inputs: value is @path-to-file
-      value = JSON.parse(read(value.substr(1)));
+      try {
+        value = JSON.parse(read(value.substr(1)));
+      } catch(e) {
+        // continue normally; assume it is not a response file
+      }
     }
     eval(key + ' = ' + JSON.stringify(value));
   }
@@ -210,15 +214,20 @@ if (phase == 'pre') {
 
 if (VERBOSE) printErr('VERBOSE is on, this generates a lot of output and can slow down compilation');
 
-// Load struct and define information.
-//try {
-  var temp = JSON.parse(read(STRUCT_INFO));
-//} catch(e) {
-//  printErr('cannot load struct info at ' + STRUCT_INFO + ' : ' + e + ', trying in current dir');
-//  temp = JSON.parse(read('struct_info.compiled.json'));
-//}
-C_STRUCTS = temp.structs;
-C_DEFINES = temp.defines;
+if (!BOOTSTRAPPING_STRUCT_INFO) {
+  // Load struct and define information.
+  //try {
+    var temp = JSON.parse(read(STRUCT_INFO));
+  //} catch(e) {
+  //  printErr('cannot load struct info at ' + STRUCT_INFO + ' : ' + e + ', trying in current dir');
+  //  temp = JSON.parse(read('struct_info.compiled.json'));
+  //}
+  C_STRUCTS = temp.structs;
+  C_DEFINES = temp.defines;
+} else {
+  C_STRUCTS = {};
+  C_DEFINES = {};
+}
 
 // Load compiler code
 
@@ -327,12 +336,12 @@ try {
     }
   }
 } catch(err) {
-  if (err.indexOf('Aborting compilation due to previous errors') != -1) {
+  if (err.toString().indexOf('Aborting compilation due to previous errors') != -1) {
     // Compiler failed on user error, print out the error message.
     printErr(err + ' | ' + err.stack);
   } else {
     // Compiler failed on internal compiler error!
-    printErr('Internal compiler error in src/compiler.js! Please raise a bug report at https://github.com/kripken/emscripten/issues/ with a log of the build and the input files used to run. Exception message: ' + err + ' | ' + err.stack);
+    printErr('Internal compiler error in src/compiler.js! Please raise a bug report at https://github.com/kripken/emscripten/issues/ with a log of the build and the input files used to run. Exception message: "' + err + '" | ' + err.stack);
   }
 
   if (ENVIRONMENT_IS_NODE) {

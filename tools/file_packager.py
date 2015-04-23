@@ -358,6 +358,8 @@ if has_preloaded:
     data.write(curr)
   data.close()
   # TODO: sha256sum on data_target
+  if start > 256*1024*1024:
+    print >> sys.stderr, 'warning: file packager is creating an asset bundle of %d MB. this is very large, and browsers might have trouble loading it. see https://hacks.mozilla.org/2015/02/synchronous-execution-and-filesystem-access-in-emscripten/' % (start/(1024*1024))
   if Compression.on:
     Compression.compress(data_target)
 
@@ -482,9 +484,11 @@ if has_preloaded:
     var PACKAGE_PATH;
     if (typeof window === 'object') {
       PACKAGE_PATH = window['encodeURIComponent'](window.location.pathname.toString().substring(0, window.location.pathname.toString().lastIndexOf('/')) + '/');
-    } else {
+    } else if (typeof location !== 'undefined') {
       // worker
       PACKAGE_PATH = encodeURIComponent(location.pathname.toString().substring(0, location.pathname.toString().lastIndexOf('/')) + '/');
+    } else {
+      throw 'using preloaded data can only be done on a web page or in a web worker';
     }
     var PACKAGE_NAME = '%s';
     var REMOTE_PACKAGE_BASE = '%s';

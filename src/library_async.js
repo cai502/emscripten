@@ -1,3 +1,7 @@
+// Async support
+//
+// Two experiments in async support: ASYNCIFY, and EMTERPRETIFY_ASYNC
+
 mergeInto(LibraryManager.library, {
 #if ASYNCIFY
 /*
@@ -77,7 +81,7 @@ mergeInto(LibraryManager.library, {
   emscripten_realloc_async_context: function(len) {
     len = len|0;
     // assuming that we have on the stacktop
-    stackRestore(___async_cur_frame);
+    stackRestore(___async_cur_frame | 0);
     return ((stackAlloc((len + 8)|0)|0) + 8)|0;
   },
 
@@ -91,7 +95,7 @@ mergeInto(LibraryManager.library, {
 #if ASSERTIONS
     assert((((___async_cur_frame + 8)|0) == (ctx|0))|0);
 #endif
-    stackRestore(___async_cur_frame);
+    stackRestore(___async_cur_frame | 0);
     ___async_cur_frame = {{{ makeGetValueAsm('___async_cur_frame', 0, 'i32') }}};
   },
 
@@ -140,10 +144,11 @@ mergeInto(LibraryManager.library, {
   emscripten_coroutine_next__deps: ['__async_cur_frame', '__async', 'emscripten_async_resume', 'free'],
   emscripten_coroutine_next: function(coroutine) {
     coroutine = coroutine|0;
-    var coroutine_not_finished = 0;
+    var coroutine_not_finished = 0, temp = 0;
     // switch context
     {{{ makeSetValueAsm('coroutine', 0, '___async_cur_frame', 'i32') }}};
-    {{{ makeSetValueAsm('coroutine', 4, 'stackSave()|0', 'i32') }}};
+    temp = stackSave() | 0;
+    {{{ makeSetValueAsm('coroutine', 4, 'temp', 'i32') }}};
     {{{ makeSetValueAsm('coroutine', 8, 'STACK_MAX', 'i32') }}};
     ___async_cur_frame = {{{ makeGetValueAsm('coroutine', 12, 'i32') }}};
     stackRestore({{{ makeGetValueAsm('coroutine', 16, 'i32') }}});
@@ -161,7 +166,8 @@ mergeInto(LibraryManager.library, {
 
     // switch context
     {{{ makeSetValueAsm('coroutine', 12, '___async_cur_frame', 'i32') }}};
-    {{{ makeSetValueAsm('coroutine', 16, 'stackSave()|0', 'i32') }}};
+    temp = stackSave() | 0;
+    {{{ makeSetValueAsm('coroutine', 16, 'temp', 'i32') }}};
     ___async_cur_frame = {{{ makeGetValueAsm('coroutine', 0, 'i32') }}};
     stackRestore({{{ makeGetValueAsm('coroutine', 4, 'i32') }}});
     STACK_MAX = {{{ makeGetValueAsm('coroutine', 8, 'i32') }}};
@@ -185,17 +191,150 @@ mergeInto(LibraryManager.library, {
     ___async = 1;
   }
 #else // ASYNCIFY
-  emscripten_sleep: function() {
-    throw 'Please compile your program with -s ASYNCIFY=1 in order to use asynchronous operations like emscripten_sleep';
+
+#if EMTERPRETIFY_ASYNC
+
+  // Emterpreter sync=>async support
+  //
+  // The idea here is that almost all interpreter frames are already on the stack (the
+  // emterpreter stack), so it's easy to save a callstack and reload it, we just need
+  // to also save the pc.
+  // Saving state keeps the pc right before the current call. That means when we reload,
+  // we are going to re-call in the exact same way as before - including the final call
+  // to the async function here! Therefore sleep etc. detect the state, so they know
+  // if they are the first call or the second. The second typically does nothing, but
+  // if there is a return value it could return it, etc.
+  $EmterpreterAsync__deps: ['$Browser'],
+  $EmterpreterAsync: {
+    initted: false,
+    state: 0, // 0 - nothing/normal
+              // 1 - saving the stack: functions should all be in emterpreter, and should all save&exit/return
+              // 2 - restoring the stack: functions should all be in emterpreter, and should all restore&continue
+              // 3 - during sleep. this is between 1 and 2. at this time it is ok to call yield funcs
+    saveStack: '',
+    yieldCallbacks: [],
+    postAsync: null,
+
+    ensureInit: function() {
+      if (this.initted) return;
+      this.initted = true;
+#if ASSERTIONS
+      abortDecorators.push(function(output, what) {
+        if (EmterpreterAsync.state !== 0) {
+          return output + '\nThis error happened during an emterpreter-async save or load of the stack. Was there non-emterpreted code on the stack during save (which is unallowed)? You may want to adjust EMTERPRETIFY_BLACKLIST, EMTERPRETIFY_WHITELIST, or EMTERPRETIFY_YIELDLIST (to consider certain functions ok to run during an emscripten_sleep_with_yield).\nThis is what the stack looked like when we tried to save it: ' + [EmterpreterAsync.state, EmterpreterAsync.saveStack];
+        }
+        return output;
+      });
+#endif
+    },
+    setState: function(s) {
+      this.ensureInit();
+      this.state = s;
+      asm.setAsyncState(s);
+    },
+    handle: function(doAsyncOp, yieldDuring) {
+      Module['noExitRuntime'] = true;
+      if (EmterpreterAsync.state === 0) {
+        // save the stack we want to resume. this lets other code run in between
+        // XXX this assumes that this stack top never ever leak! exceptions might violate that
+        var stack = new Int32Array(HEAP32.subarray(EMTSTACKTOP>>2, asm.emtStackSave()>>2));
+        var stacktop = asm.stackSave();
+
+        var resumedCallbacksForYield = false;
+        function resumeCallbacksForYield() {
+          if (resumedCallbacksForYield) return;
+          resumedCallbacksForYield = true;
+          // allow async callbacks, and also make sure to call the specified yield callbacks. we must
+          // do this when nothing is on the stack, i.e. after it unwound
+          EmterpreterAsync.yieldCallbacks.forEach(function(func) {
+            func();
+          });
+          Browser.resumeAsyncCallbacks(); // if we were paused (e.g. we are after a sleep), then since we are now yielding, it is safe to call callbacks
+        }
+
+        doAsyncOp(function resume(post) {
+          assert(EmterpreterAsync.state === 1 || EmterpreterAsync.state === 3);
+          EmterpreterAsync.setState(3);
+          if (yieldDuring) {
+            resumeCallbacksForYield();
+          }
+          // copy the stack back in and resume
+          HEAP32.set(stack, EMTSTACKTOP>>2);
+#if ASSERTIONS
+          assert(stacktop === asm.stackSave()); // nothing should have modified the stack meanwhile
+#endif
+          EmterpreterAsync.setState(2);
+          // Resume the main loop
+          if (Browser.mainLoop.func) {
+            Browser.mainLoop.resume();
+          }
+          assert(!EmterpreterAsync.postAsync);
+          EmterpreterAsync.postAsync = post || null;
+          asm.emterpret(stack[0]); // pc of the first function, from which we can reconstruct the rest, is at position 0 on the stack
+          if (!yieldDuring && EmterpreterAsync.state === 0) {
+            // if we did *not* do another async operation, then we know that nothing is conceptually on the stack now, and we can re-allow async callbacks as well as run the queued ones right now
+            Browser.resumeAsyncCallbacks();
+          }
+        });
+        EmterpreterAsync.setState(1);
+#if ASSERTIONS
+        EmterpreterAsync.saveStack = new Error().stack; // we can't call  stackTrace()  as it calls compiled code
+#endif
+        // Pause the main loop, until we resume
+        if (Browser.mainLoop.func) {
+          Browser.mainLoop.pause();
+        }
+        if (yieldDuring) {
+          // do this when we are not on the stack, i.e., the stack unwound. we might be too late, in which case we do it in resume()
+          setTimeout(function() {
+            resumeCallbacksForYield();
+          }, 0);
+        } else {
+          Browser.pauseAsyncCallbacks();
+        }
+      } else {
+        // nothing to do here, the stack was just recreated. reset the state.
+        assert(EmterpreterAsync.state === 2);
+        EmterpreterAsync.setState(0);
+        if (EmterpreterAsync.postAsync) {
+          EmterpreterAsync.postAsync();
+          EmterpreterAsync.postAsync = null;
+        }
+      }
+    }
   },
+
+  emscripten_sleep__deps: ['$EmterpreterAsync'],
+  emscripten_sleep: function(ms) {
+    EmterpreterAsync.handle(function(resume) {
+      setTimeout(function() {
+        if (ABORT) return; // do this manually; we can't call into Browser.safeSetTimeout, because that is paused/resumed!
+        resume();
+      }, ms);
+    });
+  },
+
+  emscripten_sleep_with_yield__deps: ['$EmterpreterAsync'],
+  emscripten_sleep_with_yield: function(ms) {
+    EmterpreterAsync.handle(function(resume) {
+      Browser.safeSetTimeout(resume, ms);
+    }, true);
+  },
+
+#else
+  emscripten_sleep: function() {
+    throw 'Please compile your program with async support in order to use asynchronous operations like emscripten_sleep';
+  },
+#endif
+
   emscripten_coroutine_create: function() {
-    throw 'Please compile your program with -s ASYNCIFY=1 in order to use asynchronous operations like emscripten_coroutine_create';
+    throw 'Please compile your program with async support in order to use asynchronous operations like emscripten_coroutine_create';
   },
   emscripten_coroutine_next: function() {
-    throw 'Please compile your program with -s ASYNCIFY=1 in order to use asynchronous operations like emscripten_coroutine_next';
+    throw 'Please compile your program with async support in order to use asynchronous operations like emscripten_coroutine_next';
   },
   emscripten_yield: function() {
-    throw 'Please compile your program with -s ASYNCIFY=1 in order to use asynchronous operations like emscripten_yield';
+    throw 'Please compile your program with async support in order to use asynchronous operations like emscripten_yield';
   }
 #endif
 });

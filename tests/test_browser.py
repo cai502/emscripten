@@ -9,6 +9,8 @@ if emscripten_browser:
   cmd = shlex.split(emscripten_browser)
   def run_in_other_browser(url):
     Popen(cmd + [url])
+  if EM_BUILD_VERBOSE_LEVEL >= 3:
+    print >> sys.stderr, "using Emscripten browser: " + str(cmd)
   webbrowser.open_new = run_in_other_browser
 
 def test_chunked_synchronous_xhr_server(support_byte_ranges, chunkSize, data, checksum):
@@ -123,6 +125,7 @@ If manually bisecting:
       os.chdir(cwd)
 
   def test_split(self):
+    return self.skip('non-fastcomp is deprecated and fails in 3.5')
     def nfc():
       # test HTML generation.
       self.reftest(path_from_root('tests', 'htmltest.png'))
@@ -218,6 +221,7 @@ If manually bisecting:
     nonfastcomp(nfc)
 
   def test_split_in_source_filenames(self):
+    return self.skip('non-fastcomp is deprecated and fails in 3.5')
     def nfc():
       self.reftest(path_from_root('tests', 'htmltest.png'))
       output = Popen([PYTHON, EMCC, path_from_root('tests', 'hello_world_sdl.cpp'), '-o', 'something.js', '-g', '--split', '100', '--pre-js', 'reftest.js']).communicate()
@@ -801,36 +805,43 @@ window.close = function() {
 
 
   def test_sdl_key(self):
-    for defines in [[], ['-DTEST_EMSCRIPTEN_SDL_SETEVENTHANDLER']]:
-      open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
-        Module.postRun = function() {
-          function doOne() {
-            Module._one();
-            setTimeout(doOne, 1000/60);
-          }
-          setTimeout(doOne, 1000/60);
-        }
+    for delay in [0, 1]:
+      for defines in [
+        [],
+        ['-DTEST_EMSCRIPTEN_SDL_SETEVENTHANDLER']
+      ]:
+        for emterps in [
+          [],
+          ['-DTEST_SLEEP', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-s', 'ASSERTIONS=1', '-s', 'EMTERPRETIFY_YIELDLIST=["_EventHandler"]', '-s', "SAFE_HEAP=1"]
+        ]:
+          print delay, defines, emterps
+          open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
+            function keydown(c) {
+             %s
+              //Module.print('push keydown');
+              var event = document.createEvent("KeyboardEvent");
+              event.initKeyEvent("keydown", true, true, window,
+                                 0, 0, 0, 0,
+                                 c, c);
+              document.dispatchEvent(event);
+             %s
+            }
 
-        function keydown(c) {
-          var event = document.createEvent("KeyboardEvent");
-          event.initKeyEvent("keydown", true, true, window,
-                             0, 0, 0, 0,
-                             c, c);
-          document.dispatchEvent(event);
-        }
+            function keyup(c) {
+             %s
+              //Module.print('push keyup');
+              var event = document.createEvent("KeyboardEvent");
+              event.initKeyEvent("keyup", true, true, window,
+                                 0, 0, 0, 0,
+                                 c, c);
+              document.dispatchEvent(event);
+             %s
+            }
+          ''' % ('setTimeout(function() {' if delay else '', '}, 1);' if delay else '', 'setTimeout(function() {' if delay else '', '}, 1);' if delay else ''))
+          open(os.path.join(self.get_dir(), 'sdl_key.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl_key.c')).read()))
 
-        function keyup(c) {
-          var event = document.createEvent("KeyboardEvent");
-          event.initKeyEvent("keyup", true, true, window,
-                             0, 0, 0, 0,
-                             c, c);
-          document.dispatchEvent(event);
-        }
-      ''')
-      open(os.path.join(self.get_dir(), 'sdl_key.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl_key.c')).read()))
-
-      Popen([PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl_key.c'), '-o', 'page.html'] + defines + ['--pre-js', 'pre.js', '-s', '''EXPORTED_FUNCTIONS=['_main', '_one']''', '-s', 'NO_EXIT_RUNTIME=1']).communicate()
-      self.run_browser('page.html', '', '/report_result?223092870')
+          Popen([PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl_key.c'), '-o', 'page.html'] + defines + emterps + ['--pre-js', 'pre.js', '-s', '''EXPORTED_FUNCTIONS=['_main']''', '-s', 'NO_EXIT_RUNTIME=1']).communicate()
+          self.run_browser('page.html', '', '/report_result?223092870')
 
   def test_sdl_key_proxy(self):
     open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
@@ -995,7 +1006,7 @@ keydown(100);keyup(100); // trigger the end
                 var element = document.getElementById('output');
                 element.value = ''; // clear browser cache
                 return function(text) {
-                  text = Array.prototype.slice.call(arguments).join(' ');
+                  if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
                   element.value += text + "\\n";
                   element.scrollTop = element.scrollHeight; // focus on bottom
                 };
@@ -1158,6 +1169,22 @@ keydown(100);keyup(100); // trigger the end
       secret = str(time.time())
       self.btest(path_from_root('tests', 'fs', 'test_idbfs_sync.c'), '1', force_c=True, args=mode + ['-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
       self.btest(path_from_root('tests', 'fs', 'test_idbfs_sync.c'), '1', force_c=True, args=mode + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
+
+  def test_idbstore(self):
+    secret = str(time.time())
+    for stage in [0, 1, 2, 3, 0, 1, 2, 0, 0, 1, 4, 2, 5]:
+      self.clear()
+      self.btest(path_from_root('tests', 'idbstore.c'), str(stage), force_c=True, args=['-DSTAGE=' + str(stage), '-DSECRET=\"' + secret + '\"'])
+
+  def test_idbstore_sync(self):
+    secret = str(time.time())
+    self.clear()
+    self.btest(path_from_root('tests', 'idbstore_sync.c'), '6', force_c=True, args=['-DSECRET=\"' + secret + '\"', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '--memory-init-file', '1', '-O3', '-g2'])
+
+  def zzztest_idbstore_sync_worker(self):
+    secret = str(time.time())
+    self.clear()
+    self.btest(path_from_root('tests', 'idbstore_sync_worker.c'), '6', force_c=True, args=['-DSECRET=\"' + secret + '\"', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '--memory-init-file', '1', '-O3', '-g2', '--proxy-to-worker', '-s', 'TOTAL_MEMORY=75000000'])
 
   def test_force_exit(self):
     self.btest('force_exit.c', force_c=True, expected='17')
@@ -1788,6 +1815,31 @@ void *getBindBuffer() {
     # otherwise, we just overwrite
     self.btest('mem_init.cpp', expected='3', args=['--pre-js', 'pre.js', '--post-js', 'post.js', '--memory-init-file', '1', '-s', 'ASSERTIONS=0'])
 
+  def test_mem_init_request(self):
+    def test(what, status):
+      print what, status
+      open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
+        var xhr = Module.memoryInitializerRequest = new XMLHttpRequest();
+        xhr.open('GET', "''' + what + '''", true);
+        xhr.responseType = 'arraybuffer';
+        xhr.send(null);
+
+        window.onerror = function() {
+          Module.print('fail!');
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', 'http://localhost:8888/report_result?0');
+          xhr.onload = function() {
+            console.log('close!');
+            window.close();
+          };
+          xhr.send();
+        };
+      ''')
+      self.btest('mem_init_request.cpp', expected=status, args=['--pre-js', 'pre.js', '--memory-init-file', '1'])
+
+    test('test.html.mem', '1')
+    test('nothing.nowhere', '0')
+
   def test_runtime_misuse(self):
     post_prep = '''
       var expected_ok = false;
@@ -1850,15 +1902,34 @@ void *getBindBuffer() {
       setTimeout(Module['_free'], 1000); // free is valid to call even after the runtime closes
     '''
 
-    print 'mem init, so async, call too early'
-    open(os.path.join(self.get_dir(), 'post.js'), 'w').write(post_prep + post_test + post_hook)
-    self.btest('runtime_misuse.cpp', expected='600', args=['--post-js', 'post.js', '--memory-init-file', '1'])
-    print 'sync startup, call too late'
-    open(os.path.join(self.get_dir(), 'post.js'), 'w').write(post_prep + 'Module.postRun.push(function() { ' + post_test + ' });' + post_hook);
-    self.btest('runtime_misuse.cpp', expected='600', args=['--post-js', 'post.js', '--memory-init-file', '0'])
-    print 'sync, runtime still alive, so all good'
-    open(os.path.join(self.get_dir(), 'post.js'), 'w').write(post_prep + 'expected_ok = true; Module.postRun.push(function() { ' + post_test + ' });' + post_hook);
-    self.btest('runtime_misuse.cpp', expected='606', args=['--post-js', 'post.js', '--memory-init-file', '0', '-s', 'NO_EXIT_RUNTIME=1'])
+    open('pre_main.js', 'w').write(r'''
+      Module._main = function(){
+        myJSCallback();
+        return 0;
+      };
+    ''')
+
+    open('pre_runtime.js', 'w').write(r'''
+      Module.onRuntimeInitialized = function(){
+        myJSCallback();
+      };
+    ''')
+
+    for filename, extra_args, second_code in [
+      ('runtime_misuse.cpp', [], 600),
+      ('runtime_misuse_2.cpp', ['--pre-js', 'pre_main.js'], 600),
+      ('runtime_misuse_2.cpp', ['--pre-js', 'pre_runtime.js'], 601) # 601, because no main means we *do* run another call after exit()
+    ]:
+      print '\n', filename, extra_args
+      print 'mem init, so async, call too early'
+      open(os.path.join(self.get_dir(), 'post.js'), 'w').write(post_prep + post_test + post_hook)
+      self.btest(filename, expected='600', args=['--post-js', 'post.js', '--memory-init-file', '1'] + extra_args)
+      print 'sync startup, call too late'
+      open(os.path.join(self.get_dir(), 'post.js'), 'w').write(post_prep + 'Module.postRun.push(function() { ' + post_test + ' });' + post_hook);
+      self.btest(filename, expected=str(second_code), args=['--post-js', 'post.js', '--memory-init-file', '0'] + extra_args)
+      print 'sync, runtime still alive, so all good'
+      open(os.path.join(self.get_dir(), 'post.js'), 'w').write(post_prep + 'expected_ok = true; Module.postRun.push(function() { ' + post_test + ' });' + post_hook);
+      self.btest(filename, expected='606', args=['--post-js', 'post.js', '--memory-init-file', '0', '-s', 'NO_EXIT_RUNTIME=1'] + extra_args)
 
   def test_worker_api(self):
     Popen([PYTHON, EMCC, path_from_root('tests', 'worker_api_worker.cpp'), '-o', 'worker.js', '-s', 'BUILD_AS_WORKER=1', '-s', 'EXPORTED_FUNCTIONS=["_one"]']).communicate()
@@ -1872,10 +1943,15 @@ void *getBindBuffer() {
     Popen([PYTHON, EMCC, path_from_root('tests', 'worker_api_3_worker.cpp'), '-o', 'worker.js', '-s', 'BUILD_AS_WORKER=1', '-s', 'EXPORTED_FUNCTIONS=["_one"]']).communicate()
     self.btest('worker_api_3_main.cpp', expected='5')
 
+  def test_worker_api_sleep(self):
+    Popen([PYTHON, EMCC, path_from_root('tests', 'worker_api_worker_sleep.cpp'), '-o', 'worker.js', '-s', 'BUILD_AS_WORKER=1', '-s', 'EXPORTED_FUNCTIONS=["_one"]', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1']).communicate()
+    self.btest('worker_api_main.cpp', expected='566')
+
   def test_emscripten_async_wget2(self):
     self.btest('http.cpp', expected='0', args=['-I' + path_from_root('tests')])
 
   def test_module(self):
+    return self.skip('non-fastcomp is deprecated and fails in 3.5')
     def nfc():
       Popen([PYTHON, EMCC, path_from_root('tests', 'browser_module.cpp'), '-o', 'module.js', '-O2', '-s', 'SIDE_MODULE=1', '-s', 'DLOPEN_SUPPORT=1', '-s', 'EXPORTED_FUNCTIONS=["_one", "_two"]']).communicate()
       self.btest('browser_main.cpp', args=['-O2', '-s', 'MAIN_MODULE=1', '-s', 'DLOPEN_SUPPORT=1'], expected='8')
@@ -1902,9 +1978,10 @@ void *getBindBuffer() {
     # and the browser will not close as part of the test, pinning down the cwd on Windows and it wouldn't be possible to delete it. Therefore switch away from that directory
     # before launching.
     os.chdir(path_from_root())
-    args = [PYTHON, path_from_root('emrun'), '--timeout', '30', '--verbose', '--log_stdout', os.path.join(outdir, 'stdout.txt'), '--log_stderr', os.path.join(outdir, 'stderr.txt'), os.path.join(outdir, 'hello_world.html'), '1', '2', '--3']
+    args = [PYTHON, path_from_root('emrun'), '--timeout', '30', '--verbose', '--log_stdout', os.path.join(outdir, 'stdout.txt'), '--log_stderr', os.path.join(outdir, 'stderr.txt')]
     if emscripten_browser is not None:
       args += ['--browser', emscripten_browser]
+    args += [os.path.join(outdir, 'hello_world.html'), '1', '2', '--3']
     process = subprocess.Popen(args)
     process.communicate()
     stdout = open(os.path.join(outdir, 'stdout.txt'), 'r').read()
@@ -1968,6 +2045,11 @@ Module["preRun"].push(function () {
       print opts
       self.btest(path_from_root('tests', 'webgl_create_context.cpp'), args=opts, expected='0')
 
+  def test_html5_webgl_destroy_context(self):
+    for opts in [[], ['-O2', '-g1'], ['-s', 'FULL_ES2=1']]:
+      print opts
+      self.btest(path_from_root('tests', 'webgl_destroy_context.cpp'), args=opts + ['--shell-file', path_from_root('tests/webgl_destroy_context_shell.html'), '-s', 'NO_EXIT_RUNTIME=1'], expected='0')
+
   def test_sdl_touch(self):
     for opts in [[], ['-O2', '-g1', '--closure', '1']]:
       print opts
@@ -2019,6 +2101,14 @@ open(filename, 'w').write(replaced)
     with open(os.path.join(self.get_dir(), 'test.txt'), 'w') as f:
       f.write('emscripten')
     self.btest(path_from_root('tests', 'test_wget.c'), expected='1', args=['-s', 'ASYNCIFY=1'])
+    print 'asyncify+emterpreter'
+    self.btest(path_from_root('tests', 'test_wget.c'), expected='1', args=['-s', 'ASYNCIFY=1', '-s', 'EMTERPRETIFY=1'])
+
+  def test_wget_data(self):
+    with open(os.path.join(self.get_dir(), 'test.txt'), 'w') as f:
+      f.write('emscripten')
+    self.btest(path_from_root('tests', 'test_wget_data.c'), expected='1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O2', '-g2'])
+    self.btest(path_from_root('tests', 'test_wget_data.c'), expected='1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O2', '-g2', '-s', 'ASSERTIONS=1'])
 
   def test_locate_file(self):
     self.clear()
@@ -2090,8 +2180,11 @@ Module['_main'] = function() {
       Popen([PYTHON, path_from_root('tools', 'distill_asm.py'), 'a.out.js', 'second.js', 'swap-in']).communicate()
       assert os.path.exists('second.js')
 
-      out = run_js('second.js', engine=SPIDERMONKEY_ENGINE, stderr=PIPE, full_output=True, assert_returncode=None)
-      self.validate_asmjs(out)
+      if isinstance(SPIDERMONKEY_ENGINE, list) and len(SPIDERMONKEY_ENGINE[0]) != 0:
+        out = run_js('second.js', engine=SPIDERMONKEY_ENGINE, stderr=PIPE, full_output=True, assert_returncode=None)
+        self.validate_asmjs(out)
+      else:
+        print 'Skipping asm validation check, spidermonkey is not configured'
 
       self.btest(path_from_root('tests', 'asm_swap.cpp'), args=['-s', 'SWAPPABLE_ASM_MODULE=1', '-s', 'NO_EXIT_RUNTIME=1', '--pre-js', 'run.js'] + opts, expected='999')
 
@@ -2267,7 +2360,7 @@ Module['_main'] = function() {
                 var element = document.getElementById('output');
                 element.value = ''; // clear browser cache
                 return function(text) {
-                  text = Array.prototype.slice.call(arguments).join(' ');
+                  if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
                   element.value += text + "\\n";
                   element.scrollTop = element.scrollHeight; // focus on bottom
                 };
@@ -2421,4 +2514,91 @@ window.close = function() {
     self.btest('sdl2_fog_linear.c', reference='screenshot-fog-linear.png', reference_slack=1,
       args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
       message='You should see an image with fog.')
+
+  def test_sdl2_unwasteful(self):
+    self.btest('sdl2_unwasteful.cpp', expected='1', args=['-s', 'USE_SDL=2', '-O1'])
+
+  def test_sdl2_canvas_write(self):
+    self.btest('sdl2_canvas_write.cpp', expected='0', args=['-s', 'USE_SDL=2'])
+
+  def test_emterpreter_async(self):
+    for opts in [0, 1, 2, 3]:
+      print opts
+      self.btest('emterpreter_async.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts), '-g2'])
+
+  def test_emterpreter_async_2(self):
+    self.btest('emterpreter_async_2.cpp', '40', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O3'])
+
+  def test_emterpreter_async_virtual(self):
+    for opts in [0, 1, 2, 3]:
+      print opts
+      self.btest('emterpreter_async_virtual.cpp', '5', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts), '-profiling'])
+
+  def test_emterpreter_async_virtual_2(self):
+    for opts in [0, 1, 2, 3]:
+      print opts
+      self.btest('emterpreter_async_virtual_2.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts), '-s', 'ASSERTIONS=1', '-s', 'SAFE_HEAP=1', '-profiling'])
+
+  def test_emterpreter_async_bad(self):
+    for opts in [0, 1, 2, 3]:
+      print opts
+      self.btest('emterpreter_async_bad.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts), '-s', 'EMTERPRETIFY_BLACKLIST=["_middle"]', '-s', 'ASSERTIONS=1'])
+
+  def test_emterpreter_async_mainloop(self):
+    for opts in [0, 1, 2, 3]:
+      print opts
+      self.btest('emterpreter_async_mainloop.cpp', '121', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts)])
+
+  def test_emterpreter_async_with_manual(self):
+    for opts in [0, 1, 2, 3]:
+      print opts
+      self.btest('emterpreter_async_with_manual.cpp', '121', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts), '-s', 'EMTERPRETIFY_BLACKLIST=["_acall"]'])
+
+  def test_emterpreter_async_sleep2(self):
+    self.btest('emterpreter_async_sleep2.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Oz'])
+
+  def test_sdl_audio_beep_sleep(self):
+    self.btest('sdl_audio_beep_sleep.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Os', '-s', 'ASSERTIONS=1', '-s', 'DISABLE_EXCEPTION_CATCHING=0', '-profiling', '-s', 'EMTERPRETIFY_YIELDLIST=["__Z14audio_callbackPvPhi", "__ZN6Beeper15generateSamplesIhEEvPT_i", "__ZN6Beeper15generateSamplesIsEEvPT_i"]', '-s', 'SAFE_HEAP=1'])
+
+  def test_mainloop_reschedule(self):
+    self.btest('mainloop_reschedule.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Os'])
+
+  def test_modularize(self):
+    for opts in [[], ['-O1'], ['-O2', '-profiling'], ['-O2']]:
+      for args, code in [
+        ([], 'Module();'), # defaults
+        (['-s', 'EXPORT_NAME="HelloWorld"'], '''
+          if (typeof Module !== "undefined") throw "what?!"; // do not pollute the global scope, we are modularized!
+          HelloWorld();
+        '''), # use EXPORT_NAME
+        (['-s', 'EXPORT_NAME="HelloWorld"'], '''
+          var hello = HelloWorld({ noInitialRun: true, onRuntimeInitialized: function() {
+            setTimeout(function() { hello._main(); }); // must be async, because onRuntimeInitialized may be called synchronously, so |hello| is not yet set!
+          } });
+        '''), # pass in a Module option (which prevents main(), which we then invoke ourselves)
+        (['-s', 'EXPORT_NAME="HelloWorld"', '--memory-init-file', '0'], '''
+          var hello = HelloWorld({ noInitialRun: true});
+          hello._main();
+        '''), # similar, but without a mem init file, everything is sync and simple
+      ]:
+        print 'test on', opts, args, code
+        src = open(path_from_root('tests', 'browser_test_hello_world.c')).read()
+        open('test.c', 'w').write(self.with_report_result(src))
+        Popen([PYTHON, EMCC, 'test.c', '-s', 'MODULARIZE=1'] + args + opts).communicate()
+        open('a.html', 'w').write('''
+          <script src="a.out.js"></script>
+          <script>
+            %s
+          </script>
+        ''' % code)
+        self.run_browser('a.html', '...', '/report_result?0')
+
+  def test_webidl(self):
+    # see original in test_core.py
+    output = Popen([PYTHON, path_from_root('tools', 'webidl_binder.py'),
+                            path_from_root('tests', 'webidl', 'test.idl'),
+                            'glue']).communicate()[0]
+    assert os.path.exists('glue.cpp')
+    assert os.path.exists('glue.js')
+    self.btest(os.path.join('webidl', 'test.cpp'), '1', args=['--post-js', 'glue.js', '-I' + path_from_root('tests', 'webidl'), '-DBROWSER'])
 

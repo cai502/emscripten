@@ -97,7 +97,7 @@ mergeInto(LibraryManager.library, {
           while (FS.isLink(current.mode)) {
             var link = FS.readlink(current_path);
             current_path = PATH.resolve(PATH.dirname(current_path), link);
-            
+
             var lookup = FS.lookupPath(current_path, { recurse_count: opts.recurse_count });
             current = lookup.node;
 
@@ -427,7 +427,7 @@ mergeInto(LibraryManager.library, {
     // we employ a simple trick: the pointer to a stream is its fd plus 1.  This
     // means that all valid streams have a valid non-zero pointer while allowing
     // the fs for stdin to be the standard value of zero.
-    // 
+    //
     //
     getStreamFromPtr: function(ptr) {
       return FS.streams[ptr - 1];
@@ -838,7 +838,7 @@ mergeInto(LibraryManager.library, {
       if (!link.node_ops.readlink) {
         throw new FS.ErrnoError(ERRNO_CODES.EINVAL);
       }
-      return link.node_ops.readlink(link);
+      return PATH.resolve(FS.getPath(lookup.node.parent), link.node_ops.readlink(link));
     },
     stat: function(path, dontFollow) {
       var lookup = FS.lookupPath(path, { follow: !dontFollow });
@@ -1154,6 +1154,15 @@ mergeInto(LibraryManager.library, {
       }
       return stream.stream_ops.mmap(stream, buffer, offset, length, position, prot, flags);
     },
+    msync: function(stream, buffer, offset, length, mmapFlags) {
+      if (!stream || !stream.stream_ops.msync) {
+        return 0;
+      }
+      return stream.stream_ops.msync(stream, buffer, offset, length, mmapFlags);
+    },
+    munmap: function(stream) {
+      return 0;
+    },
     ioctl: function(stream, cmd, arg) {
       if (!stream.stream_ops.ioctl) {
         throw new FS.ErrnoError(ERRNO_CODES.ENOTTY);
@@ -1174,11 +1183,7 @@ mergeInto(LibraryManager.library, {
       var buf = new Uint8Array(length);
       FS.read(stream, buf, 0, length, 0);
       if (opts.encoding === 'utf8') {
-        ret = '';
-        var utf8 = new Runtime.UTF8Processor();
-        for (var i = 0; i < length; i++) {
-          ret += utf8.processCChar(buf[i]);
-        }
+        ret = UTF8ArrayToString(buf, 0);
       } else if (opts.encoding === 'binary') {
         ret = buf;
       }
@@ -1194,9 +1199,9 @@ mergeInto(LibraryManager.library, {
       }
       var stream = FS.open(path, opts.flags, opts.mode);
       if (opts.encoding === 'utf8') {
-        var utf8 = new Runtime.UTF8Processor();
-        var buf = new Uint8Array(utf8.processJSString(data));
-        FS.write(stream, buf, 0, buf.length, 0, opts.canOwn);
+        var buf = new Uint8Array(lengthBytesUTF8(data)+1);
+        var actualNumBytes = stringToUTF8Array(data, buf, 0, buf.length);
+        FS.write(stream, buf, 0, actualNumBytes, 0, opts.canOwn);
       } else if (opts.encoding === 'binary') {
         FS.write(stream, data, 0, data.length, 0, opts.canOwn);
       }

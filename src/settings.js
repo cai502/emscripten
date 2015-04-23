@@ -58,16 +58,14 @@ var TOTAL_STACK = 5*1024*1024; // The total stack size. There is no way to enlar
 var TOTAL_MEMORY = 16777216;     // The total amount of memory to use. Using more memory than this will
                                  // cause us to expand the heap, which can be costly with typed arrays:
                                  // we need to copy the old heap into a new one in that case.
-var FAST_MEMORY = 2*1024*1024; // The amount of memory to initialize to 0. This ensures it will be
-                               // in a flat array. This only matters in non-typed array builds.
 var ALLOW_MEMORY_GROWTH = 0; // If false, we abort with an error if we try to allocate more memory than
                              // we can (TOTAL_MEMORY). If true, we will grow the memory arrays at
                              // runtime, seamlessly and dynamically. This has a performance cost though,
                              // both during the actual growth and in general (the latter is because in
                              // that case we must be careful about optimizations, in particular the
-                             // eliminator). Note that memory growth is only supported with typed
-                             // arrays.
-var MAX_SETJMPS = 20; // size of setjmp table allocated in each function invocation (that has setjmp)
+                             // eliminator).
+                             // See https://code.google.com/p/v8/issues/detail?id=3907 regarding
+                             // memory growth performance in chrome.
 
 var GLOBAL_BASE = -1; // where global data begins; the start of static memory. -1 means use the
                       // default, any other value will be used as an override
@@ -134,7 +132,8 @@ var PRECISE_F32 = 0; // 0: Use JS numbers for floating-point values. These are 6
                      //    polyfill in cases where engine support is not present. In addition, we can
                      //    remove the empty polyfill calls themselves on the client when generating html,
                      //    which should mean that this gives you the best of both worlds of 0 and 1, and is
-                     //    therefore recommended.
+                     //    therefore recommended, *unless* you need a guarantee of proper float32 precision
+                     //    (in that case, use option 1).
                      // XXX Note: To optimize float32-using code, we use the 'const' keyword in the emitted
                      //           code. This allows us to avoid unnecessary calls to Math.fround, which would
                      //           slow down engines not yet supporting that function. 'const' is present in
@@ -189,8 +188,26 @@ var OUTLINING_LIMIT = 0; // A function size above which we try to automatically 
 
 var AGGRESSIVE_VARIABLE_ELIMINATION = 0; // Run aggressiveVariableElimination in js-optimizer.js
 var SIMPLIFY_IFS = 1; // Whether to simplify ifs in js-optimizer.js
-var POINTER_MASKING = 0; // Whether to mask pointers (experimental optimization trying to reduce VM bounds checks).
-                         // When using this option, TOTAL_MEMORY must be a power of 2.
+
+var POINTER_MASKING = 0; // Whether pointers can be masked to a power-of-two heap
+                         // length. An experimental optimization trying to reduce VM
+                         // bounds checks.
+var POINTER_MASKING_OVERFLOW = 64 * 1024; // The length added to the heap length to allow
+                                          // the compiler to derive that accesses are
+                                          // within bounds even when adding small constant
+                                          // offsets. This defaults to 64K, but in asm.js
+                                          // mode it is silently adjusted to keep the
+                                          // total buffer length a valid asm.js heap
+                                          // buffer length.
+var POINTER_MASKING_DYNAMIC = 0; // When disabled, the masking is baked into the code with
+				 // static masks and a static heap buffer length and the
+				 // TOTAL_MEMORY must be a power of 2. When enabled, the
+				 // masks are defined at runtime rather than compling them
+				 // into the asm.js module as literal constants and the
+				 // TOTAL_MEMORY can be defined at run time.
+var POINTER_MASKING_DEFAULT_ENABLED = 1; // When POINTER_MASKING_DYNAMIC is enabled this
+					 // sets the default for POINTER_MASKING_ENABLED,
+					 // enabling or disabling pointer masking.
 
 // Generated code debugging options
 var SAFE_HEAP = 0; // Check each write to the heap, for example, this will give a clear
@@ -426,13 +443,6 @@ var LIBRARY_DEPS_TO_AUTOEXPORT = ['memcpy']; // This list is also used to determ
                                              // so we must export so that if they are implemented in C
                                              // they will be accessible, in ASM_JS mode).
 
-var IGNORED_FUNCTIONS = []; // Functions that we should not generate, neither a stub nor a complete function.
-                            // This is useful if your project code includes a function, and you want to replace
-                            // that in the compiled code with your own handwritten JS. (Of course even without
-                            // this option, you could just override the generated function at runtime. However,
-                            // JS engines might optimize better if the function is defined once in a single
-                            // place in your code.)
-
 var EXPORTED_GLOBALS = []; // Global non-function variables that are explicitly
                            // exported, so they are guaranteed to be
                            // accessible outside of the generated code.
@@ -535,6 +545,29 @@ var HEADLESS = 0; // If 1, will include shim code that tries to 'fake' a browser
 var DETERMINISTIC = 0; // If 1, we force Date.now(), Math.random, etc. to return deterministic
                        // results. Good for comparing builds for debugging purposes (and nothing else)
 
+var MODULARIZE = 0; // By default we emit all code in a straightforward way into the output
+                    // .js file. That means that if you load that in a script tag in a web
+                    // page, it will use the global scope. With MODULARIZE set, we will instead emit
+                    //
+                    //   var EXPORT_NAME = function(Module) {
+                    //     Module = Module || {};
+                    //     // .. all the emitted code from emscripten ..
+                    //     return Module;
+                    //   };
+                    //
+                    // where EXPORT_NAME is from the option of the same name (so, by default
+                    // it will be var Module = ..., and so you should change EXPORT_NAME if
+                    // you want more than one module in the same web page).
+                    //
+                    // You can then use this by something like
+                    //
+                    //   var instance = EXPORT_NAME();
+                    //
+                    // or
+                    //
+                    //   var instance = EXPORT_NAME({ option: value, ... });
+                    //
+
 var BENCHMARK = 0; // If 1, will just time how long main() takes to execute, and not
                    // print out anything at all whatsoever. This is useful for benchmarking.
 
@@ -576,9 +609,28 @@ var NO_DYNAMIC_EXECUTION = 0; // When enabled, we do not emit eval() and new Fun
 
 var EMTERPRETIFY = 0; // Runs tools/emterpretify on the compiler output
 var EMTERPRETIFY_BLACKLIST = []; // Functions to not emterpret, that is, to run normally at full speed
+var EMTERPRETIFY_WHITELIST = []; // If this contains any functions, then only the functions in this list
+                                 // are emterpreted (as if all the rest are blacklisted; this overrides the BLACKLIST)
+var EMTERPRETIFY_YIELDLIST = []; // A list of functions that are allowed to run during while sleeping. Typically this is
+                                 // during  emscripten_sleep_with_yield  , but also you may need to add methods to this list
+                                 // for things like event handling (an SDL EventHandler will be called from the event, directly -
+                                 // if we do that later, you lose out on the whole point of an EventHandler, which is to let
+                                 // you react to key presses in order to launch fullscreen, etc.).
+                                 // Functions in the yield list do not trigger asserts checking on running during a sleep,
+                                 // in ASSERTIONS builds, 
+var EMTERPRETIFY_ASYNC = 0; // Allows sync code in the emterpreter, by saving the call stack, doing an async delay, and resuming it
+var EMTERPRETIFY_ADVISE = 0; // Performs a static analysis to suggest which functions should be run in the emterpreter, as it
+                             // appears they can be on the stack when a sync function is called in the EMTERPRETIFY_ASYNC option.
+                             // After showing the suggested list, compilation will halt. You can apply the provided list as an
+                             // emcc argument when compiling later.
+                             // This will also advise on the YIELDLIST, if it contains at least one value (it then reports
+                             // all things reachable from that function, as they may need to be in the YIELDLIST as well).
+                             // Note that this depends on things like inlining. If you run this with different inlining than
+                             // when you use the list, it might not work.
 
 var RUNNING_JS_OPTS = 0; // whether js opts will be run, after the main compiler
 var RUNNING_FASTCOMP = 1; // whether we are running the fastcomp backend
+var BOOTSTRAPPING_STRUCT_INFO = 0; // whether we are in the generate struct_info bootstrap phase
 
 var COMPILER_ASSERTIONS = 0; // costly (slow) compile-time assertions
 var COMPILER_FASTPATHS = 1; // use fast-paths to speed up compilation

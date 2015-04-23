@@ -427,6 +427,7 @@ var LibraryManager = {
 
     var libraries = [
       'library.js',
+      'library_formatString.js'
     ];
     if (!NO_FILESYSTEM) {
       libraries = libraries.concat([
@@ -458,8 +459,12 @@ var LibraryManager = {
       'library_glew.js',
       'library_html5.js',
       'library_signals.js',
-      'library_async.js'
+      'library_idbstore.js',
+      'library_async.js',
+      'library_vr.js'
     ]).concat(additionalLibraries);
+
+    if (BOOTSTRAPPING_STRUCT_INFO) libraries = ['library_bootstrap_structInfo.js', 'library_formatString.js'];
 
     for (var i = 0; i < libraries.length; i++) {
       var filename = libraries[i];

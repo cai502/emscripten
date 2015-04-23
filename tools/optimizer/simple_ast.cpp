@@ -93,7 +93,9 @@ struct StackedStack { // a stack, on the stack
         memcpy(storage, old, sizeof(T)*used);
         alloced = true;
       } else {
-        storage = (T*)realloc(storage, sizeof(T)*available);
+        T *newStorage = (T*)realloc(storage, sizeof(T)*available);
+        assert(newStorage);
+        storage = newStorage;
       }
     }
     assert(used < available);
@@ -198,5 +200,5 @@ void traverseFunctions(Ref ast, std::function<void (Ref)> visit) {
 
 // ValueBuilder
 
-IStringSet ValueBuilder::statable("assign call binary unary-prefix if label name num conditional dot new sub seq string object array");
+IStringSet ValueBuilder::statable("assign call binary unary-prefix if name num conditional dot new sub seq string object array");
 
