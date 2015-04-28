@@ -81,7 +81,7 @@ inline void OSSpinLockUnlock(volatile OSSpinLock *lock) {
 	*lock = 0;
 }
 
-inline Boolean OSSpinLockTry(volatile OSSpinLock *lock) {
+inline BOOL OSSpinLockTry(volatile OSSpinLock *lock) {
 	return (__sync_val_compare_and_swap(lock, 0, ~0) == 0);
 }
 
