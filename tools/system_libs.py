@@ -403,6 +403,9 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
         'getopt.c',
         'getopt_long.c',
        ]],
+       ['mman', [
+        'shm_open.c',
+       ]],
        ['multibyte', [
         'btowc.c',
         'internal.c',
@@ -729,7 +732,7 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
   # malloc dependency is force-added, so when using pthreads, it must be force-added
   # as well, since malloc needs to be thread-safe, so it depends on mutexes.
   if shared.Settings.USE_PTHREADS:
-    system_libs += [('pthreads',  'bc', create_pthreads,  pthreads_symbols,  ['libc'],                   False),
+    system_libs += [('pthreads',  'bc', create_pthreads,  pthreads_symbols,  ['libc', 'libcextra'],      False),
                     ('dlmalloc_threadsafe', 'bc', create_dlmalloc_multithreaded, [], [],                 False)]
     force.add('pthreads')
     force.add('dlmalloc_threadsafe')

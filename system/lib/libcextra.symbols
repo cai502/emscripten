@@ -322,4 +322,6 @@
          T ctanh
          T ctanhf
          T ctanhl
+         T shm_open
+         T shm_unlink
          T ctanl
