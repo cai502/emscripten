@@ -1,5 +1,5 @@
 /*
- * GL support. See https://github.com/kripken/emscripten/wiki/OpenGL-support
+ * GL support. See http://kripken.github.io/emscripten-site/docs/porting/multimedia_and_graphics/OpenGL-support.html
  * for current status.
  */
 
@@ -629,10 +629,6 @@ var LibraryGL = {
     
     // Returns the context handle to the new context.
     createContext: function(canvas, webGLContextAttributes) {
-#if !USE_TYPED_ARRAYS
-      Module.print('(USE_TYPED_ARRAYS needs to be enabled for WebGL)');
-      return null;
-#endif
       if (typeof webGLContextAttributes.majorVersion === 'undefined' && typeof webGLContextAttributes.minorVersion === 'undefined') {
 #if USE_WEBGL2
         webGLContextAttributes.majorVersion = 2;
@@ -813,14 +809,8 @@ var LibraryGL = {
 #endif
 
       // Detect the presence of a few extensions manually, this GL interop layer itself will need to know if they exist. 
-      context.compressionExt = GLctx.getExtension('WEBGL_compressed_texture_s3tc') ||
-                          GLctx.getExtension('MOZ_WEBGL_compressed_texture_s3tc') ||
-                          GLctx.getExtension('WEBKIT_WEBGL_compressed_texture_s3tc');
-
-      context.anisotropicExt = GLctx.getExtension('EXT_texture_filter_anisotropic') ||
-                          GLctx.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
-                          GLctx.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
-
+      context.compressionExt = GLctx.getExtension('WEBGL_compressed_texture_s3tc');
+      context.anisotropicExt = GLctx.getExtension('EXT_texture_filter_anisotropic');
       context.floatExt = GLctx.getExtension('OES_texture_float');
 
       // Extension available from Firefox 26 and Google Chrome 30
@@ -869,7 +859,6 @@ var LibraryGL = {
       var exts = GLctx.getSupportedExtensions();
       if (exts && exts.length > 0) {
         GLctx.getSupportedExtensions().forEach(function(ext) {
-          ext = ext.replace('MOZ_', '').replace('WEBKIT_', '');
           if (automaticallyEnabledExtensions.indexOf(ext) != -1) {
             GLctx.getExtension(ext); // Calling .getExtension enables that extension permanently, no need to store the return value to be enabled.
           }

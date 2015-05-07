@@ -28,19 +28,6 @@ import tools.shared
 from tools.shared import *
 from tools.line_endings import check_line_endings
 
-# Utils
-
-def nonfastcomp(test):
-  try:
-    old_fastcomp = os.environ.get('EMCC_FAST_COMPILER')
-    os.environ['EMCC_FAST_COMPILER'] = '0'
-    test()
-  finally:
-    if old_fastcomp is None:
-      del os.environ['EMCC_FAST_COMPILER']
-    else:
-      os.environ['EMCC_FAST_COMPILER'] = old_fastcomp
-
 # Sanity check for config
 
 try:
@@ -121,16 +108,16 @@ class RunnerCore(unittest.TestCase):
     open(filename, 'w').write(js.replace('run();', 'run(%s + Module["arguments"]);' % str(args)))
 
   def prep_ll_run(self, filename, ll_file, force_recompile=False, build_ll_hook=None):
-    if ll_file.endswith(('.bc', '.o')):
-      if ll_file != filename + '.o':
-        shutil.copy(ll_file, filename + '.o')
-      Building.llvm_dis(filename)
-    else:
-      shutil.copy(ll_file, filename + '.o.ll')
-
     #force_recompile = force_recompile or os.stat(filename + '.o.ll').st_size > 50000 # if the file is big, recompile just to get ll_opts # Recompiling just for dfe in ll_opts is too costly
 
     if Building.LLVM_OPTS or force_recompile or build_ll_hook:
+      if ll_file.endswith(('.bc', '.o')):
+        if ll_file != filename + '.o':
+          shutil.copy(ll_file, filename + '.o')
+        Building.llvm_dis(filename)
+      else:
+        shutil.copy(ll_file, filename + '.o.ll')
+
       Building.ll_opts(filename)
       if build_ll_hook:
         need_post = build_ll_hook(filename)
@@ -144,6 +131,14 @@ class RunnerCore(unittest.TestCase):
         Building.llvm_as(filename)
         shutil.move(filename + '.o.ll', filename + '.o.ll.post') # for comparisons later
         Building.llvm_dis(filename)
+
+      Building.llvm_as(filename)
+    else:
+      if ll_file.endswith('.ll'):
+        safe_copy(ll_file, filename + '.o.ll')
+        Building.llvm_as(filename)
+      else:
+        safe_copy(ll_file, filename + '.o')
 
   # Generate JS from ll, and optionally modify the generated JS with a post_build function. Note
   # that post_build is called on unoptimized JS, so we send it to emcc (otherwise, if run after
@@ -159,30 +154,17 @@ class RunnerCore(unittest.TestCase):
     if emcc_args is None:
       emcc_args = []
 
-    if emcc_args is None: # legacy testing mode, no longer used
-      Building.emscripten(filename, append_ext=True, extra_args=extra_emscripten_args)
-      if post1:
-        exec post1 in locals()
-        shutil.copyfile(filename + '.o.js', filename + '.o.js.prepost.js')
-        process(filename + '.o.js')
-      if post2: post2(filename + '.o.js')
-    else:
-      transform_args = []
-      if post1:
-        transform_filename = os.path.join(self.get_dir(), 'transform.py')
-        transform = open(transform_filename, 'w')
-        transform.write('''
-import sys
-sys.path += [%r]
-''' % path_from_root(''))
-        transform.write(post1)
-        transform.write('''
-process(sys.argv[1])
-''')
-        transform.close()
-        transform_args = ['--js-transform', "%s %s" % (PYTHON, transform_filename)]
-      Building.emcc(filename + '.o.ll', Settings.serialize() + emcc_args + transform_args + Building.COMPILER_TEST_OPTS, filename + '.o.js')
-      if post2: post2(filename + '.o.js')
+    transform_args = []
+    if post1:
+      transform_filename = os.path.join(self.get_dir(), 'transform.py')
+      transform = open(transform_filename, 'w')
+      transform.write('\nimport sys\nsys.path += [%r]\n' % path_from_root(''))
+      transform.write(post1)
+      transform.write('\nprocess(sys.argv[1])\n')
+      transform.close()
+      transform_args = ['--js-transform', "%s %s" % (PYTHON, transform_filename)]
+    Building.emcc(filename + '.o', Settings.serialize() + emcc_args + transform_args + Building.COMPILER_TEST_OPTS, filename + '.o.js')
+    if post2: post2(filename + '.o.js')
 
   # Build JavaScript code from source code
   def build(self, src, dirname, filename, output_processor=None, main_file=None, additional_files=[], libraries=[], includes=[], build_ll_hook=None, extra_emscripten_args=[], post_build=None):
@@ -377,7 +359,7 @@ process(sys.argv[1])
     build_dir = self.get_build_dir()
     output_dir = self.get_dir()
 
-    cache_name = name + ','.join(filter(lambda opt: len(opt) < 10, Building.COMPILER_TEST_OPTS)) + '_' + hashlib.md5(str(Building.COMPILER_TEST_OPTS)).hexdigest() + cache_name_extra + (self.env.get('EMCC_LLVM_TARGET') or '_') + (self.env.get('EMCC_FAST_COMPILER') or '_')
+    cache_name = name + ','.join(filter(lambda opt: len(opt) < 10, Building.COMPILER_TEST_OPTS)) + '_' + hashlib.md5(str(Building.COMPILER_TEST_OPTS)).hexdigest() + cache_name_extra
 
     valid_chars = "_%s%s" % (string.ascii_letters, string.digits)
     cache_name = ''.join([(c if c in valid_chars else '_') for c in cache_name])
@@ -761,6 +743,12 @@ class BrowserCore(RunnerCore):
 
 ###################################################################################################
 
+def get_zlib_library(runner_core):
+  if WINDOWS:
+    return runner_core.get_library('zlib', os.path.join('libz.a'), configure=['emconfigure.bat'], configure_args=['cmake', '.', '-DBUILD_SHARED_LIBS=OFF'], make=['mingw32-make'], make_args=[])
+  else:
+    return runner_core.get_library('zlib', os.path.join('libz.a'), make_args=['libz.a'])
+
 # Both test_core and test_other access the Bullet library, share the access here to avoid duplication.
 def get_bullet_library(runner_core, use_cmake):
   if use_cmake:
@@ -876,6 +864,10 @@ In the main test suite, you can run all variations (O0, O1, O2, etc.) of
 an individual test with
 
   python tests/runner.py ALL.test_hello_world
+
+You can run a random set of N tests with a command like
+
+  python tests/runner.py random50
 
 Debugging: You can run
 

@@ -7,12 +7,9 @@
 // itself is as optimized as possible - no unneeded runtime checks).
 
 var RuntimeGenerator = {
-  alloc: function(size, type, init, sep, ignoreAlign) {
+  alloc: function(size, type, sep, ignoreAlign) {
     sep = sep || ';';
     var ret = type + 'TOP';
-    if (init) {
-      ret += sep + '_memset(' + type + 'TOP, 0, ' + size + ')';
-    }
     ret += sep + type + 'TOP = (' + type + 'TOP + ' + size + ')|0';
     if ({{{ STACK_ALIGN }}} > 1 && !ignoreAlign) {
       ret += sep + RuntimeGenerator.alignMemory(type + 'TOP', {{{ STACK_ALIGN }}});
@@ -23,7 +20,7 @@ var RuntimeGenerator = {
   // An allocation that lives as long as the current function call
   stackAlloc: function(size, sep) {
     sep = sep || ';';
-    var ret = RuntimeGenerator.alloc(size, 'STACK', false, sep, USE_TYPED_ARRAYS != 2 || (isNumber(size) && parseInt(size) % {{{ STACK_ALIGN }}} == 0));
+    var ret = RuntimeGenerator.alloc(size, 'STACK', sep, (isNumber(size) && parseInt(size) % {{{ STACK_ALIGN }}} == 0));
     if (ASSERTIONS) {
       ret += sep + '(assert(' + asmCoercion('(STACKTOP|0) < (STACK_MAX|0)', 'i32') + ')|0)';
     }
@@ -32,13 +29,11 @@ var RuntimeGenerator = {
 
   stackEnter: function(initial, force) {
     if (initial === 0 && SKIP_STACK_IN_SMALL && !force) return '';
-    var ret = 'var sp=' + (ASM_JS ? '0;sp=' : '') + 'STACKTOP';
+    var ret = 'var sp=0;sp=STACKTOP';
     if (initial > 0) ret += ';STACKTOP=(STACKTOP+' + initial + ')|0';
-    if (USE_TYPED_ARRAYS == 2) {
-      assert(initial % Runtime.STACK_ALIGN == 0);
-      if (ASSERTIONS && Runtime.STACK_ALIGN == 4) {
-        ret += '; (assert(' + asmCoercion('!(STACKTOP&3)', 'i32') + ')|0)';
-      }
+    assert(initial % Runtime.STACK_ALIGN == 0);
+    if (ASSERTIONS && Runtime.STACK_ALIGN == 4) {
+      ret += '; (assert(' + asmCoercion('!(STACKTOP&3)', 'i32') + ')|0)';
     }
     if (ASSERTIONS) {
       ret += '; (assert(' + asmCoercion('(STACKTOP|0) < (STACK_MAX|0)', 'i32') + ')|0)';
@@ -48,26 +43,22 @@ var RuntimeGenerator = {
 
   stackExit: function(initial, force) {
     if (initial === 0 && SKIP_STACK_IN_SMALL && !force) return '';
-    var ret = '';
-    if (SAFE_HEAP && !ASM_JS) {
-      ret += 'var i = sp; while ((i|0) < (STACKTOP|0)) { SAFE_HEAP_CLEAR(i|0); i = (i+1)|0 }';
-    }
-    return ret += 'STACKTOP=sp';
+    return 'STACKTOP=sp';
   },
 
   // An allocation that cannot normally be free'd (except through sbrk, which once
   // called, takes control of STATICTOP)
   staticAlloc: function(size) {
     if (ASSERTIONS) size = '(assert(!staticSealed),' + size + ')'; // static area must not be sealed
-    var ret = RuntimeGenerator.alloc(size, 'STATIC', INIT_HEAP);
+    var ret = RuntimeGenerator.alloc(size, 'STATIC');
     return ret;
   },
 
   // allocation on the top of memory, adjusted dynamically by sbrk
   dynamicAlloc: function(size) {
     if (ASSERTIONS) size = '(assert(DYNAMICTOP > 0),' + size + ')'; // dynamic area must be ready
-    var ret = RuntimeGenerator.alloc(size, 'DYNAMIC', INIT_HEAP);
-    if (USE_TYPED_ARRAYS) ret += '; if (DYNAMICTOP >= TOTAL_MEMORY) { var success = enlargeMemory(); if (!success) return 0; }'
+    var ret = RuntimeGenerator.alloc(size, 'DYNAMIC');
+    ret += '; if (DYNAMICTOP >= TOTAL_MEMORY) { var success = enlargeMemory(); if (!success) { DYNAMICTOP = ret; return 0; } }'
     return ret;
   },
 
@@ -135,31 +126,9 @@ var Runtime = {
     STACKTOP = stackTop;
   },
 
-#if RUNNING_FASTCOMP == 0
-  // Imprecise bitops utilities
-  or64: function(x, y) {
-    var l = (x | 0) | (y | 0);
-    var h = (Math.round(x / 4294967296) | Math.round(y / 4294967296)) * 4294967296;
-    return l + h;
-  },
-  and64: function(x, y) {
-    var l = (x | 0) & (y | 0);
-    var h = (Math.round(x / 4294967296) & Math.round(y / 4294967296)) * 4294967296;
-    return l + h;
-  },
-  xor64: function(x, y) {
-    var l = (x | 0) ^ (y | 0);
-    var h = (Math.round(x / 4294967296) ^ Math.round(y / 4294967296)) * 4294967296;
-    return l + h;
-  },
-#endif
-
   //! Returns the size of a type, as C/C++ would have it (in 32-bit), in bytes.
   //! @param type The type, by name.
   getNativeTypeSize: function(type) {
-#if QUANTUM_SIZE == 1
-    return 1;
-#else
     switch (type) {
       case 'i1': case 'i8': return 1;
       case 'i16': return 2;
@@ -179,7 +148,6 @@ var Runtime = {
         }
       }
     }
-#endif
   },
 
   //! Returns the size of a structure field, as C/C++ would have it (in 32-bit,
@@ -188,10 +156,6 @@ var Runtime = {
   getNativeFieldSize: function(type) {
     return Math.max(Runtime.getNativeTypeSize(type), Runtime.QUANTUM_SIZE);
   },
-
-#if RUNNING_FASTCOMP == 0
-  dedup: dedup,
-#endif
 
   STACK_ALIGN: {{{ STACK_ALIGN }}},
 
@@ -213,187 +177,87 @@ var Runtime = {
   // type can be a native type or a struct (or null, for structs we only look at size here)
   getAlignSize: function(type, size, vararg) {
     // we align i64s and doubles on 64-bit boundaries, unlike x86
-#if TARGET_ASMJS_UNKNOWN_EMSCRIPTEN == 1
-    if (vararg) return 8;
-#endif
-#if TARGET_ASMJS_UNKNOWN_EMSCRIPTEN
     if (!vararg && (type == 'i64' || type == 'double')) return 8;
     if (!type) return Math.min(size, 8); // align structures internally to 64 bits
-#endif
     return Math.min(size || (type ? Runtime.getNativeFieldSize(type) : 0), Runtime.QUANTUM_SIZE);
   },
-
-#if RUNNING_FASTCOMP == 0
-  // Calculate aligned size, just like C structs should be. TODO: Consider
-  // requesting that compilation be done with #pragma pack(push) /n #pragma pack(1),
-  // which would remove much of the complexity here.
-  calculateStructAlignment: function calculateStructAlignment(type) {
-    type.flatSize = 0;
-    type.alignSize = 0;
-    var diffs = [];
-    var prev = -1;
-    var index = 0;
-    type.flatIndexes = type.fields.map(function(field) {
-      index++;
-      var size, alignSize;
-      if (Compiletime.isNumberType(field) || Compiletime.isPointerType(field)) {
-        size = Runtime.getNativeTypeSize(field); // pack char; char; in structs, also char[X]s.
-        alignSize = Runtime.getAlignSize(field, size);
-      } else if (Compiletime.isStructType(field)) {
-        if (field[1] === '0') {
-          // this is [0 x something]. When inside another structure like here, it must be at the end,
-          // and it adds no size
-          // XXX this happens in java-nbody for example... assert(index === type.fields.length, 'zero-length in the middle!');
-          size = 0;
-          if (Types.types[field]) {
-            alignSize = Runtime.getAlignSize(null, Types.types[field].alignSize);
-          } else {
-            alignSize = type.alignSize || QUANTUM_SIZE;
-          }
-        } else {
-          size = Types.types[field].flatSize;
-          alignSize = Runtime.getAlignSize(null, Types.types[field].alignSize);
-        }
-      } else if (field[0] == 'b') {
-        // bN, large number field, like a [N x i8]
-        size = field.substr(1)|0;
-        alignSize = 1;
-      } else if (field[0] === '<') {
-        // vector type
-        size = alignSize = Types.types[field].flatSize; // fully aligned
-      } else if (field[0] === 'i') {
-        // illegal integer field, that could not be legalized because it is an internal structure field
-        // it is ok to have such fields, if we just use them as markers of field size and nothing more complex
-        size = alignSize = parseInt(field.substr(1))/8;
-        assert(size % 1 === 0, 'cannot handle non-byte-size field ' + field);
-      } else {
-        assert(false, 'invalid type for calculateStructAlignment');
-      }
-      if (type.packed) alignSize = 1;
-      type.alignSize = Math.max(type.alignSize, alignSize);
-      var curr = Runtime.alignMemory(type.flatSize, alignSize); // if necessary, place this on aligned memory
-      type.flatSize = curr + size;
-      if (prev >= 0) {
-        diffs.push(curr-prev);
-      }
-      prev = curr;
-      return curr;
-    });
-    if (type.name_ && type.name_[0] === '[') {
-      // arrays have 2 elements, so we get the proper difference. then we scale here. that way we avoid
-      // allocating a potentially huge array for [999999 x i8] etc.
-      type.flatSize = parseInt(type.name_.substr(1))*type.flatSize/2;
-    }
-    type.flatSize = Runtime.alignMemory(type.flatSize, type.alignSize);
-    if (diffs.length == 0) {
-      type.flatFactor = type.flatSize;
-    } else if (Runtime.dedup(diffs).length == 1) {
-      type.flatFactor = diffs[0];
-    }
-    type.needsFlattening = (type.flatFactor != 1);
-    return type.flatIndexes;
-  },
-
-  // Given details about a structure, returns its alignment. For example,
-  // generateStructInfo(
-  //    [
-  //      ['i32', 'field1'],
-  //      ['i8', 'field2']
-  //    ]
-  // ) will return
-  //    { field1: 0, field2: 4 } (depending on QUANTUM_SIZE)
-  //
-  // Instead of [type, name], you can also provide just [name]. In that case
-  // it will use type information present in LLVM bitcode. (It is safer to
-  // specify the type though, as it will then check the type.) You must then
-  // also specify the second parameter to generateStructInfo, which is the
-  // LLVM structure name.
-  //
-  // Note that LLVM optimizations can remove some of the debug info generated
-  // by -g.
-  //
-  // Note that you will need the full %struct.* name here at compile time,
-  // but not at runtime. The reason is that during compilation we cannot
-  // simplify the type names yet. At runtime, you can provide either the short
-  // or the full name.
-  //
-  // When providing a typeName, you can generate information for nested
-  // structs, for example, struct = ['field1', { field2: ['sub1', 'sub2', 'sub3'] }, 'field3']
-  // which represents a structure whose 2nd field is another structure.
-  generateStructInfo: function(struct, typeName, offset) {
-    var type, alignment;
-    if (typeName) {
-      offset = offset || 0;
-      type = (typeof Types === 'undefined' ? Runtime.typeInfo : Types.types)[typeName];
-      if (!type) return null;
-      if (type.fields.length != struct.length) {
-        printErr('Number of named fields must match the type for ' + typeName + ': possibly duplicate struct names. Cannot return structInfo');
-        return null;
-      }
-      alignment = type.flatIndexes;
-    } else {
-      var type = { fields: struct.map(function(item) { return item[0] }) };
-      alignment = Runtime.calculateStructAlignment(type);
-    }
-    var ret = {
-      __size__: type.flatSize
-    };
-    if (typeName) {
-      struct.forEach(function(item, i) {
-        if (typeof item === 'string') {
-          ret[item] = alignment[i] + offset;
-        } else {
-          // embedded struct
-          var key;
-          for (var k in item) key = k;
-          ret[key] = Runtime.generateStructInfo(item[key], type.fields[i], alignment[i]);
-        }
-      });
-    } else {
-      struct.forEach(function(item, i) {
-        ret[item[1]] = alignment[i];
-      });
-    }
-    return ret;
-  },
-#endif
 
   dynCall: function(sig, ptr, args) {
     if (args && args.length) {
 #if ASSERTIONS
       assert(args.length == sig.length-1);
 #endif
-#if ASM_JS
       if (!args.splice) args = Array.prototype.slice.call(args);
       args.splice(0, 0, ptr);
 #if ASSERTIONS
       assert(('dynCall_' + sig) in Module, 'bad function pointer type - no table for sig \'' + sig + '\'');
 #endif
       return Module['dynCall_' + sig].apply(null, args);
-#else
-      return FUNCTION_TABLE[ptr].apply(null, args);
-#endif
     } else {
 #if ASSERTIONS
       assert(sig.length == 1);
 #endif
-#if ASM_JS
 #if ASSERTIONS
       assert(('dynCall_' + sig) in Module, 'bad function pointer type - no table for sig \'' + sig + '\'');
 #endif
       return Module['dynCall_' + sig].call(null, ptr);
-#else
-      return FUNCTION_TABLE[ptr]();
-#endif
     }
   },
 
-#if ASM_JS
-  functionPointers: new Array(RESERVED_FUNCTION_POINTERS),
+#if EMULATED_FUNCTION_POINTERS
+  getFunctionTables: function(module) {
+    if (!module) module = Module;
+    var tables = {};
+    for (var t in module) {
+      if (/^FUNCTION_TABLE_.*/.test(t)) {
+        var table = module[t];
+        if (typeof table === 'object') tables[t.substr('FUNCTION_TABLE_'.length)] = table;
+      }
+    }
+    return tables;
+  },
+
+  alignFunctionTables: function(module) {
+    var tables = Runtime.getFunctionTables(module);
+    var maxx = 0;
+    for (var sig in tables) {
+      maxx = Math.max(maxx, tables[sig].length);
+    }
+    assert(maxx >= 0);
+    for (var sig in tables) {
+      var table = tables[sig];
+      while (table.length < maxx) table.push(0);
+    }
+    return maxx;
+  },
+
+  registerFunctions: function(sigs, newModule) {
+    sigs.forEach(function(sig) {
+      if (!Module['FUNCTION_TABLE_' + sig]) {
+        Module['FUNCTION_TABLE_' + sig] = [];
+      }
+    });
+    var oldMaxx = Runtime.alignFunctionTables(); // align the new tables we may have just added
+    var newMaxx = Runtime.alignFunctionTables(newModule);
+    var maxx = oldMaxx + newMaxx;
+    sigs.forEach(function(sig) {
+      var newTable = newModule['FUNCTION_TABLE_' + sig];
+      var oldTable = Module['FUNCTION_TABLE_' + sig];
+      assert(newTable !== oldTable);
+      assert(oldTable.length === oldMaxx);
+      for (var i = 0; i < newTable.length; i++) {
+        oldTable.push(newTable[i]);
+      }
+      assert(oldTable.length === maxx);
+    });
+    assert(maxx === Runtime.alignFunctionTables()); // align the ones we didn't touch
+  },
 #endif
 
+  functionPointers: new Array(RESERVED_FUNCTION_POINTERS),
+
   addFunction: function(func) {
-#if ASM_JS
+#if EMULATED_FUNCTION_POINTERS == 0
     for (var i = 0; i < Runtime.functionPointers.length; i++) {
       if (!Runtime.functionPointers[i]) {
         Runtime.functionPointers[i] = func;
@@ -402,25 +266,50 @@ var Runtime = {
     }
     throw 'Finished up all reserved function pointers. Use a higher value for RESERVED_FUNCTION_POINTERS.';
 #else
-    var table = FUNCTION_TABLE;
-    var ret = table.length;
-    assert(ret % {{{ FUNCTION_POINTER_ALIGNMENT }}} === 0);
-    table.push(func);
-    for (var i = 0; i < {{{ FUNCTION_POINTER_ALIGNMENT }}}-1; i++) table.push(0);
+    Runtime.alignFunctionTables(); // XXX we should rely on this being an invariant
+    var tables = Runtime.getFunctionTables();
+    var ret = -1;
+    for (var sig in tables) {
+      var table = tables[sig];
+      if (ret < 0) ret = table.length;
+      else assert(ret === table.length);
+      table.push(func);
+    }
     return ret;
 #endif
   },
 
   removeFunction: function(index) {
-#if ASM_JS
+#if EMULATED_FUNCTION_POINTERS == 0
     Runtime.functionPointers[(index-{{{ FUNCTION_POINTER_ALIGNMENT }}})/{{{ FUNCTION_POINTER_ALIGNMENT }}}] = null;
 #else
-    var table = FUNCTION_TABLE;
-    table[index] = null;
+    Runtime.alignFunctionTables(); // XXX we should rely on this being an invariant
+    var tables = Runtime.getFunctionTables();
+    for (var sig in tables) {
+      tables[sig][index] = null;
+    }
 #endif
   },
 
-  asmConsts: [],
+#if RELOCATABLE
+  loadedDynamicLibraries: [],
+
+  loadDynamicLibrary: function(lib) {
+    // TODO: addRunDep etc., do asynchronously when in the browser. for now we assume we can do a sync xhr, no mem init files in libs, and we ignore the sync xhr lag
+    var src = Module['read'](lib);
+    var libModule = eval(src)(
+      Runtime.alignFunctionTables(),
+      Module
+    );
+    // add symbols into global namespace TODO: weak linking etc.
+    for (var sym in libModule) {
+      if (!Module.hasOwnProperty(sym)) {
+        Module[sym] = libModule[sym];
+      }
+    }
+    Runtime.loadedDynamicLibraries.push(libModule);
+  },
+#endif
 
   warnOnce: function(text) {
     if (!Runtime.warnOnce.shown) Runtime.warnOnce.shown = {};
@@ -541,9 +430,6 @@ function unSign(value, bits, ignore) {
   if (value >= 0) {
     return value;
   }
-#if CHECK_SIGNS
-  if (!ignore) throw 'UnSign';
-#endif
   return bits <= 32 ? 2*Math.abs(1 << (bits-1)) + value // Need some trickery, since if bits == 32, we are right at the limit of the bits JS uses in bitshifts
                     : Math.pow(2, bits)         + value;
 }
@@ -556,25 +442,11 @@ function reSign(value, bits, ignore) {
   }
   var half = bits <= 32 ? Math.abs(1 << (bits-1)) // abs is needed if bits == 32
                         : Math.pow(2, bits-1);
-#if CHECK_SIGNS
-  var noted = false;
-#endif
   if (value >= half && (bits <= 32 || value > half)) { // for huge values, we can hit the precision limit and always get true here. so don't do that
                                                        // but, in general there is no perfect solution here. With 64-bit ints, we get rounding and errors
                                                        // TODO: In i64 mode 1, resign the two parts separately and safely
-#if CHECK_SIGNS
-    if (!ignore) throw 'ReSign';
-#endif
     value = -2*half + value; // Cannot bitshift half, as it may be at the limit of the bits JS uses in bitshifts
   }
-#if CHECK_SIGNS
-  // If this is a 32-bit value, then it should be corrected at this point. And,
-  // without CHECK_SIGNS, we would just do the |0 shortcut, so check that that
-  // would indeed give the exact same result.
-  if (bits === 32 && (value|0) !== value && typeof value !== 'boolean') {
-    if (!ignore) throw 'ReSign';
-  }
-#endif
   return value;
 }
 
@@ -582,10 +454,10 @@ function reSign(value, bits, ignore) {
 // Above 0 is static memory, starting with globals.
 // Then the stack.
 // Then 'dynamic' memory for sbrk.
-Runtime.GLOBAL_BASE = {{{ GLOBAL_BASE }}} < 0 ? (TARGET_X86 ? 4 : 8) : {{{ GLOBAL_BASE }}};
+Runtime.GLOBAL_BASE = {{{ GLOBAL_BASE }}} < 0 ? 8 : {{{ GLOBAL_BASE }}};
 
 if (RETAIN_COMPILER_SETTINGS) {
-  var blacklist = set('RELOOPER', 'STRUCT_INFO');
+  var blacklist = set('STRUCT_INFO');
   for (var x in this) {
     try {
       if (x[0] !== '_' && !(x in blacklist) && x == x.toUpperCase() && (typeof this[x] === 'number' || typeof this[x] === 'string' || this.isArray())) Runtime.compilerSettings[x] = this[x];

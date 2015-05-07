@@ -372,28 +372,6 @@ Options that are modified or new in *emcc* are listed below:
    example, "<cmd>" of **python processor.py** will cause a Python
    script to be run.
 
-"--split <size>"
-   Splits the resulting JavaScript file into pieces to ease debugging.
-
-   Warning: This option is deprecated (modern JavaScript debuggers
-     should work even on large files).
-
-   This option only works if JavaScript is generated ("target -o
-   <name>.js"). Files with function declarations must be loaded before
-   main file upon execution.
-
-      * Without the "-g" option this creates files with function
-        declarations up to the given size with the suffix
-        **_functions.partxxx.js** and a main file with the suffix
-        **.js**.
-
-      * With the "-g" option this recreates the directory structure
-        of the C source files and stores function declarations in
-        their respective C files with the suffix ".js". If such a file
-        exceeds the given size, files with the suffix ".partxxx.js"
-        are created. The main file resides in the base directory and
-        has the suffix ".js".
-
 "--bind"
    Compiles the source code using the *Embind* bindings to connect
    C/C++ and JavaScript.
@@ -432,8 +410,7 @@ Options that are modified or new in *emcc* are listed below:
    the caching mechanism can get confused. Clearing the cache can fix
    weird problems related to cache incompatibilities, like *Clang*
    failing to link with library files. This also clears other cached
-   data like the jcache and the bootstrapped relooper. After the cache
-   is cleared, this process will exit.
+   data. After the cache is cleared, this process will exit.
 
 "--save-bc PATH"
    When compiling to JavaScript or HTML, this option will save a copy
@@ -544,8 +521,6 @@ Environment variables
    * "EMMAKEN_CFLAGS"
 
    * "EMCC_DEBUG"
-
-   * "EMCC_FAST_COMPILER"
 
 Search for 'os.environ' in emcc to see how these are used. The most
 interesting is possibly "EMCC_DEBUG", which forces the compiler to

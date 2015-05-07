@@ -316,17 +316,6 @@ Options that are modified or new in *emcc* are listed below:
 	
 	``<cmd>`` is interpreted as a space-separated list of arguments, for example, ``<cmd>`` of **python processor.py** will cause a Python script to be run.
 	 
-``--split <size>``
-	Splits the resulting JavaScript file into pieces to ease debugging. 
-	
-	.. warning:: This option is deprecated (modern JavaScript debuggers should work even on large files).
-	
-	This option only works if JavaScript is generated (``target -o <name>.js``). Files with function declarations must be loaded before main file upon execution.
-
-		- Without the ``-g`` option this creates files with function declarations up to the given size with the suffix **_functions.partxxx.js** and a main file with the suffix **.js**.
-		- With the ``-g`` option this recreates the directory structure of the C source files and stores function declarations in their respective C files with the suffix ".js". If such a file exceeds the given size, files with the suffix ".partxxx.js" are created. The main file resides in the base directory and has the suffix ".js".
-
-
 .. _emcc-bind:
 
 ``--bind``
@@ -369,7 +358,7 @@ Options that are modified or new in *emcc* are listed below:
 ``--clear-cache``
 	Manually clears the cache of compiled Emscripten system libraries (libc++, libc++abi, libc). 
 	
-	This is normally handled automatically, but if you update LLVM in-place (instead of having a different directory for a new version), the caching mechanism can get confused. Clearing the cache can fix weird problems related to cache incompatibilities, like *Clang* failing to link with library files. This also clears other cached data like the jcache and the bootstrapped relooper. After the cache is cleared, this process will exit.
+	This is normally handled automatically, but if you update LLVM in-place (instead of having a different directory for a new version), the caching mechanism can get confused. Clearing the cache can fix weird problems related to cache incompatibilities, like *Clang* failing to link with library files. This also clears other cached data. After the cache is cleared, this process will exit.
 
 .. _emcc-clear-ports:
 	 
@@ -427,7 +416,7 @@ Options that are modified or new in *emcc* are listed below:
 		emcc -c a.c -o dir/
  
        
-``--valid_abspath path``
+``--valid-abspath path``
 	Whitelist an absolute path to prevent warnings about absolute include paths.
 	 
 .. _emcc-o-target:
@@ -464,7 +453,6 @@ Environment variables
 	- ``EMMAKEN_COMPILER``
 	- ``EMMAKEN_CFLAGS``
 	- ``EMCC_DEBUG``
-	- ``EMCC_FAST_COMPILER``
 
 Search for 'os.environ' in `emcc <https://github.com/kripken/emscripten/blob/master/emcc>`_ to see how these are used. The most interesting is possibly ``EMCC_DEBUG``, which forces the compiler to dump its build and temporary files to a temporary directory where they can be reviewed.
 

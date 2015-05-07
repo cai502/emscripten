@@ -38,7 +38,7 @@ mergeInto(LibraryManager.library, {
       callback = {{{ makeGetValueAsm('___async_cur_frame', 8, 'i32') }}};
       // the signature of callback is always vi
       // the only argument is ctx
-      dynCall_vi(callback, (___async_cur_frame + 8)|0);
+      {{{ makeDynCall('vi') }}}(callback | 0, (___async_cur_frame + 8)|0);
       if (___async) return; // that was an async call
       if (!___async_unwind) {
         // keep the async stack
@@ -156,7 +156,7 @@ mergeInto(LibraryManager.library, {
 
     if (!___async_cur_frame) {
       // first run
-      dynCall_vi(
+      {{{ makeDynCall('vi') }}}(
         {{{ makeGetValueAsm('coroutine', 24, 'i32') }}},
         {{{ makeGetValueAsm('coroutine', 28, 'i32') }}}
       );
@@ -214,6 +214,7 @@ mergeInto(LibraryManager.library, {
     saveStack: '',
     yieldCallbacks: [],
     postAsync: null,
+    asyncFinalizers: [], // functions to run when all asynchronicity is done
 
     ensureInit: function() {
       if (this.initted) return;
@@ -252,7 +253,18 @@ mergeInto(LibraryManager.library, {
           Browser.resumeAsyncCallbacks(); // if we were paused (e.g. we are after a sleep), then since we are now yielding, it is safe to call callbacks
         }
 
+        var callingDoAsyncOp = 1; // if resume is called synchronously - during the doAsyncOp - we must make it truly async, for consistency
+
         doAsyncOp(function resume(post) {
+          if (callingDoAsyncOp) {
+            assert(callingDoAsyncOp === 1); // avoid infinite recursion
+            callingDoAsyncOp++;
+            setTimeout(function() {
+              resume(post);
+            }, 0);
+            return;
+          }
+
           assert(EmterpreterAsync.state === 1 || EmterpreterAsync.state === 3);
           EmterpreterAsync.setState(3);
           if (yieldDuring) {
@@ -275,7 +287,16 @@ mergeInto(LibraryManager.library, {
             // if we did *not* do another async operation, then we know that nothing is conceptually on the stack now, and we can re-allow async callbacks as well as run the queued ones right now
             Browser.resumeAsyncCallbacks();
           }
+          if (EmterpreterAsync.state === 0) {
+            EmterpreterAsync.asyncFinalizers.forEach(function(func) {
+              func();
+            });
+            EmterpreterAsync.asyncFinalizers.length = 0;
+          }
         });
+
+        callingDoAsyncOp = 0;
+
         EmterpreterAsync.setState(1);
 #if ASSERTIONS
         EmterpreterAsync.saveStack = new Error().stack; // we can't call  stackTrace()  as it calls compiled code
@@ -296,9 +317,11 @@ mergeInto(LibraryManager.library, {
         // nothing to do here, the stack was just recreated. reset the state.
         assert(EmterpreterAsync.state === 2);
         EmterpreterAsync.setState(0);
+
         if (EmterpreterAsync.postAsync) {
-          EmterpreterAsync.postAsync();
+          var ret = EmterpreterAsync.postAsync();
           EmterpreterAsync.postAsync = null;
+          return ret;
         }
       }
     }

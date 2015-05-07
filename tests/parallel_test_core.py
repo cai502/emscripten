@@ -4,14 +4,11 @@
 import os, sys, subprocess, multiprocessing, threading, time
 from runner import test_modes, PYTHON, path_from_root
 
+assert not os.environ.get('EM_SAVE_DIR'), 'Need separate directories to avoid the parallel tests clashing'
+
 # run slower ones first, to optimize total time
 optimal_order = ['asm3i', 'asm1i', 'asm2nn', 'asm3', 'asm2', 'asm2g', 'asm2f', 'asm1', 'default']
 assert set(optimal_order) == set(test_modes), 'need to update the list of slowest modes'
-
-# clean up previous output
-for mode in optimal_order:
-  if os.path.exists(mode + '.err'):
-    os.unlink(mode + '.err')
 
 # set up a background thread to report progress
 class Watcher(threading.Thread):
@@ -29,28 +26,50 @@ class Watcher(threading.Thread):
         print >> sys.stderr, '[parallel_test_copy.py watcher] total output: %d' % total
       time.sleep(1)
 
-watcher = Watcher()
-watcher.start()
-
 # run tests for one mode
-def run_mode(mode):
-  print '<< running %s >>' % mode
-  proc = subprocess.Popen([PYTHON, path_from_root('tests', 'runner.py'), mode], stdout=open(mode + '.out', 'w'), stderr=open(mode + '.err', 'w'))
+def run_mode(args):
+  mode = args[0]
+  if len(args) > 1:
+    # If args has multiple elements, then only the selected tests from that suite are run e.g. args=['asm1', 'test_hello_world', 'test_i64'] runs only tests asm1.test_hello_world and asm1.test_i64.
+    args = args[1:]
+    for i in range(len(args)):
+      if args[i].startswith('test_'):
+        args[i] = mode + '.' + args[i]
+    print '<< running %s >>' % str(args)
+  else:
+    # If args has only one argument, e.g. args=['default'] or args=['asm1'], all tests are run in one suite.
+    print '<< running %s >>' % mode
+
+  proc = subprocess.Popen([PYTHON, path_from_root('tests', 'runner.py')] + args, stdout=open(mode + '.out', 'w'), stderr=open(mode + '.err', 'w'))
   proc.communicate()
-  print '<< %s finished >>' % mode
+  print '<< %s finished with exit code %d >>' % (mode, proc.returncode)
+  return proc.returncode
 
-# run all modes
-cores = int(os.environ.get('EMCC_CORES') or multiprocessing.cpu_count())
-pool = multiprocessing.Pool(processes=cores)
-filenames = pool.map(run_mode, optimal_order, chunksize=1)
+def main():
+  # clean up previous output
+  for mode in optimal_order:
+    if os.path.exists(mode + '.err'):
+      os.unlink(mode + '.err')
 
-# quit watcher
-Watcher.stop = True
+  watcher = Watcher()
+  watcher.start()
 
-# emit all outputs
-for mode in optimal_order:
-  print >> sys.stderr, '=== %s ===' % mode
-  if os.path.exists(mode + '.err'):
-    print >> sys.stderr, open(mode + '.err').read()
-  print >> sys.stderr
+  # run all modes
+  cores = int(os.environ.get('PARALLEL_SUITE_EMCC_CORES') or os.environ.get('EMCC_CORES') or multiprocessing.cpu_count())
+  pool = multiprocessing.Pool(processes=cores)
+  args = [[x] + sys.argv[1:] for x in optimal_order]
+  num_failures = pool.map(run_mode, args, chunksize=1)
 
+  # quit watcher
+  Watcher.stop = True
+
+  # emit all outputs
+  for mode in optimal_order:
+    print >> sys.stderr, '=== %s ===' % mode
+    if os.path.exists(mode + '.err'):
+      print >> sys.stderr, open(mode + '.err').read()
+    print >> sys.stderr
+  return sum(num_failures)
+
+if __name__ == '__main__':
+  sys.exit(main())

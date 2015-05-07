@@ -69,20 +69,28 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
     shared.Building.link(o_s, in_temp(lib_filename))
     return in_temp(lib_filename)
 
-  def build_libcxx(src_dirname, lib_filename, files, lib_opts):
+  def build_libcxx(src_dirname, lib_filename, files, lib_opts, has_noexcept_version=False):
     o_s = []
     commands = []
+    opts = default_opts + lib_opts
+    if has_noexcept_version and shared.Settings.DISABLE_EXCEPTION_CATCHING:
+      opts += ['-fno-exceptions']
     for src in files:
       o = in_temp(src + '.o')
       srcfile = shared.path_from_root(src_dirname, src)
-      commands.append([shared.PYTHON, shared.EMXX, srcfile, '-o', o, '-std=c++11'] + default_opts + lib_opts)
+      commands.append([shared.PYTHON, shared.EMXX, srcfile, '-o', o, '-std=c++11'] + opts)
       o_s.append(o)
     run_commands(commands)
-    shared.Building.link(o_s, in_temp(lib_filename))
+    if lib_filename.endswith('.bc'):
+      shared.Building.link(o_s, in_temp(lib_filename))
+    elif lib_filename.endswith('.a'):
+      shared.Building.emar('cr', in_temp(lib_filename), o_s)
+    else:
+      raise Exception('unknown suffix ' + lib_filename)
     return in_temp(lib_filename)
 
   # libc
-  def create_libc():
+  def create_libc(libname):
     logging.debug(' building libc for cache')
     libc_files = [
       'dlmalloc.c',
@@ -261,22 +269,10 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
     ]
     for directory, sources in musl_files:
       libc_files += [os.path.join('libc', 'musl', 'src', directory, source) for source in sources]
-    return build_libc('libc.bc', libc_files, ['-O2'])
-
-  def apply_libc(need):
-    # libc needs some sign correction. # If we are in mode 0, switch to 2. We will add our lines
-    try:
-      if shared.Settings.CORRECT_SIGNS == 0: raise Exception('we need to change to 2')
-    except: # we fail if equal to 0 - so we need to switch to 2 - or if CORRECT_SIGNS is not even in Settings
-      shared.Settings.CORRECT_SIGNS = 2
-    if shared.Settings.CORRECT_SIGNS == 2:
-      shared.Settings.CORRECT_SIGNS_LINES = [shared.path_from_root('src', 'dlmalloc.c') + ':' + str(i+4) for i in [4816, 4191, 4246, 4199, 4205, 4235, 4227]]
-    # If we are in mode 1, we are correcting everything anyhow. If we are in mode 3, we will be corrected
-    # so all is well anyhow too.
-    return True
+    return build_libc(libname, libc_files, ['-O2'])
 
   # libcextra
-  def create_libcextra():
+  def create_libcextra(libname):
     logging.debug('building libcextra for cache')
     musl_files = [
        ['compat', [
@@ -584,10 +580,10 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
     libcextra_files = []
     for directory, sources in musl_files:
       libcextra_files += [os.path.join('libc', 'musl', 'src', directory, source) for source in sources]
-    return build_libc('libcextra.bc', libcextra_files, ['-O2'])
+    return build_libc(libname, libcextra_files, ['-O2'])
 
   # libcxx
-  def create_libcxx():
+  def create_libcxx(libname):
     logging.debug('building libcxx for cache')
     libcxx_files = [
       'algorithm.cpp',
@@ -613,17 +609,10 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
       'regex.cpp',
       'strstream.cpp'
     ]
-    return build_libcxx(os.path.join('system', 'lib', 'libcxx'), 'libcxx.bc', libcxx_files, ['-Oz', '-Wno-warn-absolute-paths', '-I' + shared.path_from_root('system', 'lib', 'libcxxabi', 'include')])
-
-  def apply_libcxx(need):
-    assert shared.Settings.QUANTUM_SIZE == 4, 'We do not support libc++ with QUANTUM_SIZE == 1'
-    # libcxx might need corrections, so turn them all on. TODO: check which are actually needed
-    shared.Settings.CORRECT_SIGNS = shared.Settings.CORRECT_OVERFLOWS = shared.Settings.CORRECT_ROUNDINGS = 1
-    #logging.info('using libcxx turns on CORRECT_* options')
-    return True
+    return build_libcxx(os.path.join('system', 'lib', 'libcxx'), libname, libcxx_files, ['-Oz', '-Wno-warn-absolute-paths', '-I' + shared.path_from_root('system', 'lib', 'libcxxabi', 'include')], has_noexcept_version=True)
 
   # libcxxabi - just for dynamic_cast for now
-  def create_libcxxabi():
+  def create_libcxxabi(libname):
     logging.debug('building libcxxabi for cache')
     libcxxabi_files = [
       'abort_message.cpp',
@@ -639,16 +628,10 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
       'private_typeinfo.cpp',
       os.path.join('..', '..', 'libcxx', 'new.cpp'),
     ]
-    return build_libcxx(os.path.join('system', 'lib', 'libcxxabi', 'src'), 'libcxxabi.bc', libcxxabi_files, ['-Oz', '-Wno-warn-absolute-paths', '-I' + shared.path_from_root('system', 'lib', 'libcxxabi', 'include')])
-
-  def apply_libcxxabi(need):
-    assert shared.Settings.QUANTUM_SIZE == 4, 'We do not support libc++abi with QUANTUM_SIZE == 1'
-    #logging.info('using libcxxabi, this may need CORRECT_* options')
-    #shared.Settings.CORRECT_SIGNS = shared.Settings.CORRECT_OVERFLOWS = shared.Settings.CORRECT_ROUNDINGS = 1
-    return True
+    return build_libcxx(os.path.join('system', 'lib', 'libcxxabi', 'src'), libname, libcxxabi_files, ['-Oz', '-Wno-warn-absolute-paths', '-I' + shared.path_from_root('system', 'lib', 'libcxxabi', 'include')])
 
   # gl
-  def create_gl():
+  def create_gl(libname): # libname is ignored, this is just one .o file
     o = in_temp('gl.o')
     check_call([shared.PYTHON, shared.EMCC, shared.path_from_root('system', 'lib', 'gl.c'), '-o', o])
     return o
@@ -721,14 +704,23 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
     all_needed.difference_update(symbols.defs)
 
   # Go over libraries to figure out which we must include
+  def maybe_noexcept(name):
+    if shared.Settings.DISABLE_EXCEPTION_CATCHING:
+      name += '_noexcept'
+    return name
   ret = []
   has = need = None
-  for name, create, apply_, library_symbols, deps in [('libcxx',    create_libcxx,    apply_libcxx,    libcxx_symbols,    ['libcextra', 'libcxxabi']),
-                                                      ('libcextra', create_libcextra, lambda x: True,  libcextra_symbols, ['libc']),
-                                                      ('libcxxabi', create_libcxxabi, apply_libcxxabi, libcxxabi_symbols, ['libc']),
-                                                      ('gl',        create_gl,        lambda x: True,  gl_symbols,        ['libc']),
-                                                      ('libc',      create_libc,      apply_libc,      libc_symbols,      [])]:
-    force_this = force_all or name in force
+  for shortname, suffix, create, library_symbols, deps, can_noexcept in [('libcxx',    'a',  create_libcxx,    libcxx_symbols,    ['libcextra', 'libcxxabi'], True),
+                                                                         ('libcextra', 'bc', create_libcextra, libcextra_symbols, ['libc'],                   False),
+                                                                         ('libcxxabi', 'bc', create_libcxxabi, libcxxabi_symbols, ['libc'],                   False),
+                                                                         ('gl',        'bc', create_gl,        gl_symbols,        ['libc'],                   False),
+                                                                         ('libc',      'bc', create_libc,      libc_symbols,      [],                         False)]:
+    force_this = force_all or shortname in force
+    if can_noexcept: shortname = maybe_noexcept(shortname)
+    if force_this:
+      suffix = 'bc' # .a files do not always link in all their parts; don't use them when forced
+    name = shortname + '.' + suffix
+
     if not force_this:
       need = set()
       has = set()
@@ -744,12 +736,12 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
           need.remove(haz)
       if shared.Settings.VERBOSE: logging.debug('considering %s: we need %s and have %s' % (name, str(need), str(has)))
     if force_this or (len(need) > 0 and not only_forced):
-      if apply_(need):
-        # We need to build and link the library in
-        logging.debug('including %s' % name)
-        libfile = shared.Cache.get(name, create)
-        ret.append(libfile)
-        force = force.union(deps)
+      # We need to build and link the library in
+      logging.debug('including %s' % name)
+      libfile = shared.Cache.get(name, lambda: create(name), extension=suffix)
+      ret.append(libfile)
+      force = force.union(deps)
+  ret.sort(key=lambda x: x.endswith('.a')) # make sure to put .a files at the end.
   return ret
 
 #---------------------------------------------------------------------------

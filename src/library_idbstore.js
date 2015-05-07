@@ -4,117 +4,9 @@ var LibraryIDBStore = {
   // filesystem-like layer you want, with the overhead 100% controlled by you. At the extremes, you could either
   // just store large files, with almost no extra code; or you could implement a file b-tree using posix-compliant
   // filesystem on top.
-  $IDBStore: {
-    indexedDB: function() {
-      if (typeof indexedDB !== 'undefined') return indexedDB;
-      var ret = null;
-      if (typeof window === 'object') ret = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
-      assert(ret, 'IDBStore used, but indexedDB not supported');
-      return ret;
-    },
-    DB_VERSION: 22,
-    DB_STORE_NAME: 'FILE_DATA',
-    dbs: {},
-    blobs: [0],
-    getDB: function(name, callback) {
-      // check the cache first
-      var db = IDBStore.dbs[name];
-      if (db) {
-        return callback(null, db);
-      }
-      var req;
-      try {
-        req = IDBStore.indexedDB().open(name, IDBStore.DB_VERSION);
-      } catch (e) {
-        return callback(e);
-      }
-      req.onupgradeneeded = function(e) {
-        var db = e.target.result;
-        var transaction = e.target.transaction;
-        var fileStore;
-        if (db.objectStoreNames.contains(IDBStore.DB_STORE_NAME)) {
-          fileStore = transaction.objectStore(IDBStore.DB_STORE_NAME);
-        } else {
-          fileStore = db.createObjectStore(IDBStore.DB_STORE_NAME);
-        }
-      };
-      req.onsuccess = function() {
-        db = req.result;
-        // add to the cache
-        IDBStore.dbs[name] = db;
-        callback(null, db);
-      };
-      req.onerror = function(e) {
-        callback(this.error);
-        e.preventDefault();
-      };
-    },
-    getStore: function(dbName, type, callback) {
-      IDBStore.getDB(dbName, function(error, db) {
-        var transaction = db.transaction([IDBStore.DB_STORE_NAME], type);
-        transaction.onerror = function(e) {
-          callback(this.error || 'unknown error');
-          e.preventDefault();
-        };
-        var store = transaction.objectStore(IDBStore.DB_STORE_NAME);
-        callback(null, store);
-      });
-    },
-    // External API
-    getFile: function(dbName, id, callback) {
-      IDBStore.getStore(dbName, 'readonly', function(err, store) {
-        if (err) return callback(err);
-        var req = store.get(id);
-        req.onsuccess = function(event) {
-          var result = event.target.result;
-          if (!result) {
-            return callback('file ' + id + ' not found');
-          } else {
-            return callback(null, result);
-          }
-        };
-        req.onerror = function(error) {
-          callback(error);
-        };
-      });
-    },
-    setFile: function(dbName, id, data, callback) {
-      IDBStore.getStore(dbName, 'readwrite', function(err, store) {
-        if (err) return callback(err);
-        var req = store.put(data, id);
-        req.onsuccess = function(event) {
-          callback();
-        };
-        req.onerror = function(error) {
-          callback(error);
-        };
-      });
-    },
-    deleteFile: function(dbName, id, callback) {
-      IDBStore.getStore(dbName, 'readwrite', function(err, store) {
-        if (err) return callback(err);
-        var req = store.delete(id);
-        req.onsuccess = function(event) {
-          callback();
-        };
-        req.onerror = function(error) {
-          callback(error);
-        };
-      });
-    },
-    existsFile: function(dbName, id, callback) {
-      IDBStore.getStore(dbName, 'readonly', function(err, store) {
-        if (err) return callback(err);
-        var req = store.count(id);
-        req.onsuccess = function(event) {
-          callback(null, event.target.result > 0);
-        };
-        req.onerror = function(error) {
-          callback(error);
-        };
-      });
-    },
-  },
+  $IDBStore:
+#include IDBStore.js
+  ,
 
   emscripten_idb_async_load: function(db, id, arg, onload, onerror) {
     IDBStore.getFile(Pointer_stringify(db), Pointer_stringify(id), function(error, byteArray) {
@@ -204,9 +96,33 @@ var LibraryIDBStore = {
       });
     });
   },
-  // extra worker methods
+  // extra worker methods - proxied
   emscripten_idb_load_blob__deps: ['$EmterpreterAsync'],
   emscripten_idb_load_blob: function(db, id, pblob, perror) {
+    EmterpreterAsync.handle(function(resume) {
+      assert(!IDBStore.pending);
+      IDBStore.pending = function(msg) {
+        IDBStore.pending = null;
+        var blob = msg.blob;
+        if (!blob) {
+          {{{ makeSetValueAsm('perror', 0, '1', 'i32') }}};
+          resume();
+          return;
+        }
+        assert(blob instanceof Blob);
+        var blobId = IDBStore.blobs.length;
+        IDBStore.blobs.push(blob);
+        {{{ makeSetValueAsm('pblob', 0, 'blobId', 'i32') }}};
+        resume();
+      };
+      postMessage({
+        target: 'IDBStore',
+        method: 'loadBlob',
+        db: Pointer_stringify(db),
+        id: Pointer_stringify(id)
+      });
+    });
+    /*
     EmterpreterAsync.handle(function(resume) {
       IDBStore.getFile(Pointer_stringify(db), Pointer_stringify(id), function(error, blob) {
         if (error) {
@@ -221,29 +137,47 @@ var LibraryIDBStore = {
         resume();
       });
     });
+    */
   },
   emscripten_idb_store_blob__deps: ['$EmterpreterAsync'],
   emscripten_idb_store_blob: function(db, id, ptr, num, perror) {
+    EmterpreterAsync.handle(function(resume) {
+      assert(!IDBStore.pending);
+      IDBStore.pending = function(msg) {
+        IDBStore.pending = null;
+        {{{ makeSetValueAsm('perror', 0, '!!msg.error', 'i32') }}};
+        resume();
+      };
+      postMessage({
+        target: 'IDBStore',
+        method: 'storeBlob',
+        db: Pointer_stringify(db),
+        id: Pointer_stringify(id),
+        blob: new Blob([new Uint8Array(HEAPU8.subarray(ptr, ptr+num))])
+      });
+    });
+    /*
     EmterpreterAsync.handle(function(resume) {
       IDBStore.setFile(Pointer_stringify(db), Pointer_stringify(id), new Blob([new Uint8Array(HEAPU8.subarray(ptr, ptr+num))]), function(error) {
         {{{ makeSetValueAsm('perror', 0, '!!error', 'i32') }}};
         resume();
       });
     });
+    */
   },
   emscripten_idb_read_from_blob__deps: ['$EmterpreterAsync'],
   emscripten_idb_read_from_blob: function(blobId, start, num, buffer) {
-    var blob = EmterpreterAsync.blobs[blobId];
+    var blob = IDBStore.blobs[blobId];
     if (!blob) return 1;
     if (start+num > blob.size) return 2;
-    var byteArray = (new FileReaderSync()).readAsArrayBuffer(Blob.slice(start, start+num));
-    HEAPU8.set(byteArray, buffer);
+    var byteArray = (new FileReaderSync()).readAsArrayBuffer(blob.slice(start, start+num));
+    HEAPU8.set(new Uint8Array(byteArray), buffer);
     return 0;
   },
   emscripten_idb_free_blob__deps: ['$EmterpreterAsync'],
   emscripten_idb_free_blob: function(blobId) {
-    assert(EmterpreterAsync.blobs[blobId]);
-    EmterpreterAsync.blobs[blobId] = null;
+    assert(IDBStore.blobs[blobId]);
+    IDBStore.blobs[blobId] = null;
   },
 #else
   emscripten_idb_load: function() {
