@@ -64,8 +64,8 @@ var LibraryPThreadStub = {
     _pthread_once.seen[ptr] = 1;
   },
 
-  $PTHREAD_SPECIFIC: {},
-  $PTHREAD_SPECIFIC_NEXT_KEY: 1,
+  $PTHREAD_SPECIFIC: {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0},
+  $PTHREAD_SPECIFIC_NEXT_KEY: 10,
   pthread_key_create__deps: ['$PTHREAD_SPECIFIC', '$PTHREAD_SPECIFIC_NEXT_KEY', '$ERRNO_CODES'],
   pthread_key_create: function(key, destructor) {
     if (key == 0) {
