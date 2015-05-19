@@ -921,6 +921,9 @@ def main():
   parser.add_option('--log_html', dest='log_html', action='store_true',
     help='If set, information lines are printed out an HTML-friendly format.')
 
+  parser.add_option('--profile', dest='profile', default='',
+    help='Specifies browser profile. (supports firefox only)')
+
   opts_with_param = ['--browser', '--timeout_returncode', '--timeout', '--silence_timeout', '--log_stderr', '--log_stdout', '--port', '--serve_root']
 
   cmdlineparams = []
@@ -1054,6 +1057,8 @@ def main():
   #      browser_args += ['--disable-web-security']
     elif 'firefox' in browser_exe.lower():
       processname_killed_atexit = 'firefox'
+      if options.profile:
+        browser_args = ['-P', options.profile]
     elif 'iexplore' in browser_exe.lower():
       processname_killed_atexit = 'iexplore'
       browser_args = ['-private']
