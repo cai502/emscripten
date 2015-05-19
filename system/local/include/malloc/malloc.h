@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#define PAGE_MAX_SIZE 4096
+
 typedef void * malloc_zone_t;
 
 static __inline malloc_zone_t malloc_default_zone(void) { return (malloc_zone_t)-1; }
