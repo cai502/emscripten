@@ -979,6 +979,33 @@ keydown(100);keyup(100); // trigger the end
       self.btest(path_from_root('tests', 'fs', 'test_idbfs_sync.c'), '1', force_c=True, args=mode + ['-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
       self.btest(path_from_root('tests', 'fs', 'test_idbfs_sync.c'), '1', force_c=True, args=mode + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
 
+  def test_fs_idbfs_fsync(self):
+    # sync from persisted state into memory before main()
+    open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
+      Module.preRun = function() {
+        addRunDependency('syncfs');
+
+        FS.mkdir('/working1');
+        FS.mount(IDBFS, {}, '/working1');
+        FS.syncfs(true, function (err) {
+          if (err) throw err;
+          removeRunDependency('syncfs');
+        });
+      };
+    ''')
+
+    args = ['--pre-js', 'pre.js', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1'];
+    for mode in [[], ['-s', 'MEMFS_APPEND_TO_TYPED_ARRAYS=1']]:
+      secret = str(time.time())
+      self.btest(path_from_root('tests', 'fs', 'test_idbfs_fsync.c'), '1', force_c=True, args=args + mode + ['-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_success']'''])
+      self.btest(path_from_root('tests', 'fs', 'test_idbfs_fsync.c'), '1', force_c=True, args=args + mode + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_success']'''])
+
+  def test_fs_memfs_fsync(self):
+    args = ['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1'];
+    for mode in [[], ['-s', 'MEMFS_APPEND_TO_TYPED_ARRAYS=1']]:
+      secret = str(time.time())
+      self.btest(path_from_root('tests', 'fs', 'test_memfs_fsync.c'), '1', force_c=True, args=args + mode + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main']'''])
+
   def test_idbstore(self):
     secret = str(time.time())
     for stage in [0, 1, 2, 3, 0, 1, 2, 0, 0, 1, 4, 2, 5]:
@@ -1378,6 +1405,7 @@ keydown(100);keyup(100); // trigger the end
 
   def test_cubegeom_pre(self):
     self.btest('cubegeom_pre.c', reference='cubegeom_pre.png', args=['-s', 'LEGACY_GL_EMULATION=1'])
+    self.btest('cubegeom_pre.c', reference='cubegeom_pre.png', args=['-s', 'LEGACY_GL_EMULATION=1', '-s', 'RELOCATABLE=1'])
 
   def test_cubegeom_pre2(self):
     self.btest('cubegeom_pre2.c', reference='cubegeom_pre2.png', args=['-s', 'GL_DEBUG=1', '-s', 'LEGACY_GL_EMULATION=1']) # some coverage for GL_DEBUG not breaking the build
@@ -1569,14 +1597,10 @@ void *getBindBuffer() {
     self.btest('perspective.c', reference='perspective.png', args=['-s', 'LEGACY_GL_EMULATION=1'])
 
   def test_runtimelink(self):
-    return self.skip('BUILD_AS_SHARED_LIB=2 is deprecated')
     main, supp = self.setup_runtimelink_test()
-
-    open(self.in_dir('supp.cpp'), 'w').write(supp)
-    Popen([PYTHON, EMCC, self.in_dir('supp.cpp'), '-o', 'supp.js', '-s', 'LINKABLE=1', 'BUILD_AS_SHARED_LIB=2', '-O2', '-s', 'ASM_JS=0']).communicate()
-    shutil.move(self.in_dir('supp.js'), self.in_dir('supp.so'))
-
-    self.btest(main, args=['-s', 'LINKABLE=1', '-s', 'RUNTIME_LINKED_LIBS=["supp.so"]', '-DBROWSER=1', '-O2', '-s', 'ASM_JS=0'], expected='76')
+    open('supp.cpp', 'w').write(supp)
+    Popen([PYTHON, EMCC, 'supp.cpp', '-o', 'supp.js', '-s', 'SIDE_MODULE=1', '-O2']).communicate()
+    self.btest(main, args=['-DBROWSER=1', '-s', 'MAIN_MODULE=1', '-O2', '-s', 'RUNTIME_LINKED_LIBS=["supp.js"]'], expected='76')
 
   def test_pre_run_deps(self):
     # Adding a dependency in preRun will delay run
@@ -2411,4 +2435,78 @@ window.close = function() {
     assert os.path.exists('glue.cpp')
     assert os.path.exists('glue.js')
     self.btest(os.path.join('webidl', 'test.cpp'), '1', args=['--post-js', 'glue.js', '-I' + path_from_root('tests', 'webidl'), '-DBROWSER'])
+
+  def test_dynamic_link(self):
+    open('pre.js', 'w').write('''
+      Module.dynamicLibraries = ['side.js'];
+  ''')
+    open('main.cpp', 'w').write(r'''
+      #include <stdio.h>
+      #include <stdlib.h>
+      #include <string.h>
+      #include <emscripten.h>
+      char *side(const char *data);
+      int main() {
+        char *temp = side("hello through side\n");
+        char *ret = (char*)malloc(strlen(temp)+1);
+        strcpy(ret, temp);
+        temp[1] = 'x';
+        EM_ASM({
+          Module.realPrint = Module.print;
+          Module.print = function(x) {
+            if (!Module.printed) Module.printed = x;
+            Module.realPrint(x);
+          };
+        });
+        puts(ret);
+        EM_ASM({ assert(Module.printed === 'hello through side', ['expected', Module.printed]); });
+        int result = 2;
+        REPORT_RESULT();
+        return 0;
+      }
+    ''')
+    open('side.cpp', 'w').write(r'''
+      #include <stdlib.h>
+      #include <string.h>
+      char *side(const char *data);
+      char *side(const char *data) {
+        char *ret = (char*)malloc(strlen(data)+1);
+        strcpy(ret, data);
+        return ret;
+      }
+    ''')
+    Popen([PYTHON, EMCC, 'side.cpp', '-s', 'SIDE_MODULE=1', '-O2', '-o', 'side.js']).communicate()
+
+    self.btest(self.in_dir('main.cpp'), '2', args=['-s', 'MAIN_MODULE=1', '-O2', '--pre-js', 'pre.js'])
+
+  def test_dynamic_link_glemu(self):
+    open('pre.js', 'w').write('''
+      Module.dynamicLibraries = ['side.js'];
+  ''')
+    open('main.cpp', 'w').write(r'''
+      #include <stdio.h>
+      #include <string.h>
+      #include <assert.h>
+      const char *side();
+      int main() {
+        const char *exts = side();
+        puts(side());
+        assert(strstr(exts, "GL_EXT_texture_env_combine"));
+        int result = 1;
+        REPORT_RESULT();
+        return 0;
+      }
+    ''')
+    open('side.cpp', 'w').write(r'''
+      #include "SDL/SDL.h"
+      #include "SDL/SDL_opengl.h"
+      const char *side() {
+        SDL_Init(SDL_INIT_VIDEO);
+        SDL_SetVideoMode(600, 600, 16, SDL_OPENGL);
+        return (const char *)glGetString(GL_EXTENSIONS);
+      }
+    ''')
+    Popen([PYTHON, EMCC, 'side.cpp', '-s', 'SIDE_MODULE=1', '-O2', '-o', 'side.js']).communicate()
+
+    self.btest(self.in_dir('main.cpp'), '1', args=['-s', 'MAIN_MODULE=1', '-O2', '-s', 'LEGACY_GL_EMULATION=1', '--pre-js', 'pre.js'])
 

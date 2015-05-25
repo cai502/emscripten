@@ -938,7 +938,7 @@ try:
 
   if shared.Settings.SAFE_HEAP and not js_opts:
     js_opts = True
-    logging.warning('enabling js opts for SAFE_HEAP')
+    logging.debug('enabling js opts for SAFE_HEAP')
 
   if debug_level > 1 and closure:
     logging.warning('disabling closure because debug info was requested')
@@ -958,14 +958,14 @@ try:
     shared.Settings.INCLUDE_FULL_LIBRARY = 1
   elif shared.Settings.SIDE_MODULE:
     assert not shared.Settings.MAIN_MODULE
-    shared.Settings.FINALIZE_ASM_JS = 0 # side modules are not finalized until after relocation
+    memory_init_file = False # memory init file is not supported with side modules, must be executable synchronously (for dlopen)
 
   if shared.Settings.MAIN_MODULE or shared.Settings.SIDE_MODULE:
-    memory_init_file = False # memory init file is not supported with module linking
     assert shared.Settings.ASM_JS, 'module linking requires asm.js output (-s ASM_JS=1)'
     shared.Settings.LINKABLE = 1 # TODO: add FORCE_DCE option for the brave people that do want to dce here and in side modules
-    debug_level = max(debug_level, 2)
     shared.Settings.RELOCATABLE = 1
+    shared.Settings.PRECISE_I64_MATH = 1 # other might use precise math, we need to be able to print it
+    assert not closure, 'cannot use closure compiler on shared modules'
 
   if shared.Settings.EMULATE_FUNCTION_POINTER_CASTS:
     shared.Settings.ALIASING_FUNCTION_POINTERS = 0
@@ -999,21 +999,17 @@ try:
 
   if shared.Settings.EMTERPRETIFY:
     shared.Settings.FINALIZE_ASM_JS = 0
-    shared.Settings.GLOBAL_BASE = 8*256 # keep enough space at the bottom for a full stack frame
+    #shared.Settings.GLOBAL_BASE = 8*256 # keep enough space at the bottom for a full stack frame, for z-interpreter
     shared.Settings.SIMPLIFY_IFS = 0 # this is just harmful for emterpreting
     shared.Settings.EXPORTED_FUNCTIONS += ['emterpret']
     if not js_opts:
       js_opts = True
-      logging.warning('enabling js opts for EMTERPRETIFY')
-    if not memory_init_file:
-      logging.warning('enabling --memory-init-file for EMTERPRETIFY')
-      memory_init_file = True
+      logging.debug('enabling js opts for EMTERPRETIFY')
     assert closure is not 2, 'EMTERPRETIFY requires valid asm.js, and is incompatible with closure 2 which disables that'
-    assert not shared.Settings.RELOCATABLE
 
   if shared.Settings.DEAD_FUNCTIONS and not js_opts:
     js_opts = True
-    logging.warning('enabling js opts for DEAD_FUNCTIONS')
+    logging.debug('enabling js opts for DEAD_FUNCTIONS')
 
   if proxy_to_worker:
     shared.Settings.PROXY_TO_WORKER = 1
@@ -1193,7 +1189,9 @@ try:
      (not LEAVE_INPUTS_RAW and not (suffix(temp_files[0][1]) in BITCODE_ENDINGS or suffix(temp_files[0][1]) in DYNAMICLIB_ENDINGS) and shared.Building.is_ar(temp_files[0][1])):
     linker_inputs += extra_files_to_link
     logging.debug('linking: ' + str(linker_inputs))
-    shared.Building.link(linker_inputs, in_temp(target_basename + '.bc'), force_archive_contents=len([temp for i, temp in temp_files if not temp.endswith(STATICLIB_ENDINGS)]) == 0)
+    # force archive contents to all be included, if just archives, or if linking shared modules
+    force_archive_contents = len([temp for i, temp in temp_files if not temp.endswith(STATICLIB_ENDINGS)]) == 0 or not shared.Building.can_build_standalone()
+    shared.Building.link(linker_inputs, in_temp(target_basename + '.bc'), force_archive_contents=force_archive_contents)
     final = in_temp(target_basename + '.bc')
   else:
     if not LEAVE_INPUTS_RAW:
@@ -1498,7 +1496,7 @@ try:
 
     if closure == 1:
       js_optimizer_queue += ['closure']
-    elif debug_level <= 2 and not shared.Settings.MAIN_MODULE and shared.Settings.FINALIZE_ASM_JS and not closure:
+    elif debug_level <= 2 and shared.Settings.FINALIZE_ASM_JS and not closure:
       js_optimizer_queue += ['cleanup']
 
   if js_opts:
@@ -1555,12 +1553,11 @@ try:
   if shared.Settings.EMTERPRETIFY:
     flush_js_optimizer_queue()
     logging.debug('emterpretifying')
-    assert memory_init_file, 'emterpreter requires a mem init file'
     import json
     try:
       # move temp js to final position, alongside its mem init file
       shutil.move(final, js_target)
-      args = [shared.PYTHON, shared.path_from_root('tools', 'emterpretify.py'), js_target, final + '.em.js', memfile, json.dumps(shared.Settings.EMTERPRETIFY_BLACKLIST), json.dumps(shared.Settings.EMTERPRETIFY_WHITELIST), json.dumps(shared.Settings.EMTERPRETIFY_YIELDLIST), str(shared.Settings.SWAPPABLE_ASM_MODULE)]
+      args = [shared.PYTHON, shared.path_from_root('tools', 'emterpretify.py'), js_target, final + '.em.js', json.dumps(shared.Settings.EMTERPRETIFY_BLACKLIST), json.dumps(shared.Settings.EMTERPRETIFY_WHITELIST), json.dumps(shared.Settings.EMTERPRETIFY_YIELDLIST), str(shared.Settings.SWAPPABLE_ASM_MODULE)]
       if shared.Settings.EMTERPRETIFY_ASYNC:
         args += ['ASYNC=1']
       if shared.Settings.EMTERPRETIFY_ADVISE:

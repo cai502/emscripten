@@ -230,13 +230,13 @@ class RunnerCore(unittest.TestCase):
       if '--memory-init-file' in self.emcc_args:
         memory_init_file = int(self.emcc_args[self.emcc_args.index('--memory-init-file')+1])
       else:
-        memory_init_file = '-O2' in self.emcc_args or '-O3' in self.emcc_args or '-Oz' in self.emcc_args or self.is_emterpreter()
+        memory_init_file = ('-O2' in self.emcc_args or '-O3' in self.emcc_args or '-Oz' in self.emcc_args) and not Settings.SIDE_MODULE
       src = open(filename + '.o.js').read()
       if memory_init_file:
         # side memory init file, or an empty one in the js
         assert ('/* memory initializer */' not in src) or ('/* memory initializer */ allocate([]' in src)
       else:
-        assert 'memory initializer */' in src
+        assert 'memory initializer */' in src or '/*' not in src # memory initializer comment, or cleaned-up source with no comments
 
   def validate_asmjs(self, err):
     if 'uccessfully compiled asm.js code' in err and 'asm.js link error' not in err:

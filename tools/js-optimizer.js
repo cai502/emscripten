@@ -754,19 +754,10 @@ function simplifyExpressions(ast) {
         return node;
       } else if (type === 'binary' && node[1] === '+') {
         // The most common mathop is addition, e.g. in getelementptr done repeatedly. We can join all of those,
-        // by doing (num+num) ==> newnum, and (name+num)+num = name+newnum
+        // by doing (num+num) ==> newnum.
         if (node[2][0] === 'num' && node[3][0] === 'num') {
           node[2][1] += node[3][1];
           return node[2];
-        }
-        for (var i = 2; i <= 3; i++) {
-          var ii = 5-i;
-          for (var j = 2; j <= 3; j++) {
-            if (node[i][0] === 'num' && node[ii][0] === 'binary' && node[ii][1] === '+' && node[ii][j][0] === 'num') {
-              node[ii][j][1] += node[i][1];
-              return node[ii];
-            }
-          }
         }
       }
     });
@@ -1012,6 +1003,7 @@ function localCSE(ast) {
           if (type === 'binary' || type === 'unary-prefix') {
             if (type === 'binary' && skips.indexOf(node) >= 0) return;
             if (measureCost(node) < MIN_COST) return;
+            if (detectType(node, asmData) === ASM_NONE) return; // if we can't figure it out locally, forget it
             var str = JSON.stringify(node);
             var lookup = exps[str];
             if (!lookup) {
@@ -1810,7 +1802,11 @@ function detectType(node, asmInfo, inVarDef) {
     case 'binary': {
       switch (node[1]) {
         case '+': case '-':
-        case '*': case '/': case '%': return detectType(node[2], asmInfo, inVarDef);
+        case '*': case '/': case '%': {
+          var ret = detectType(node[2], asmInfo, inVarDef);
+          if (ret !== ASM_NONE) return ret;
+          return detectType(node[3], asmInfo, inVarDef)
+        }
         case '|': case '&': case '^': case '<<': case '>>': case '>>>':
         case '==': case '!=': case '<': case '<=': case '>': case '>=': {
           return ASM_INT;

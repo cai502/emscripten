@@ -868,6 +868,35 @@ LibraryManager.library = {
     return -1;
   },
   pathconf: 'fpathconf',
+#if EMTERPRETIFY_ASYNC
+  fsync__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', '$EmterpreterAsync'],
+  fsync: function(fildes) {
+    return EmterpreterAsync.handle(function(resume) {
+      // int fsync(int fildes);
+      // http://pubs.opengroup.org/onlinepubs/000095399/functions/fsync.html
+      var stream = FS.getStream(fildes);
+      if (stream) {
+        var mount = stream.node.mount;
+        if (!mount.type.syncfs) {
+          // We write directly to the file system, so there's nothing to do here.
+          resume(function() { return 0 });
+          return;
+        }
+        mount.type.syncfs(mount, false, function(err) {
+          if (err) {
+            ___setErrNo(ERRNO_CODES.EIO);
+            resume(function() { return -1 });
+            return;
+          }
+          resume(function() { return 0 });
+        });
+      } else {
+        ___setErrNo(ERRNO_CODES.EBADF);
+        resume(function() { return -1 });
+      }
+    });
+  },
+#else
   fsync__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
   fsync: function(fildes) {
     // int fsync(int fildes);
@@ -881,6 +910,7 @@ LibraryManager.library = {
       return -1;
     }
   },
+#endif // EMTERPRETIFY_ASYNC
   fdatasync: 'fsync',
   truncate__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
   truncate: function(path, length) {
@@ -1480,6 +1510,7 @@ LibraryManager.library = {
     // http://pubs.opengroup.org/onlinepubs/009695399/functions/sysconf.html
     switch(name) {
       case {{{ cDefine('_SC_PAGE_SIZE') }}}: return PAGE_SIZE;
+      case {{{ cDefine('_SC_PHYS_PAGES') }}}: return totalMemory / PAGE_SIZE;
       case {{{ cDefine('_SC_ADVISORY_INFO') }}}:
       case {{{ cDefine('_SC_BARRIERS') }}}:
       case {{{ cDefine('_SC_ASYNCHRONOUS_IO') }}}:
@@ -1936,12 +1967,11 @@ LibraryManager.library = {
     stream.eof = false;
     stream.error = false;
   },
-  fclose__deps: ['close', 'fsync', 'fileno'],
+  fclose__deps: ['close', 'fileno'],
   fclose: function(stream) {
     // int fclose(FILE *stream);
     // http://pubs.opengroup.org/onlinepubs/000095399/functions/fclose.html
     var fd = _fileno(stream);
-    _fsync(fd);
     return _close(fd);
   },
   fdopen__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
@@ -3314,7 +3344,7 @@ LibraryManager.library = {
     var ret = 0;
     ret = Math_clz32(h) | 0;
     if ((ret | 0) == 32) ret = ret + (Math_clz32(l) | 0) | 0;
-    tempRet0 = 0;
+    {{{ makeSetTempRet0('0') }}};
     return ret | 0;
   },
 
@@ -3327,6 +3357,7 @@ LibraryManager.library = {
       }
       return 8;
     }
+    if (SIDE_MODULE) return ''; // uses it from the parent
     return 'var cttz_i8 = allocate([' + range(256).map(function(x) { return cttz(x) }).join(',') + '], "i8", ALLOC_STATIC);';
   }],
   llvm_cttz_i32__asm: true,
@@ -3696,7 +3727,7 @@ LibraryManager.library = {
     Runtime.warnOnce('no overflow support in llvm_umul_with_overflow_i64');
 #endif
     var low = ___muldi3(xl, xh, yl, yh);
-    {{{ makeStructuralReturn(['low', 'tempRet0', '0']) }}};
+    {{{ makeStructuralReturn(['low', makeGetTempRet0(), '0']) }}};
   },
 
   llvm_stacksave: function() {
@@ -3797,7 +3828,7 @@ LibraryManager.library = {
     var l = {{{ makeGetValue('ptr', 0, 'i32') }}};
     var h = {{{ makeGetValue('ptr', 4, 'i32') }}};
     {{{ makeSetValue('ptr', 0, '_llvm_uadd_with_overflow_i64(l, h, vall, valh)', 'i32') }}};
-    {{{ makeSetValue('ptr', 4, 'tempRet0', 'i32') }}};
+    {{{ makeSetValue('ptr', 4, makeGetTempRet0(), 'i32') }}};
     {{{ makeStructuralReturn(['l', 'h']) }}};
   },
 
@@ -3806,7 +3837,7 @@ LibraryManager.library = {
     var l = {{{ makeGetValue('ptr', 0, 'i32') }}};
     var h = {{{ makeGetValue('ptr', 4, 'i32') }}};
     {{{ makeSetValue('ptr', 0, '_i64Subtract(l, h, vall, valh)', 'i32') }}};
-    {{{ makeSetValue('ptr', 4, 'tempRet0', 'i32') }}};
+    {{{ makeSetValue('ptr', 4, makeGetTempRet0(), 'i32') }}};
     {{{ makeStructuralReturn(['l', 'h']) }}};
   },
 
@@ -3962,6 +3993,7 @@ LibraryManager.library = {
   fabs: 'Math_abs',
   fabsf: 'Math_abs',
   fabsl: 'Math_abs',
+  llvm_fabs_f32: 'Math_abs',
   llvm_fabs_f64: 'Math_abs',
   ceil: 'Math_ceil',
   ceilf: 'Math_ceil',
@@ -5188,7 +5220,7 @@ LibraryManager.library = {
         {{{ makeSetValueAsm('table', '(i<<3)+4', 'label', 'i32') }}};
         // prepare next slot
         {{{ makeSetValueAsm('table', '(i<<3)+8', '0', 'i32') }}};
-        tempRet0 = size;
+        {{{ makeSetTempRet0('size') }}};
         return table | 0;
       }
       i = i+1|0;
@@ -5197,7 +5229,7 @@ LibraryManager.library = {
     size = (size*2)|0;
     table = _realloc(table|0, 8*(size+1|0)|0) | 0;
     table = _saveSetjmp(env|0, label|0, table|0, size|0) | 0;
-    tempRet0 = size;
+    {{{ makeSetTempRet0('size') }}};
     return table | 0;
   },
 
@@ -8008,10 +8040,10 @@ LibraryManager.library = {
     var ander = 0;
     if ((bits|0) < 32) {
       ander = ((1 << bits) - 1)|0;
-      tempRet0 = (high << bits) | ((low&(ander << (32 - bits))) >>> (32 - bits));
+      {{{ makeSetTempRet0('(high << bits) | ((low&(ander << (32 - bits))) >>> (32 - bits))') }}};
       return low << bits;
     }
-    tempRet0 = low << (bits - 32);
+    {{{ makeSetTempRet0('low << (bits - 32)') }}};
     return 0;
   },
   bitshift64Ashr__asm: true,
@@ -8021,10 +8053,10 @@ LibraryManager.library = {
     var ander = 0;
     if ((bits|0) < 32) {
       ander = ((1 << bits) - 1)|0;
-      tempRet0 = high >> bits;
+      {{{ makeSetTempRet0('high >> bits') }}};
       return (low >>> bits) | ((high&ander) << (32 - bits));
     }
-    tempRet0 = (high|0) < 0 ? -1 : 0;
+    {{{ makeSetTempRet0('(high|0) < 0 ? -1 : 0') }}};
     return (high >> (bits - 32))|0;
   },
   bitshift64Lshr__asm: true,
@@ -8034,10 +8066,10 @@ LibraryManager.library = {
     var ander = 0;
     if ((bits|0) < 32) {
       ander = ((1 << bits) - 1)|0;
-      tempRet0 = high >>> bits;
+      {{{ makeSetTempRet0('high >>> bits') }}};
       return (low >>> bits) | ((high&ander) << (32 - bits));
     }
-    tempRet0 = 0;
+    {{{ makeSetTempRet0('0') }}};
     return (high >>> (bits - 32))|0;
   },
 

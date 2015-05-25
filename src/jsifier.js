@@ -324,6 +324,7 @@ function JSify(data, functionsOnly) {
         print('  HEAP8[tempDoublePtr+7] = HEAP8[ptr+7];\n');
         print('}\n');
       }
+      print('// {{PRE_LIBRARY}}\n'); // safe to put stuff here that statically allocates
 
       return;
     }
@@ -365,7 +366,10 @@ function JSify(data, functionsOnly) {
     // rest of the output that we started to print out earlier (see comment on the
     // "Final shape that will be created").
     if (PRECISE_I64_MATH && (Types.preciseI64MathUsed || PRECISE_I64_MATH == 2)) {
-      if (!INCLUDE_FULL_LIBRARY && !SIDE_MODULE && !BUILD_AS_SHARED_LIB) {
+      if (SIDE_MODULE) {
+        print('// ASM_LIBRARY FUNCTIONS'); // fastLong.js etc. code is indeed asm library code
+      }
+      if (!INCLUDE_FULL_LIBRARY) {
         // first row are utilities called from generated code, second are needed from fastLong
         ['i64Add', 'i64Subtract', 'bitshift64Shl', 'bitshift64Lshr', 'bitshift64Ashr',
          'llvm_cttz_i32'].forEach(function(ident) {
@@ -389,7 +393,7 @@ function JSify(data, functionsOnly) {
         });
       }
       // these may be duplicated in side modules and the main module without issue
-      print(read('fastLong.js'));
+      print(processMacros(read('fastLong.js')));
       print('// EMSCRIPTEN_END_FUNCS\n');
       print(read('long.js'));
     } else {
@@ -417,11 +421,6 @@ function JSify(data, functionsOnly) {
     var postFile = BUILD_AS_SHARED_LIB || SIDE_MODULE ? 'postamble_sharedlib.js' : 'postamble.js';
     var postParts = processMacros(preprocess(read(postFile))).split('{{GLOBAL_VARS}}');
     print(postParts[0]);
-
-    // Load runtime-linked libraries
-    RUNTIME_LINKED_LIBS.forEach(function(lib) {
-      print('eval(Module["read"]("' + lib + '"))(' + Functions.getTable('x') + '.length, this);');
-    });
 
     print(postParts[1]);
 

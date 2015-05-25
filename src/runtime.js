@@ -306,6 +306,15 @@ var Runtime = {
       if (!Module.hasOwnProperty(sym)) {
         Module[sym] = libModule[sym];
       }
+#if ASSERTIONS
+      else if (sym[0] === '_') {
+        var curr = Module[sym], next = libModule[sym];
+        // don't warn on functions - might be odr, linkonce_odr, etc.
+        if (!(typeof curr === 'function' && typeof next === 'function')) {
+          Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+        }
+      }
+#endif
     }
     Runtime.loadedDynamicLibraries.push(libModule);
   },
@@ -406,6 +415,16 @@ Runtime.staticAlloc = unInline('staticAlloc', ['size']);
 Runtime.dynamicAlloc = unInline('dynamicAlloc', ['size']);
 Runtime.alignMemory = unInline('alignMemory', ['size', 'quantum']);
 Runtime.makeBigInt = unInline('makeBigInt', ['low', 'high', 'unsigned']);
+
+if (MAIN_MODULE || SIDE_MODULE) {
+  Runtime.tempRet0 = 0;
+  Runtime.getTempRet0 = function() {
+    return Runtime.tempRet0;
+  };
+  Runtime.setTempRet0 = function(x) {
+    Runtime.tempRet0 = x;
+  };
+}
 
 function getRuntime() {
   var ret = 'var Runtime = {\n';

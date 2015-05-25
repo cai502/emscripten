@@ -1190,12 +1190,6 @@ function ensureInitRuntime() {
   if (runtimeInitialized) return;
   runtimeInitialized = true;
   callRuntimeCallbacks(__ATINIT__);
-
-#if RELOCATABLE
-  Runtime.loadedDynamicLibraries.forEach(function(lib) {
-    lib['initLibraryRuntime']();
-  });
-#endif
 }
 
 function preMain() {
@@ -1456,13 +1450,25 @@ addOnPreRun(function() { addRunDependency('pgo') });
 #endif
 
 #if RELOCATABLE
-if (Module['dynamicLibraries']) {
-  Module['dynamicLibraries'].forEach(function(lib) {
-    addOnPreRun(function() {
+{{{
+(function() {
+  // add in RUNTIME_LINKED_LIBS, if provided
+  if (RUNTIME_LINKED_LIBS.length > 0) {
+    return "if (!Module['dynamicLibraries']) Module['dynamicLibraries'] = [];\n" +
+           "Module['dynamicLibraries'] = " + JSON.stringify(RUNTIME_LINKED_LIBS) + ".concat(Module['dynamicLibraries']);\n";
+  }
+  return '';
+})()
+}}}
+
+addOnPreRun(function() {
+  if (Module['dynamicLibraries']) {
+    Module['dynamicLibraries'].forEach(function(lib) {
       Runtime.loadDynamicLibrary(lib);
     });
-  });
-}
+  }
+  asm['runPostSets']();
+});
 #endif
 
 var memoryInitializer = null;

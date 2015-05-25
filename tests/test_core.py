@@ -396,6 +396,12 @@ class T(RunnerCore): # Short name, to make it more fun to use manually on the co
 
     self.do_run_from_file(src, output, 'waka fleefl asdfasdfasdfasdf'.split(' '))
 
+  def test_llvm_fabs(self):
+    Settings.PRECISE_F32 = 1
+    test_path = path_from_root('tests', 'core', 'test_llvm_fabs')
+    src, output = (test_path + s for s in ('.c', '.out'))
+    self.do_run_from_file(src, output)
+
   def test_double_varargs(self):
     test_path = path_from_root('tests', 'core', 'test_double_varargs')
     src, output = (test_path + s for s in ('.c', '.out'))
@@ -772,6 +778,10 @@ class T(RunnerCore): # Short name, to make it more fun to use manually on the co
       test_path = path_from_root('tests', 'math', 'lgamma')
       src, output = (test_path + s for s in ('.in', '.out'))
 
+      self.do_run_from_file(src, output)
+
+      print 'main module'
+      Settings.MAIN_MODULE = 1
       self.do_run_from_file(src, output)
 
   def test_frexp(self):
@@ -1960,12 +1970,11 @@ value = real 1.25 imag 0.00''', force_c=True)
 
       test()
 
-      if not self.is_emterpreter():
-        print 'relocatable' # this tests recursive global structs => nontrivial postSets for relocation
-        assert Settings.RELOCATABLE == Settings.EMULATED_FUNCTION_POINTERS == 0
-        Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 1
-        test()
-        Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 0
+      print 'relocatable' # this tests recursive global structs => nontrivial postSets for relocation
+      assert Settings.RELOCATABLE == Settings.EMULATED_FUNCTION_POINTERS == 0
+      Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 1
+      test()
+      Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 0
 
   def test_ptrtoint(self):
       runner = self
@@ -2839,15 +2848,6 @@ The current type of b is: 9
     self.do_run(main, 'supp: 54,2\nmain: 56\nsupp see: 543\nmain see: 76\nok.')
 
   def can_dlfcn(self):
-    if self.is_emterpreter():
-      self.skip('no dlfcn support in emterpreter yet')
-      return False
-
-    if self.emcc_args:
-      self.emcc_args += ['--memory-init-file', '0']
-
-    Settings.DISABLE_EXCEPTION_CATCHING = 1
-
     return True
 
   def prep_dlfcn_lib(self):
@@ -3606,10 +3606,6 @@ ok
 ''', post_build=self.dlfcn_post_build)
 
   def dylink_test(self, main, side, expected, header=None, main_emcc_args=[], force_c=False, need_reverse=True):
-    if self.is_emterpreter():
-      self.skip('no dylink support in emterpreter yet')
-      return
-
     if header:
       open('header.h', 'w').write(header)
 
@@ -3632,6 +3628,10 @@ ok
         # side is just a library
         try_delete('liblib.cpp.o.js')
         Popen([PYTHON, EMCC] + side + self.emcc_args + Settings.serialize() + ['-o', os.path.join(self.get_dir(), 'liblib.cpp.o.js')]).communicate()
+      if SPIDERMONKEY_ENGINE and os.path.exists(SPIDERMONKEY_ENGINE[0]):
+        out = run_js('liblib.cpp.o.js', engine=SPIDERMONKEY_ENGINE, full_output=True, stderr=STDOUT)
+        if 'asm' in out:
+          self.validate_asmjs(out)
       shutil.move('liblib.cpp.o.js', 'liblib.so')
 
       # main settings
@@ -3760,6 +3760,31 @@ var Module = {
       #include "header.h"
       static Class c("side");
     ''', expected=['new main\nnew side\n', 'new side\nnew main\n'])
+
+    if Settings.ASSERTIONS:
+      print 'check warnings'
+      full = run_js('src.cpp.o.js', engine=JS_ENGINES[0], full_output=True, stderr=STDOUT)
+      self.assertNotContained("trying to dynamically load symbol '__ZN5ClassC2EPKc' (from 'liblib.so') that already exists", full)
+
+  def test_dylink_i64(self):
+    self.dylink_test('''
+      #include <stdio.h>
+      #include <stdint.h>
+      extern int64_t sidey();
+      int main() {
+        printf("other says %lld.", sidey());
+        return 0;
+      }
+    ''', '''
+      #include <stdint.h>
+      int64_t sidey() {
+        volatile int64_t x = 11;
+        x = x * x * x * x;
+        x += x % 17;
+        x += (x * (1 << 30));
+        return x;
+      }
+    ''', 'other says 15724949027125.')
 
   def test_dylink_class(self):
     self.dylink_test(header=r'''
@@ -3890,31 +3915,36 @@ var Module = {
     ''', expected=['main: jslib_x is 148.\nside: jslib_x is 148.\n'], main_emcc_args=['--js-library', 'lib.js'])
 
   def test_dylink_syslibs(self): # one module uses libcextra, need to force its inclusion when it isn't the main
-    try:
-      os.environ['EMCC_FORCE_STDLIBS'] = 'libc,libcextra'
-      self.dylink_test(header=r'''
-        #include <string.h>
-        int side();
-      ''', main=r'''
-        #include <stdio.h>
-        #include <wchar.h>
-        #include "header.h"
-        int main() {
-          printf("|%d|\n", side());
-          wprintf (L"Characters: %lc %lc\n", L'a', 65);
-          return 0;
-        }
-      ''', side=r'''
-        #include <stdlib.h>
-        #include <malloc.h>
-        #include "header.h"
-        int side() {
-          struct mallinfo m = mallinfo();
-          return m.arena > 1;
-        }
-      ''', expected=['|1|\nCharacters: a A\n'])
-    finally:
-      del os.environ['EMCC_FORCE_STDLIBS']
+    def test(syslibs):
+      print 'syslibs', syslibs
+      try:
+        os.environ['EMCC_FORCE_STDLIBS'] = syslibs
+        self.dylink_test(header=r'''
+          #include <string.h>
+          int side();
+        ''', main=r'''
+          #include <stdio.h>
+          #include <wchar.h>
+          #include "header.h"
+          int main() {
+            printf("|%d|\n", side());
+            wprintf (L"Characters: %lc %lc\n", L'a', 65);
+            return 0;
+          }
+        ''', side=r'''
+          #include <stdlib.h>
+          #include <malloc.h>
+          #include "header.h"
+          int side() {
+            struct mallinfo m = mallinfo();
+            return m.arena > 1;
+          }
+        ''', expected=['|1|\nCharacters: a A\n'])
+      finally:
+        del os.environ['EMCC_FORCE_STDLIBS']
+
+    test('libc,libcextra')
+    test('1')
 
   def test_dylink_iostream(self):
     try:
@@ -3935,6 +3965,99 @@ var Module = {
       ''', expected=['hello from main and hello from side\n'])
     finally:
       del os.environ['EMCC_FORCE_STDLIBS']
+
+  def test_dylink_hyper_dupe(self):
+    Settings.TOTAL_MEMORY = 64*1024*1024
+
+    # test hyper-dynamic linking, and test duplicate warnings
+    open('third.cpp', 'w').write(r'''
+      int sidef() { return 36; }
+      int sideg = 49;
+      int bsidef() { return 536; }
+    ''')
+    Popen([PYTHON, EMCC, 'third.cpp', '-s', 'SIDE_MODULE=1'] + Building.COMPILER_TEST_OPTS + self.emcc_args + ['-o', 'third.js']).communicate()
+
+    self.dylink_test(main=r'''
+      #include <stdio.h>
+      #include <emscripten.h>
+      extern int sidef();
+      extern int sideg;
+      extern int bsidef();
+      extern int bsideg;
+      int main() {
+        EM_ASM({
+          Runtime.loadDynamicLibrary('third.js'); // hyper-dynamic! works at least for functions (and consts not used in same block)
+        });
+        printf("sidef: %d, sideg: %d.\n", sidef(), sideg);
+        printf("bsidef: %d.\n", bsidef());
+      }
+    ''', side=r'''
+      int sidef() { return 10; } // third.js will try to override these, but fail!
+      int sideg = 20;
+    ''', expected=['sidef: 10, sideg: 20.\nbsidef: 536.\n'])
+
+    if Settings.ASSERTIONS:
+      print 'check warnings'
+      full = run_js('src.cpp.o.js', engine=JS_ENGINES[0], full_output=True, stderr=STDOUT)
+      #self.assertContained("warning: trying to dynamically load symbol '__Z5sidefv' (from 'third.js') that already exists", full)
+      self.assertContained("warning: trying to dynamically load symbol '_sideg' (from 'third.js') that already exists", full)
+
+  def test_dylink_dot_a(self):
+    # .a linking must force all .o files inside it, when in a shared module
+    open('third.cpp', 'w').write(r'''
+      int sidef() { return 36; }
+    ''')
+    Popen([PYTHON, EMCC, 'third.cpp'] + Building.COMPILER_TEST_OPTS + self.emcc_args + ['-o', 'third.o', '-c']).communicate()
+
+    open('fourth.cpp', 'w').write(r'''
+      int sideg() { return 17; }
+    ''')
+    Popen([PYTHON, EMCC, 'fourth.cpp'] + Building.COMPILER_TEST_OPTS + self.emcc_args + ['-o', 'fourth.o', '-c']).communicate()
+
+    Popen([PYTHON, EMAR, 'rc', 'libfourth.a', 'fourth.o']).communicate()
+
+    self.dylink_test(main=r'''
+      #include <stdio.h>
+      #include <emscripten.h>
+      extern int sidef();
+      extern int sideg();
+      int main() {
+        printf("sidef: %d, sideg: %d.\n", sidef(), sideg());
+      }
+    ''', side=['libfourth.a', 'third.o'], # contents of libtwo.a must be included, even if they aren't referred to!
+    expected=['sidef: 36, sideg: 17.\n'])
+
+  def test_dylink_spaghetti(self):
+    self.dylink_test(main=r'''
+      #include <stdio.h>
+      int main_x = 72;
+      extern int side_x;
+      int adjust = side_x + 10;
+      int *ptr = &side_x;
+      struct Class {
+        Class() {
+          printf("main init sees %d, %d, %d.\n", adjust, *ptr, main_x);
+        }
+      };
+      Class cm;
+      int main() {
+        printf("main main sees %d, %d, %d.\n", adjust, *ptr, main_x);
+        return 0;
+      }
+    ''', side=r'''
+      #include <stdio.h>
+      extern int main_x;
+      int side_x = -534;
+      int adjust2 = main_x + 10;
+      int *ptr2 = &main_x;
+      struct Class {
+        Class() {
+          printf("side init sees %d, %d, %d.\n", adjust2, *ptr2, side_x);
+        }
+      };
+      Class cs;
+    ''', expected=['side init sees 82, 72, -534.\nmain init sees -524, -534, 72.\nmain main sees -524, -534, 72.',
+                   'main init sees -524, -534, 72.\nside init sees 82, 72, -534.\nmain main sees -524, -534, 72.'])
 
   def test_dylink_zlib(self):
     Building.COMPILER_TEST_OPTS += ['-I' + path_from_root('tests', 'zlib')]
@@ -4910,6 +5033,10 @@ PORT: 3979
     Building.COMPILER_TEST_OPTS += ['-std=c++11']
     self.do_run_from_file(src, output)
 
+    print 'main module'
+    Settings.MAIN_MODULE = 1
+    self.do_run_from_file(src, output)
+
   def test_phiundef(self):
     test_path = path_from_root('tests', 'core', 'test_phiundef')
     src, output = (test_path + s for s in ('.in', '.out'))
@@ -5273,12 +5400,11 @@ return malloc(size);
       main = main[:main.find('\n}')]
       assert main.count('\n') <= 7, ('must not emit too many postSets: %d' % main.count('\n')) + ' : ' + main
 
-    if not self.is_emterpreter():
-      print 'relocatable'
-      assert Settings.RELOCATABLE == Settings.EMULATED_FUNCTION_POINTERS == 0
-      Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 1
-      test()
-      Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 0
+    print 'relocatable'
+    assert Settings.RELOCATABLE == Settings.EMULATED_FUNCTION_POINTERS == 0
+    Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 1
+    test()
+    Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 0
 
     if self.is_emterpreter():
       print 'emterpreter/async/assertions' # extra coverage
