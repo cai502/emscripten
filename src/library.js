@@ -2611,6 +2611,17 @@ LibraryManager.library = {
   },
 
   // ==========================================================================
+  // semaphore.h
+  // ==========================================================================
+
+  sem_init: function() { throw new Error("sem_init"); },
+  sem_destroy: function() { throw new Error("sem_destroy"); },
+  sem_open: function() { throw new Error("sem_open"); },
+  sem_close: function() { throw new Error("sem_close"); },
+  sem_post: function() { throw new Error("sem_post"); },
+  sem_wait: function() { throw new Error("sem_wait"); },
+
+  // ==========================================================================
   // stdlib.h
   // ==========================================================================
 
