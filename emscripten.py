@@ -629,6 +629,19 @@ function ftCall_%s(%s) {%s
     %sdynCall_%s(imp|0,self|0,sel|0%s);
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
+      elif item == "_objc_msgSend_stret":
+        function_tables_impls.append('''
+  function %s(staddr,self,sel%s) {
+    staddr=staddr|0;self=self|0; sel=sel|0;%s
+    if(!self) return%s;
+    var cls = HEAP32[(self+0)>>2]|0;
+    var imp = _cache_getImp(cls|0, sel|0)|0;
+    if(!imp) {
+      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
+    }
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSendSuper":
         function_tables_impls.append('''
   function %s(objcSuper,sel%s) {
