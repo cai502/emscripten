@@ -655,6 +655,19 @@ function ftCall_%s(%s) {%s
     %sdynCall_%s(imp|0,self|0,sel|0%s);
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+      elif item == "_objc_msgSendSuper_stret":
+        function_tables_impls.append('''
+  function %s(staddr,objcSuper,sel%s) {
+    staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
+    var self = HEAP32[(objcSuper+0)>>2]|0;
+    var superCls = HEAP32[(objcSuper+4)>>2]|0;
+    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    if(!imp) {
+      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
+    }
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSendSuper2":
         function_tables_impls.append('''
   function %s(objcSuper,sel%s) {
@@ -667,6 +680,20 @@ function ftCall_%s(%s) {%s
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
     %sdynCall_%s(imp|0,self|0,sel|0%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+      elif item == "_objc_msgSendSuper2_stret":
+        function_tables_impls.append('''
+  function %s(staddr,objcSuper,sel%s) {
+    staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
+    var self = HEAP32[(objcSuper+0)>>2]|0;
+    var cls = HEAP32[(objcSuper+4)>>2]|0;
+    var superCls = HEAP32[(cls+4)>>2]|0;
+    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    if(!imp) {
+      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
+    }
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
 
