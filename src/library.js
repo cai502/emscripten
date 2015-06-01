@@ -758,6 +758,176 @@ LibraryManager.library = {
   },
 
   // ==========================================================================
+  // timerfd.h
+  // ==========================================================================
+  timerfd_create__deps: ['$FS', 'emscripten_get_now', 'emscripten_get_now_is_monotonic', '__setErrNo', '$ERRNO_CODES', 'usleep'],
+  timerfd_create: function(clockid, flags) {
+    var realtime;
+    if (clockid === {{{ cDefine('CLOCK_REALTIME') }}}) {
+      realtime = true;
+    } else if (clockid === {{{ cDefine('CLOCK_MONOTONIC') }}} && _emscripten_get_now_is_monotonic()) {
+      realtime = false;
+    } else {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    if (flags & ~{{{ cDefine('TFD_NONBLOCK') }}}) { // TFD_CLOEXEC is not supproted
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    var nonblock = (flags & {{{ cDefine('TFD_NONBLOCK') }}}) != 0;
+
+    var TimeInterval = function() { this.set(0, 0) };
+    TimeInterval.prototype.set = function(sec, nsec) { this.sec = sec; this.nsec = nsec; return this; };
+    TimeInterval.prototype.setFromMs = function(msec) { return this.set(((msec/1000)|0), (msec%1000)*1000*1000); };
+    TimeInterval.prototype.add = function(sec, nsec) { this.sec += sec; this.nsec += nsec; this.normalize(); };
+    TimeInterval.prototype.toMs = function() { return this.sec*1000 + (this.nsec/1000/1000)|0; };
+    TimeInterval.prototype.toNs = function() { return this.sec*1000*1000*1000 + this.nsec; };
+    TimeInterval.prototype.isZero = function() { return this.sec == 0 && this.nsec == 0; };
+    TimeInterval.prototype.diff = function(msec) {
+      return (((msec/1000)|0) - this.sec)*1000*1000*1000 + ((msec%1000)*1000*1000 - this.nsec);
+    };
+    TimeInterval.prototype.normalize = function() {
+      while(this.nsec >= 1000*1000*1000) { this.sec++; this.nsec -= 1000*1000*1000; }
+      while(this.nsec < 0) { this.sec--; this.nsec += 1000*1000*1000; }
+    };
+
+    var stream = FS.createStream({
+      timerfd: true,
+      realtime: realtime,
+      nonblock: nonblock,
+      node: {},
+      stream_ops: {
+        read: function(stream, buffer, offset, length) {
+          if(length < 8) {
+            ___setErrNo(ERRNO_CODES.EINVAL);
+            return -1;
+          }
+          var value = stream.value;
+          var interval = stream.interval;
+
+          var current;
+          var currentFunc = stream.realtime ? Date.now : _emscripten_get_now;
+
+          if(stream.nonblock) {
+            if(value.isZero() || (current = currentFunc()) < value.toMs()) {
+              ___setErrNo(ERRNO_CODES.EAGAIN);
+              return -1;
+            }
+          } else {
+            while(value.isZero() || (current = currentFunc()) < value.toMs()) {
+              _usleep(current - value.toMs()); // enable to interrupt
+            }
+          }
+
+          var ret = 0;
+          if(interval.isZero()) {
+            // once
+            ret = 1;
+            value.set(0,0);
+          } else {
+            // repeat (assume: 0 < current - value (ns) < 0x1FFFFFFFFFFFFF(int_max) ~ 100day)
+            var elapsed = value.diff(current);
+            ret = ((elapsed / interval.toNs())|0) + 1;
+            value.setFromMs(current).add(interval.sec, interval.nsec);
+          }
+
+          for(var i = 0; i < 8; i++) {
+            buffer[offset+i] = (ret >> i) & 0xff;
+          }
+          return 8;
+        },
+      },
+      expired: false, 
+      value: new TimeInterval(0, 0), // absolute time(ms)
+      interval: new TimeInterval(0, 0) // interval time(ms)
+    });
+    return stream.fd;
+  },
+  timerfd_settime__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', 'timerfd_gettime'],
+  timerfd_settime: function(fd, flags, new_value, old_value) {
+    var stream = FS.getStream(fd);
+    if(!stream) {
+      ___setErrNo(ERRNO_CODES.EBADF);
+      return -1;
+    } else if(!stream.timerfd) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    if(flags & ~{{{ cDefine('TFD_TIMER_ABSTIME') }}}) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    if(old_value) {
+      var ret = timerfd_gettime(fd, old_value);
+      if(ret) {
+        // ErrNo is set by timerfd_gettime
+        return -1;
+      }
+    }
+
+    var current = stream.realtime ? Date.now() : _emscripten_get_now();
+    var sec, nsec;
+    sec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_value.tv_sec, 'i32') }}};
+    nsec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_value.tv_nsec, 'i32') }}};
+    if(flags & {{{ cDefine('TFD_TIMER_ABSTIME') }}}) {
+      stream.value.set(sec, nsec);
+    } else {
+      stream.value.setFromMs(current).add(sec, nsec);
+    }
+
+    sec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_sec, 'i32') }}};
+    nsec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_nsec, 'i32') }}};
+    stream.interval.set(sec, nsec);
+  },
+  timerfd_gettime__deps: ['$FS', 'emscripten_get_now', '__setErrNo', '$ERRNO_CODES'],
+  timerfd_gettime: function(fd, curr_value) {
+    var stream = FS.getStream(fd);
+    if(!stream) {
+      ___setErrNo(ERRNO_CODES.EBADF);
+      return -1;
+    } else if(!stream.timerfd) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    if(!curr_value) {
+      ___setErrNo(ERRNO_CODES.EFALUT);
+      return -1;
+    }
+    var current = stream.realtime ? Date.now() : _emscripten_get_now();
+    var value = stream.value, interval = stream.interval;
+
+    var value_sec, value_nsec;
+    if(current < value.toMs()) {
+      // scheduled
+      value_sec = value.sec - ((current/1000)|0);
+      value_nsec = value.nsec - (current%1000)*1000*1000;
+      while(value_nsec < 0) {
+        value_sec--;
+        value_nsec += 1000*1000*1000;
+      }
+    } else {
+      if(interval.isZero()) {
+        // nothing scheduled
+        value_sec = 0;
+        value_nsec = 0;
+      } else {
+        // repeat and some events are not read
+        var elapsed = value.diff(current);
+        var times = elapsed / interval.toNs();
+        var residual = (times - (times|0)) * interval.toNs();
+        value_sec = (residual / (1000*1000*1000))|0;
+        value_nsec = (residual % (1000*1000*1000))|0;
+      }
+    }
+
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_value.tv_sec, 'value_sec', 'i32') }}};
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_value.tv_nsec, 'value_nsec', 'i32') }}};
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_interval.tv_sec, 'interval.sec', 'i32') }}};
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_interval.tv_nsec, 'interval.nsec', 'i32') }}};
+  },
+
+  // ==========================================================================
   // unistd.h
   // ==========================================================================
 

@@ -183,6 +183,16 @@
         }
     }, 
     {
+        "file": "libc/sys/timerfd.h", 
+        "defines": [
+            "TFD_NONBLOCK",
+            "TFD_CLOEXEC",
+            "TFD_TIMER_ABSTIME"
+        ],
+        "structs": {
+        }
+    },
+    {
         "file": "libc/time.h", 
         "defines": [
             ["li", "CLOCKS_PER_SEC"],
