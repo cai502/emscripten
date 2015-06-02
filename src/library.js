@@ -8209,8 +8209,124 @@ LibraryManager.library = {
       {{{ makeSetValue('exceptfds', '0', 'dstExceptLow', 'i32') }}};
       {{{ makeSetValue('exceptfds', '4', 'dstExceptHigh', 'i32') }}};
     }
-    
+
     return total;
+  },
+
+  // ==========================================================================
+  // sys/epoll.h
+  // ==========================================================================
+  epoll_create__deps: ['epoll_create1'],
+  epoll_create: function(size) {
+    return _epoll_create1(0);
+  },
+
+  epoll_create1__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
+  epoll_create1: function(flags) {
+    if(flags != 0) { // EPOLL_CLOEXEC not supported
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    var stream = FS.createStream({
+      epoll: true,
+      node: {},
+      events: {},
+      stream_ops: {
+      }
+    });
+    return stream.fd;
+  },
+
+  epoll_ctl__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
+  epoll_ctl: function(epfd, op, fd, event) { /*
+    var stream = FS.getStream(epfd);
+    if(!stream) {
+      ___setErrNo(ERRNO_CODES.EBADF);
+      return -1;
+    }
+    if(!stream.epoll) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    if(!fd) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    if(op == {{{ cDefine('EPOLL_CTL_ADD') }}} || op == {{{ cDefine('EPOLL_CTL_MOD') }}}) {
+      if(!event) {
+        ___setErrNo(ERRNO_CODES.ENOENT);
+        return -1;
+      }
+      if(op == {{{ cDefine('EPOLL_CTL_ADD') }}} && stream.events[fd]) {
+        ___setErrNo(ERRNO_CODES.EEXIST);
+        return -1;
+      }
+
+      var mask = {{{ makeGetValue('event', C_STRUCTS.epoll_event.events, 'i32') }}}
+      var data = {{{ makeGetValue('event', C_STRUCTS.epoll_event.data, 'i32') }}}
+      stream.events[fd] = {
+        mask: mask,
+        data: data
+      };
+    } else if(op == {{{ cDefine('EPOLL_CTL_DEL') }}}) {
+      delete stream.events[fd];
+    } else {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    return 0;
+    */
+  },
+
+  epoll_wait__deps: ['epoll_pwait'],
+  epoll_wait: function(epfd, event, maxevents, timeout) {
+    return _epoll_pwait(epfd, event, maxevents, timeout, 0);
+  },
+
+  epoll_pwait__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', 'usleep'],
+  epoll_pwait: function(epfd, event, maxevents, timeout, sigs) {
+    // epoll? No, this is almost poll
+    var epstream = FS.getStream(epfd);
+    if(!epstream) {
+      ___setErrNo(ERRNO_CODES.EBADF);
+      return -1;
+    }
+    if(!epstream.epoll) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    if(sigs) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+
+    var count = 0;
+    var begin = Date.now();
+    while(timeout == -1 || Date.now() - begin < timeout) {
+      for(var fd in epstream.events) {
+        var events = epstream.events[fd];
+        var stream = FS.getStream(fd);
+        if(!stream || !stream.stream_ops.poll) {
+          continue;
+        }
+
+        var mask = stream.stream_ops.poll(stream);
+
+        if(mask & (events.mask | {{{ cDefine('EPOLLERR') }}} | {{{ cDefine('EPOLLHUP') }}})) {
+          var ev = events + {{{ C_STRUCTS.epoll_event.__size__ }}} * count;
+          {{{ makeSetValue('ev', C_STRUCTS.epoll_event.events, 'mask', 'i32') }}};
+          {{{ makeSetValue('ev', C_STRUCTS.epoll_event.data, 'events.data', 'i32') }}};
+          count++;
+
+          if(count >= maxevents) break;
+        }
+      }
+      if(count > 0) {
+        break;
+      }
+      _usleep(1001);
+    }
+    return count;
   },
 
   // ==========================================================================

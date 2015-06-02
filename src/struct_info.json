@@ -193,6 +193,36 @@
         }
     },
     {
+        "file": "libc/sys/epoll.h",
+        "defines": [
+            "EPOLL_CLOEXEC",
+            "EPOLL_NONBLOCK",
+            "EPOLLIN",
+            "EPOLLPRI",
+            "EPOLLOUT",
+            "EPOLLRDNORM",
+            "EPOLLRDBAND",
+            "EPOLLWRNORM",
+            "EPOLLWRBAND",
+            "EPOLLMSG",
+            "EPOLLERR",
+            "EPOLLHUP",
+            "EPOLLRDHUP",
+            "EPOLLWAKEUP",
+            "EPOLLONESHOT",
+            "EPOLLET",
+            "EPOLL_CTL_ADD",
+            "EPOLL_CTL_DEL",
+            "EPOLL_CTL_MOD"
+        ],
+        "structs": {
+          "epoll_event": [
+            "events",
+            "data"
+          ]
+        }
+    },
+    {
         "file": "libc/time.h", 
         "defines": [
             ["li", "CLOCKS_PER_SEC"],
