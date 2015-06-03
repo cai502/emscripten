@@ -8238,7 +8238,7 @@ LibraryManager.library = {
   },
 
   epoll_ctl__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
-  epoll_ctl: function(epfd, op, fd, event) { /*
+  epoll_ctl: function(epfd, op, fd, event) {
     var stream = FS.getStream(epfd);
     if(!stream) {
       ___setErrNo(ERRNO_CODES.EBADF);
@@ -8275,7 +8275,6 @@ LibraryManager.library = {
       return -1;
     }
     return 0;
-    */
   },
 
   epoll_wait__deps: ['epoll_pwait'],
