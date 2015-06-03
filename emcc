@@ -59,7 +59,7 @@ CXX_ENDINGS = ('.cpp', '.cxx', '.cc', '.c++', '.CPP', '.CXX', '.CC', '.C++', '.i
 OBJC_ENDINGS = ('.m', '.mi')
 OBJCXX_ENDINGS = ('.mm', '.mii')
 SOURCE_ENDINGS = C_ENDINGS + CXX_ENDINGS + OBJC_ENDINGS + OBJCXX_ENDINGS
-BITCODE_ENDINGS = ('.bc', '.o', '.obj')
+BITCODE_ENDINGS = ('.bc', '.o', '.obj', '.lo')
 DYNAMICLIB_ENDINGS = ('.dylib', '.so') # Windows .dll suffix is not included in this list, since those are never linked to directly on the command line.
 STATICLIB_ENDINGS = ('.a',)
 ASSEMBLY_ENDINGS = ('.ll',)
@@ -164,7 +164,7 @@ elif sys.argv[1] == '--version':
     pass
   finally:
     os.chdir(here)
-  print '''emcc (Emscripten GCC-like replacement) %s (%s)
+  print '''emcc (Emscripten gcc/clang-like replacement) %s (%s)
 Copyright (C) 2014 the Emscripten authors (see AUTHORS.txt)
 This is free and open source software under the MIT license.
 There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -172,10 +172,14 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
   exit(0)
 
 elif len(sys.argv) == 2 and sys.argv[1] == '-v': # -v with no inputs
-  print 'emcc (Emscripten GCC-like replacement + linker emulating GNU ld ) %s' % shared.EMSCRIPTEN_VERSION
+  print 'emcc (Emscripten gcc/clang-like replacement) %s' % shared.EMSCRIPTEN_VERSION
   code = subprocess.call([shared.CLANG, '-v'])
   shared.check_sanity(force=True)
   exit(code)
+
+elif '-dumpmachine' in sys.argv:
+  print shared.get_llvm_target()
+  exit(0)
 
 def is_minus_s_for_emcc(newargs, i):
   assert newargs[i] == '-s'
@@ -281,7 +285,10 @@ if CONFIGURE_CONFIG or CMAKE_CONFIG:
         full_node = '/usr/bin/' + full_node # TODO: use whereis etc. And how about non-*NIX?
       open(target, 'w').write('#!' + full_node + '\n' + src) # add shebang
       import stat
-      os.chmod(target, stat.S_IMODE(os.stat(target).st_mode) | stat.S_IXUSR) # make executable
+      try:
+        os.chmod(target, stat.S_IMODE(os.stat(target).st_mode) | stat.S_IXUSR) # make executable
+      except:
+        pass # can fail if e.g. writing the executable to /dev/null
     exit(ret)
 
 if os.environ.get('EMMAKEN_COMPILER'):
@@ -1017,6 +1024,28 @@ try:
   if js_opts:
     shared.Settings.RUNNING_JS_OPTS = 1
 
+  if shared.Settings.USE_PTHREADS:
+    if not any(s.startswith('PTHREAD_POOL_SIZE=') for s in settings_changes):
+      settings_changes.append('PTHREAD_POOL_SIZE=0')
+    js_libraries.append(shared.path_from_root('src', 'library_pthread.js'))
+    newargs.append('-D__EMSCRIPTEN_PTHREADS__=1')
+  else:
+    js_libraries.append(shared.path_from_root('src', 'library_pthread_stub.js'))
+
+  if shared.Settings.USE_PTHREADS:
+    if shared.Settings.PROXY_TO_WORKER:
+      logging.error('-s PROXY_TO_WORKER=1 is not yet supported with -s USE_PTHREADS=1!')
+      exit(1)
+    if shared.Settings.LINKABLE:
+      logging.error('-s LINKABLE=1 is not supported with -s USE_PTHREADS=1!')
+      exit(1)
+    if shared.Settings.SIDE_MODULE:
+      logging.error('-s SIDE_MODULE=1 is not supported with -s USE_PTHREADS=1!')
+      exit(1)
+    if shared.Settings.MAIN_MODULE:
+      logging.error('-s MAIN_MODULE=1 is not supported with -s USE_PTHREADS=1!')
+      exit(1)
+
   shared.Settings.EMSCRIPTEN_VERSION = shared.EMSCRIPTEN_VERSION
   shared.Settings.OPT_LEVEL = opt_level
   shared.Settings.DEBUG_LEVEL = debug_level
@@ -1368,6 +1397,9 @@ try:
       final += '.mem.js'
       src = None
 
+  if shared.Settings.USE_PTHREADS:
+    shutil.copyfile(shared.path_from_root('src', 'pthread-main.js'), os.path.join(os.path.dirname(os.path.abspath(target)), 'pthread-main.js'))
+
   log_time('source transforms')
 
   # It is useful to run several js optimizer passes together, to save on unneeded unparsing/reparsing
@@ -1623,7 +1655,7 @@ try:
 <script>
   if ((',' + window.location.search.substr(1) + ',').indexOf(',noProxy,') < 0) {
     console.log('running code in a web worker');
-''' + open(shared.path_from_root('src', 'webGLClient.js')).read() + '\n' + open(shared.path_from_root('src', 'proxyClient.js')).read().replace('{{{ filename }}}', child_js).replace('{{{ IDBStore.js }}}', open(shared.path_from_root('src', 'IDBStore.js')).read()) + '''
+''' + open(shared.path_from_root('src', 'webGLClient.js')).read() + '\n' + shared.read_and_preprocess(shared.path_from_root('src', 'proxyClient.js')).replace('{{{ filename }}}', child_js).replace('{{{ IDBStore.js }}}', open(shared.path_from_root('src', 'IDBStore.js')).read()) + '''
   } else {
     // note: no support for code mods (PRECISE_F32==2)
     console.log('running code on the main thread');

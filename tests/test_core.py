@@ -791,6 +791,8 @@ class T(RunnerCore): # Short name, to make it more fun to use manually on the co
       self.do_run_from_file(src, output)
 
   def test_rounding(self):
+      Settings.PRECISE_F32 = 1 # in the move to llvm 3.7, froundf in musl became more sensitive to float/double differences
+
       test_path = path_from_root('tests', 'core', 'test_rounding')
       src, output = (test_path + s for s in ('.in', '.out'))
 
@@ -3745,24 +3747,28 @@ var Module = {
     ''', 'a new Class\n')
 
   def test_dylink_global_inits(self):
-    self.dylink_test(header=r'''
-      #include <stdio.h>
-      struct Class {
-        Class(const char *name) { printf("new %s\n", name); }
-      };
-    ''', main=r'''
-      #include "header.h"
-      static Class c("main");
-      int main() {
-        return 0;
-      }
-    ''', side=r'''
-      #include "header.h"
-      static Class c("side");
-    ''', expected=['new main\nnew side\n', 'new side\nnew main\n'])
+    def test():
+      self.dylink_test(header=r'''
+        #include <stdio.h>
+        struct Class {
+          Class(const char *name) { printf("new %s\n", name); }
+        };
+      ''', main=r'''
+        #include "header.h"
+        static Class c("main");
+        int main() {
+          return 0;
+        }
+      ''', side=r'''
+        #include "header.h"
+        static Class c("side");
+      ''', expected=['new main\nnew side\n', 'new side\nnew main\n'])
+    test()
 
-    if Settings.ASSERTIONS:
+    if Settings.ASSERTIONS == 1:
       print 'check warnings'
+      Settings.ASSERTIONS = 2
+      test()
       full = run_js('src.cpp.o.js', engine=JS_ENGINES[0], full_output=True, stderr=STDOUT)
       self.assertNotContained("trying to dynamically load symbol '__ZN5ClassC2EPKc' (from 'liblib.so') that already exists", full)
 
@@ -3915,8 +3921,9 @@ var Module = {
     ''', expected=['main: jslib_x is 148.\nside: jslib_x is 148.\n'], main_emcc_args=['--js-library', 'lib.js'])
 
   def test_dylink_syslibs(self): # one module uses libcextra, need to force its inclusion when it isn't the main
-    def test(syslibs):
-      print 'syslibs', syslibs
+    def test(syslibs, expect_pass=True):
+      print 'syslibs', syslibs, Settings.ASSERTIONS
+      passed = True
       try:
         os.environ['EMCC_FORCE_STDLIBS'] = syslibs
         self.dylink_test(header=r'''
@@ -3940,11 +3947,28 @@ var Module = {
             return m.arena > 1;
           }
         ''', expected=['|1|\nCharacters: a A\n'])
+      except Exception, e:
+        if expect_pass: raise e
+        print '(seeing expected fail)'
+        passed = False
+        assertion = 'build the MAIN_MODULE with EMCC_FORCE_STDLIBS=1 in the environment'
+        if Settings.ASSERTIONS:
+          self.assertContained(assertion, str(e))
+        else:
+          self.assertNotContained(assertion, str(e))
       finally:
         del os.environ['EMCC_FORCE_STDLIBS']
+      assert passed == expect_pass
 
     test('libc,libcextra')
     test('1')
+    if 'ASSERTIONS=1' not in self.emcc_args:
+      Settings.ASSERTIONS = 0
+      test('', expect_pass=False)
+    else:
+      print '(skip ASSERTIONS == 0 part)'
+    Settings.ASSERTIONS = 1
+    test('', expect_pass=False)
 
   def test_dylink_iostream(self):
     try:
@@ -3966,8 +3990,58 @@ var Module = {
     finally:
       del os.environ['EMCC_FORCE_STDLIBS']
 
+  def test_dylink_dynamic_cast(self): # issue 3465
+    self.dylink_test(header=r'''
+      class Base {
+      public:
+          virtual void printName();
+      };
+
+      class Derived : public Base {
+      public:
+          void printName();
+      };
+    ''', main=r'''
+      #include "header.h"
+      #include <iostream>
+
+      using namespace std;
+
+      int main() {
+        cout << "starting main" << endl;
+
+        Base *base = new Base();
+        Base *derived = new Derived();
+        base->printName();
+        derived->printName();
+
+        if (dynamic_cast<Derived*>(derived)) {
+          cout << "OK" << endl;
+        } else {
+          cout << "KO" << endl;
+        }
+
+        return 0;
+      }
+    ''', side=r'''
+      #include "header.h"
+      #include <iostream>
+
+      using namespace std;
+
+      void Base::printName() {
+          cout << "Base" << endl;
+      }
+
+      void Derived::printName() {
+          cout << "Derived" << endl;
+      }
+    ''', expected=['starting main\nBase\nDerived\nOK'])
+
   def test_dylink_hyper_dupe(self):
     Settings.TOTAL_MEMORY = 64*1024*1024
+
+    if Settings.ASSERTIONS: self.emcc_args += ['-s', 'ASSERTIONS=2']
 
     # test hyper-dynamic linking, and test duplicate warnings
     open('third.cpp', 'w').write(r'''
@@ -4061,9 +4135,12 @@ var Module = {
 
   def test_dylink_zlib(self):
     Building.COMPILER_TEST_OPTS += ['-I' + path_from_root('tests', 'zlib')]
+
+    Popen([PYTHON, path_from_root('embuilder.py'), 'build' ,'zlib']).communicate()
+    zlib = Cache.get_path(os.path.join('ports-builds', 'zlib', 'libz.a'))
     try:
       os.environ['EMCC_FORCE_STDLIBS'] = 'libcextra'
-      side = get_zlib_library(self)
+      side = [zlib]
       self.dylink_test(main=open(path_from_root('tests', 'zlib', 'example.c'), 'r').read(),
                        side=side,
                        expected=open(path_from_root('tests', 'zlib', 'ref.txt'), 'r').read(),
@@ -4470,7 +4547,7 @@ def process(filename):
     for mode in [[], ['-s', 'MEMFS_APPEND_TO_TYPED_ARRAYS=1']]:
       self.emcc_args = orig_args + mode
       try_delete(mem_file)
-      self.do_run(src, ('size: 7\ndata: 100,-56,50,25,10,77,123\nloop: 100 -56 50 25 10 77 123 \ninput:hi there!\ntexto\n$\n5 : 10,30,20,11,88\nother=some data.\nseeked=me da.\nseeked=ata.\nseeked=ta.\nfscanfed: 10 - hello\nok.\n \ntexte\n', 'size: 7\ndata: 100,-56,50,25,10,77,123\nloop: 100 -56 50 25 10 77 123 \ninput:hi there!\ntexto\ntexte\n$\n5 : 10,30,20,11,88\nother=some data.\nseeked=me da.\nseeked=ata.\nseeked=ta.\nfscanfed: 10 - hello\nok.\n'),
+      self.do_run(src, ('size: 7\ndata: 100,-56,50,25,10,77,123\nloop: 100 -56 50 25 10 77 123 \ninput:hi there!\ntexto\n$\n5 : 10,30,20,11,88\nother=some data.\nseeked=me da.\nseeked=ata.\nseeked=ta.\nfscanfed: 10 - hello\n5 bytes to dev/null: 5\nok.\n \ntexte\n', 'size: 7\ndata: 100,-56,50,25,10,77,123\nloop: 100 -56 50 25 10 77 123 \ninput:hi there!\ntexto\ntexte\n$\n5 : 10,30,20,11,88\nother=some data.\nseeked=me da.\nseeked=ata.\nseeked=ta.\nfscanfed: 10 - hello\n5 bytes to dev/null: 5\nok.\n'),
                   post_build=post, extra_emscripten_args=['-H', 'libc/fcntl.h'])
       if '-O2' in self.emcc_args:
         assert os.path.exists(mem_file)
@@ -5981,7 +6058,9 @@ def process(filename):
     Building.COMPILER_TEST_OPTS += ['--llvm-opts', '0']
 
     # Run a test that should work, generating some code
-    self.test_structs()
+    test_path = path_from_root('tests', 'core', 'test_structs')
+    src, output = (test_path + s for s in ('.in', '.out'))
+    self.do_run_from_file(src, output, build_ll_hook=lambda x: False) # add an ll hook, to force ll generation
 
     filename = os.path.join(self.get_dir(), 'src.cpp')
     self.do_autodebug(filename)
@@ -6835,23 +6914,11 @@ Module.printErr = Module['printErr'] = function(){};
       import json
       Building.emcc(src_filename, Settings.serialize() + self.emcc_args +
           Building.COMPILER_TEST_OPTS, out_filename, stderr=PIPE)
-      with open(out_filename) as f: out_file = f.read()
       # after removing the @line and @sourceMappingURL comments, the build
       # result should be identical to the non-source-mapped debug version.
       # this is worth checking because the parser AST swaps strings for token
       # objects when generating source maps, so we want to make sure the
       # optimizer can deal with both types.
-      out_file = re.sub(' *//[@#].*$', '', out_file, flags=re.MULTILINE)
-      def clean(code):
-        code = code.replace('// EMSCRIPTEN_GENERATED_FUNCTIONS: ["_malloc","__Z3foov","_free","_main"]', '')
-        code = re.sub(';', ';\n', code) # put statements each on a new line
-        code = re.sub(r'\n+[ \n]*\n+', '\n', code)
-        code = re.sub(' L\d+ ?:', '', code) # ignore labels; they can change in each compile
-        code = code.replace('{\n}', '{}')
-        lines = code.split('\n')
-        lines = filter(lambda line: ': do {' not in line and ' break L' not in line, lines) # ignore labels; they can change in each compile
-        return '\n'.join(sorted(lines))
-      self.assertIdentical(clean(no_maps_file), clean(out_file))
       map_filename = out_filename + '.map'
       data = json.load(open(map_filename, 'r'))
       self.assertPathsIdentical(out_filename, data['file'])
@@ -6961,6 +7028,26 @@ Module.printErr = Module['printErr'] = function(){};
     ''')
     self.emcc_args += ['-s', 'INVOKE_RUN=0', '--post-js', 'post.js']
     self.do_run(src, 'hello, world!\ncleanup\nI see exit status: 118')
+
+  def test_noexitruntime(self):
+    src = r'''
+      #include <emscripten.h>
+      #include <stdio.h>
+      static int testPre = TEST_PRE;
+      struct Global {
+        Global() {
+          printf("in Global()\n");
+          if (testPre) { EM_ASM(Module['noExitRuntime'] = true;); }
+        }
+        ~Global() { printf("ERROR: in ~Global()\n"); }
+      } global;
+      int main() {
+        if (!testPre) { EM_ASM(Module['noExitRuntime'] = true;); }
+        printf("in main()\n");
+      }
+    '''
+    self.do_run(src.replace('TEST_PRE', '0'), 'in Global()\nin main()')
+    self.do_run(src.replace('TEST_PRE', '1'), 'in Global()\nin main()')
 
   def test_minmax(self):
     self.do_run(open(path_from_root('tests', 'test_minmax.c')).read(), 'NAN != NAN\nSuccess!')

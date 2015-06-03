@@ -306,7 +306,7 @@ EM_BUILD_VERBOSE_LEVEL = int(os.getenv('EM_BUILD_VERBOSE')) if os.getenv('EM_BUI
 
 # Expectations
 
-EXPECTED_LLVM_VERSION = (3, 6)
+EXPECTED_LLVM_VERSION = (3, 7)
 
 actual_clang_version = None
 
@@ -1021,6 +1021,7 @@ class Building:
     env['PKG_CONFIG_PATH'] = os.environ.get ('EM_PKG_CONFIG_PATH') or ''
     env['EMSCRIPTEN'] = path_from_root()
     env['PATH'] = path_from_root('system', 'bin') + os.pathsep + env['PATH']
+    env['CROSS_COMPILE'] = path_from_root('em') # produces /path/to/emscripten/em , which then can have 'cc', 'ar', etc appended to it
     return env
 
   # Finds the given executable 'program' in PATH. Operates like the Unix tool 'which'.
@@ -1882,8 +1883,8 @@ def safe_move(src, dst):
   dst = os.path.abspath(dst)
   if os.path.isdir(dst):
     dst = os.path.join(dst, os.path.basename(src))
-  if src == dst:
-    return
+  if src == dst: return
+  if dst == '/dev/null': return
   shutil.move(src, dst)
 
 def safe_copy(src, dst):
@@ -1891,9 +1892,20 @@ def safe_copy(src, dst):
   dst = os.path.abspath(dst)
   if os.path.isdir(dst):
     dst = os.path.join(dst, os.path.basename(src))
-  if src == dst:
-    return
+  if src == dst: return
+  if dst == '/dev/null': return
   shutil.copyfile(src, dst)
 
-import js_optimizer
+def read_and_preprocess(filename):
+  f = open(filename, 'r').read()
+  pos = 0
+  include_pattern = re.compile('^#include\s*["<](.*)[">]\s?$', re.MULTILINE)
+  while(1):
+    m = include_pattern.search(f, pos)
+    if not m:
+      return f
+    included_file = open(os.path.join(os.path.dirname(filename), m.groups(0)[0]), 'r').read()
 
+    f = f[:m.start(0)] + included_file + f[m.end(0):]
+
+import js_optimizer
