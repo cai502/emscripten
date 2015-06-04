@@ -36,6 +36,8 @@
   "objc_msgSendSuper": ["_class_lookupMethodAndLoadCache3"],
   "objc_msgSendSuper2": ["_class_lookupMethodAndLoadCache3"],
   "__cxa_begin_catch": ["__cxa_can_catch", "__cxa_is_pointer_type"],
-  "sleep": ["usleep"]
+  "sleep": ["usleep"],
+  "epoll_wait": ["usleep"],
+  "epoll_pwait": ["usleep"]
 }
 
