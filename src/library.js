@@ -8312,7 +8312,7 @@ LibraryManager.library = {
         var mask = stream.stream_ops.poll(stream);
 
         if(mask & (events.mask | {{{ cDefine('EPOLLERR') }}} | {{{ cDefine('EPOLLHUP') }}})) {
-          var ev = events + {{{ C_STRUCTS.epoll_event.__size__ }}} * count;
+          var ev = event + {{{ C_STRUCTS.epoll_event.__size__ }}} * count;
           {{{ makeSetValue('ev', C_STRUCTS.epoll_event.events, 'mask', 'i32') }}};
           {{{ makeSetValue('ev', C_STRUCTS.epoll_event.data, 'events.data', 'i32') }}};
           count++;
