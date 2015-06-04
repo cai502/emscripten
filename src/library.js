@@ -388,6 +388,28 @@ LibraryManager.library = {
       ___setErrNo(ERRNO_CODES.EBADF);
       return -1;
     }
+    if(stream.timerfd) {
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_dev, '1', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.__st_dev_padding, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.__st_ino_truncated, '1', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_mode, '0600', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_nlink, '1', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_uid, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_gid, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_rdev, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.__st_rdev_padding, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_size, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_blksize, '1000', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_blocks, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_atim.tv_sec, '1', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_atim.tv_nsec, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_mtim.tv_sec, '1', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_mtim.tv_nsec, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_ctim.tv_sec, '1', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_ctim.tv_nsec, '0', 'i32') }}};
+      {{{ makeSetValue('buf', C_STRUCTS.stat.st_ino, '1', 'i32') }}};
+      return 0;
+    }
     return _stat(stream.path, buf);
   },
   mknod__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
@@ -762,6 +784,9 @@ LibraryManager.library = {
   // ==========================================================================
   timerfd_create__deps: ['$FS', 'emscripten_get_now', 'emscripten_get_now_is_monotonic', '__setErrNo', '$ERRNO_CODES', 'usleep'],
   timerfd_create: function(clockid, flags) {
+#if USE_PTHREADS
+    // TODO exec on main thread
+#endif
     var realtime;
     if (clockid === {{{ cDefine('CLOCK_REALTIME') }}}) {
       realtime = true;
@@ -837,6 +862,19 @@ LibraryManager.library = {
           }
           return 8;
         },
+        poll: function(stream) {
+          var mask = 0;
+
+          var value = stream.value;
+          var interval = stream.interval;
+          var current = stream.realtime ? Date.now() : _emscripten_get_now();
+
+          if(!(value.isZero() || current < value.toMs())) {
+            mask |= {{{ cDefine('POLLRDNORM') }}} | {{{ cDefine('POLLIN') }}};
+          }
+
+          return mask;
+        }
       },
       expired: false, 
       value: new TimeInterval(0, 0), // absolute time(ms)
@@ -846,6 +884,9 @@ LibraryManager.library = {
   },
   timerfd_settime__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', 'timerfd_gettime'],
   timerfd_settime: function(fd, flags, new_value, old_value) {
+#if USE_PTHREADS
+    // TODO exec on main thread
+#endif
     var stream = FS.getStream(fd);
     if(!stream) {
       ___setErrNo(ERRNO_CODES.EBADF);
@@ -882,6 +923,9 @@ LibraryManager.library = {
   },
   timerfd_gettime__deps: ['$FS', 'emscripten_get_now', '__setErrNo', '$ERRNO_CODES'],
   timerfd_gettime: function(fd, curr_value) {
+#if USE_PTHREADS
+    // TODO exec on main thread
+#endif
     var stream = FS.getStream(fd);
     if(!stream) {
       ___setErrNo(ERRNO_CODES.EBADF);
