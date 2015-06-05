@@ -856,7 +856,6 @@ try:
     found = False
     for framework_dir in framework_dirs:
       path = os.path.join(framework_dir, framework + ".framework", framework)
-      print path
       if os.path.exists(path):
         logging.debug('found framework "%s" at %s', framework, path)
         input_files.append((i, path))
