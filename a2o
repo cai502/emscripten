@@ -1,0 +1,22 @@
+#!/usr/bin/env python2
+
+'''
+See emcc.py. This script forwards to there, noting that we want C++ and not C by default
+'''
+
+import os, subprocess, sys
+from tools import shared
+
+exit(subprocess.call([shared.PYTHON, shared.EMCC] + sys.argv[1:] + [
+    '-fblocks',
+    '-s', 'DEMANGLE_SUPPORT=1',
+    '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
+    '-framework', 'Foundation',
+    '-framework', 'CoreFoundation',
+    '-lobjc4',
+    '-lBlocksRuntime',
+    '-lpthread_workqueue',
+    '-lkqueue',
+    '-ldispatch',
+]))
+
