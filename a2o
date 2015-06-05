@@ -7,7 +7,7 @@ See emcc.py. This script forwards to there, noting that we want C++ and not C by
 import os, subprocess, sys
 from tools import shared
 
-exit(subprocess.call([shared.PYTHON, shared.EMCC] + sys.argv[1:] + [
+args = sys.argv[1:] + [
     '-fblocks',
     '-s', 'DEMANGLE_SUPPORT=1',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
@@ -15,8 +15,9 @@ exit(subprocess.call([shared.PYTHON, shared.EMCC] + sys.argv[1:] + [
     '-framework', 'CoreFoundation',
     '-lobjc4',
     '-lBlocksRuntime',
-    '-lpthread_workqueue',
-    '-lkqueue',
-    '-ldispatch',
-]))
+]
+if 'USE_PTHREADS=1' in sys.argv:
+    args.extend(['-lpthread_workqueue'])
+args.extend(['-lkqueue', '-ldispatch'])
 
+exit(subprocess.call([shared.PYTHON, shared.EMCC] + args))
