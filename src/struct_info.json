@@ -193,6 +193,15 @@
         }
     },
     {
+        "file": "libc/sys/eventfd.h",
+        "defines": [
+            "EFD_NONBLOCK",
+            "EFD_CLOEXEC"
+        ],
+        "structs": {
+        }
+    },
+    {
         "file": "libc/sys/epoll.h",
         "defines": [
             "EPOLL_CLOEXEC",

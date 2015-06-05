@@ -857,9 +857,7 @@ LibraryManager.library = {
             value.setFromMs(current).add(interval.sec, interval.nsec);
           }
 
-          for(var i = 0; i < 8; i++) {
-            buffer[offset+i] = (ret >> i) & 0xff;
-          }
+          {{{ makeSetValue('offset', 0, 'ret', 'i64') }}};
           return 8;
         },
         poll: function(stream) {
@@ -8257,6 +8255,98 @@ LibraryManager.library = {
     return total;
   },
 
+  // ==========================================================================
+  // sys/event.h
+  // ==========================================================================
+  __EVENTFD_MAX: 0xfffffffffffffffe,
+  eventfd__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', '__EVENTFD_MAX', 'usleep'],
+  eventfd: function(initval, flags) {
+    if (flags & ~{{{ cDefine('EFD_NONBLOCK') }}}) { // TFD_CLOEXEC is not supproted
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    var nonblock = (flags & {{{ cDefine('EFD_NONBLOCK') }}}) != 0;
+    var stream = FS.createStream({
+      eventfd: true,
+      node: {},
+      counter: initval,
+      flags: {{{ cDefine('O_RDWR') }}},
+      nonblock: nonblock,
+      stream_ops: {
+        read: function(stream, buffer, offset, length) {
+          if(length < 8) {
+            ___setErrNo(ERRNO_CODES.EINVAL);
+            return -1;
+          }
+
+          if(stream.nonblock) {
+            if(stream.counter == 0) {
+              ___setErrNo(ERRNO_CODES.EAGAIN);
+              return -1;
+            }
+          } else {
+            while(stream.counter == 0) {
+              _usleep(1000*1000); // enable to interrupt
+            }
+          }
+
+          // TODO lock
+          var counter = stream.counter;
+          {{{ makeSetValue('offset', 0, 'counter', 'i64') }}};
+          stream.counter = 0;
+          // TODO.unlock
+          return 8;
+        },
+        write: function(stream, buffer, offset, length, pos) {
+          if(length < 8) {
+            ___setErrNo(ERRNO_CODES.EINVAL);
+            return -1;
+          }
+          var addition = {{{ makeGetValue('offset', 0, 'i64') }}};
+          console.log(addition);
+
+          if(stream.nonblock) {
+            if(stream.counter + addition > ___EVENTFD_MAX) {
+              ___setErrNo(ERRNO_CODES.EAGAIN);
+              return -1;
+            }
+          } else {
+            while(stream.counter + addition > ___EVENTFD_MAX) {
+              _usleep(1000*1000); // enable to interrupt
+            }
+          }
+
+          stream.counter += addition;
+
+          return 8;
+        },
+        poll: function(stream) {
+          var mask = 0;
+          if(stream.counter > 0) {
+            mask |= {{{ cDefine('POLLRDNORM') }}} | {{{ cDefine('POLLIN') }}};
+          }
+          if(stream.counter != __EVENTFD_MAX) {
+            mask |= {{{ cDefine('POLLOUT') }}};
+          }
+
+          return mask;
+        }
+      }
+    });
+    return stream.fd;
+  },
+
+  eventfd_read__deps: ["read"],
+  eventfd_read: function(fd, val) {
+    return _read(fd, val, 8);
+  },
+
+  eventfd_write__deps: ["write"],
+  eventfd_write: function(fd, val) {
+    var buf = allocate(8, 'i8', ALLOC_STACK);
+    {{{ makeSetValue('buf', 0, 'val', 'i64') }}};
+    return _write(fd, buf, 8);
+  },
   // ==========================================================================
   // sys/epoll.h
   // ==========================================================================
