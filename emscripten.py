@@ -703,6 +703,24 @@ function ftCall_%s(%s) {%s
     %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+      elif item == "_method_invoke":
+        function_tables_impls.append('''
+  function %s(self,method%s) {
+    self=self|0;method=method|0;%s
+    var imp = HEAP32[(method+8)>>2]|0;
+    var sel = HEAP32[(method)>>2]|0;
+    %sdynCall_%s(imp|0,self|0,sel|0%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+      elif item == "_method_invoke_stret":
+        function_tables_impls.append('''
+  function %s(staddr,self,method%s) {
+    staddr=staddr|0;self=self|0;method=method|0;%s
+    var imp = HEAP32[(method+8)>>2]|0;
+    var sel = HEAP32[(method)>>2]|0;
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0,%s);
+  }
+''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
 
 
     def quote(prop):
