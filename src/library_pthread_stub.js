@@ -112,9 +112,15 @@ var LibraryPThreadStub = {
     _pthread_cleanup_push.level = __ATEXIT__.length;
   },
 
-  pthread_rwlock_init: function() {
-    return 0; // XXX
-  },
+  pthread_rwlock_init: function(lock, attr) { return 0; },
+  pthread_rwlock_destroy: function(lock) { return 0; },
+  pthread_rwlock_rdlock: function(lock) { return 0; },
+  pthread_rwlock_tryrdlock: function(lock) { return 0; },
+  pthread_rwlock_timedrdlock: function(lock, timespec) { return 0; },
+  pthread_rwlock_wrlock: function(lock) { return 0; },
+  pthread_rwlock_trywrlock: function(lock) { return 0; },
+  pthread_rwlock_timedwrlock: function(lock, timespec) { return 0; },
+  pthread_rwlock_unlock: function(lock) { return 0; },
 
   pthread_cond_signal: function() {},
   pthread_equal: function() {},
