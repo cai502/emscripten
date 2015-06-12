@@ -2538,6 +2538,67 @@ LibraryManager.library = {
     // http://pubs.opengroup.org/onlinepubs/000095399/functions/gets.html
     return _fgets(s, 1e6, {{{ makeGetValue(makeGlobalUse('_stdin'), '0', 'void*') }}});
   },
+  getdelim__deps: ['realloc', 'fgetc'],
+  getdelim: function(lp, np, delim, stream) {
+#if USE_PTHREADS
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_3({{{ cDefine('EM_PROXIED_GETDELIM') }}}, lp, np, delim, stream);
+#endif
+    if (! stream || ! np || ! lp) {
+      ___setErrNo(ERRNO_CODES.EINVAL);
+      return -1;
+    }
+    var buf = {{{ makeGetValue('lp', '0', 'i32') }}};
+    if (! buf || {{{ makeGetValue('np', '0', 'i32') }}} < 128) {
+      buf = _realloc(buf|0, 128)|0;
+      if (! buf) {
+        return -1;
+      }
+      {{{ makeSetValue('lp', 0, 'buf', 'i8*') }}};
+      {{{ makeSetValue('np', 0, '128', 'i32') }}};
+    }
+    var numbytes = {{{ makeGetValue('np', '0', 'i32') }}};
+    var ptr = buf;
+    var cont = true;
+    while (cont) {
+      while (--numbytes > 0) {
+        var ch = _fgetc(stream);
+        if (ch == -1) {
+          cont = false;
+          break;
+        }
+        {{{ makeSetValue('ptr', '0', 'ch', 'i8') }}};
+        ptr++;
+        if (ch == delim) {
+          cont = false;
+          break;
+        }
+      }
+      if (cont) {
+        var pos = ptr - buf;
+        newsize = ({{{ makeGetValue('np', '0', 'i32') }}} * 2) | 0;
+        buf = _realloc(buf|0, newsize) | 0;
+        if (buf == 0) {
+          cont = false;
+          break;
+        }
+        {{{ makeSetValue('lp', 0, 'buf', 'i8*') }}};
+        {{{ makeSetValue('np', 0, 'newsize', 'i32') }}};
+        ptr = (buf + pos) | 0;
+        numbytes = newsize - pos;
+      }
+    }
+    if (ptr == buf)
+      return -1;
+    {{{ makeSetValue('ptr', 0, '0', 'i8') }}};
+    return (ptr - buf) | 0;
+  },
+  getline__deps: ['getdelim'],
+  getline: function(lp, np, stream) {
+#if USE_PTHREADS
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_3({{{ cDefine('EM_PROXIED_GETDELIM') }}}, lp, np, stream);
+#endif
+    return _getdelim(lp, np, {{{ charCode('\n') }}}, stream);
+  },
   fileno: function(stream) {
 #if USE_PTHREADS
     if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_1({{{ cDefine('EM_PROXIED_FILENO') }}}, stream);
