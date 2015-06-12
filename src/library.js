@@ -2450,6 +2450,11 @@ LibraryManager.library = {
     }
     */
   },
+  __fpurge__deps: ['$FS'],
+  __fpurge: function (stream) {
+    var streamObj = FS.getStreamFromPtr(stream);
+    streamObj.ungotten.length = 0;
+  },
   fgetc__deps: ['$FS', 'fread'],
 #if USE_PTHREADS
   fgetc__postset: 'if (ENVIRONMENT_IS_PTHREAD) _fgetc.ret = PthreadWorkerInit._fgetc_ret; else PthreadWorkerInit._fgetc_ret = _fgetc.ret = allocate([0], "i8", ALLOC_STATIC);',
