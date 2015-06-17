@@ -785,8 +785,9 @@ LibraryManager.library = {
   timerfd_create__deps: ['$FS', 'emscripten_get_now', 'emscripten_get_now_is_monotonic', '__setErrNo', '$ERRNO_CODES', 'usleep'],
   timerfd_create: function(clockid, flags) {
 #if USE_PTHREADS
-    // TODO exec on main thread
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_2({{{ cDefine('EM_PROXIED_TIMERFD_CREATE') }}}, clockid, flags);
 #endif
+
     var realtime;
     if (clockid === {{{ cDefine('CLOCK_REALTIME') }}}) {
       realtime = true;
@@ -883,8 +884,9 @@ LibraryManager.library = {
   timerfd_settime__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', 'timerfd_gettime'],
   timerfd_settime: function(fd, flags, new_value, old_value) {
 #if USE_PTHREADS
-    // TODO exec on main thread
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_4({{{ cDefine('EM_PROXIED_TIMERFD_SETTIME') }}}, fd, flags, new_value, old_value);
 #endif
+
     var stream = FS.getStream(fd);
     if(!stream) {
       ___setErrNo(ERRNO_CODES.EBADF);
@@ -917,13 +919,15 @@ LibraryManager.library = {
 
     sec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_sec, 'i32') }}};
     nsec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_nsec, 'i32') }}};
+      console.log(sec, nsec);
     stream.interval.set(sec, nsec);
   },
   timerfd_gettime__deps: ['$FS', 'emscripten_get_now', '__setErrNo', '$ERRNO_CODES'],
   timerfd_gettime: function(fd, curr_value) {
 #if USE_PTHREADS
-    // TODO exec on main thread
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_4({{{ cDefine('EM_PROXIED_TIMERFD_GETTIME') }}}, fd, curr_value);
 #endif
+
     var stream = FS.getStream(fd);
     if(!stream) {
       ___setErrNo(ERRNO_CODES.EBADF);
@@ -8261,6 +8265,10 @@ LibraryManager.library = {
   __EVENTFD_MAX: 0xfffffffffffffffe,
   eventfd__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', '__EVENTFD_MAX', 'usleep'],
   eventfd: function(initval, flags) {
+#if USE_PTHREADS
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_2({{{ cDefine('EM_PROXIED_EVENTFD') }}}, initval, flags);
+#endif
+
     if (flags & ~{{{ cDefine('EFD_NONBLOCK') }}}) { // TFD_CLOEXEC is not supproted
       ___setErrNo(ERRNO_CODES.EINVAL);
       return -1;
@@ -8325,7 +8333,7 @@ LibraryManager.library = {
           if(stream.counter > 0) {
             mask |= {{{ cDefine('POLLRDNORM') }}} | {{{ cDefine('POLLIN') }}};
           }
-          if(stream.counter != __EVENTFD_MAX) {
+          if(stream.counter != ___EVENTFD_MAX) {
             mask |= {{{ cDefine('POLLOUT') }}};
           }
 
@@ -8357,6 +8365,10 @@ LibraryManager.library = {
 
   epoll_create1__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
   epoll_create1: function(flags) {
+#if USE_PTHREADS
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_1({{{ cDefine('EM_PROXIED_EPOLL_CREATE1') }}}, flags);
+#endif
+
     if(flags != 0) { // EPOLL_CLOEXEC not supported
       ___setErrNo(ERRNO_CODES.EINVAL);
       return -1;
@@ -8373,6 +8385,10 @@ LibraryManager.library = {
 
   epoll_ctl__deps: ['$FS', '__setErrNo', '$ERRNO_CODES'],
   epoll_ctl: function(epfd, op, fd, event) {
+#if USE_PTHREADS
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_4({{{ cDefine('EM_PROXIED_EPOLL_CTL') }}}, epfd, op, fd, event);
+#endif
+
     var stream = FS.getStream(epfd);
     if(!stream) {
       ___setErrNo(ERRNO_CODES.EBADF);
@@ -8418,6 +8434,10 @@ LibraryManager.library = {
 
   epoll_pwait__deps: ['$FS', '__setErrNo', '$ERRNO_CODES', 'usleep'],
   epoll_pwait: function(epfd, event, maxevents, timeout, sigs) {
+#if USE_PTHREADS
+    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_5({{{ cDefine('EM_PROXIED_EPOLL_PWAIT') }}}, epfd, event, maxevents, timeout, sigs);
+#endif
+
     // epoll? No, this is almost poll
     var epstream = FS.getStream(epfd);
     if(!epstream) {

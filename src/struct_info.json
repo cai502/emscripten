@@ -1582,7 +1582,14 @@
             "EM_PROXIED_SENDTO",
             "EM_PROXIED_RECVFROM",
             "EM_PROXIED_GETSOCKOPT",
-            "EM_PROXIED_PTHREAD_CREATE"
+            "EM_PROXIED_PTHREAD_CREATE",
+            "EM_PROXIED_EPOLL_CREATE1",
+            "EM_PROXIED_EPOLL_CTL",
+            "EM_PROXIED_EPOLL_PWAIT",
+            "EM_PROXIED_EVENTFD",
+            "EM_PROXIED_TIMERFD_CREATE",
+            "EM_PROXIED_TIMERFD_SETTIME",
+            "EM_PROXIED_TIMERFD_GETTIME"
             ]
     },
     {
