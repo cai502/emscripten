@@ -909,17 +909,16 @@ LibraryManager.library = {
 
     var current = stream.realtime ? Date.now() : _emscripten_get_now();
     var sec, nsec;
-    sec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_value.tv_sec, 'i32') }}};
-    nsec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_value.tv_nsec, 'i32') }}};
+    sec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_value.tv_sec, 'i32', 0, 1) }}};
+    nsec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_value.tv_nsec, 'i32', 0, 1) }}};
     if(flags & {{{ cDefine('TFD_TIMER_ABSTIME') }}}) {
       stream.value.set(sec, nsec);
     } else {
       stream.value.setFromMs(current).add(sec, nsec);
     }
 
-    sec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_sec, 'i32') }}};
-    nsec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_nsec, 'i32') }}};
-      console.log(sec, nsec);
+    sec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_sec, 'i32', 0, 1) }}};
+    nsec = {{{ makeGetValue('new_value', C_STRUCTS.itimerspec.it_interval.tv_nsec, 'i32', 0, 1) }}};
     stream.interval.set(sec, nsec);
   },
   timerfd_gettime__deps: ['$FS', 'emscripten_get_now', '__setErrNo', '$ERRNO_CODES'],
@@ -967,10 +966,10 @@ LibraryManager.library = {
       }
     }
 
-    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_value.tv_sec, 'value_sec', 'i32') }}};
-    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_value.tv_nsec, 'value_nsec', 'i32') }}};
-    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_interval.tv_sec, 'interval.sec', 'i32') }}};
-    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_interval.tv_nsec, 'interval.nsec', 'i32') }}};
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_value.tv_sec, 'value_sec', 'i32', 0, 1) }}};
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_value.tv_nsec, 'value_nsec', 'i32', 0, 1) }}};
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_interval.tv_sec, 'interval.sec', 'i32', 0, 1) }}};
+    {{{ makeSetValue('curr_value', C_STRUCTS.itimerspec.it_interval.tv_nsec, 'interval.nsec', 'i32', 0, 1) }}};
   },
 
   // ==========================================================================
