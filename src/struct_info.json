@@ -1528,6 +1528,7 @@
             "EM_PROXIED_GETCHAR",
             "EM_PROXIED_FGETPOS",
             "EM_PROXIED_GETS",
+            "EM_PROXIED_GETDELIM",
             "EM_PROXIED_FILENO",
             "EM_PROXIED_FPUTC",
             "EM_PROXIED_PUTCHAR",

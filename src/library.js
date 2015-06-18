@@ -2602,9 +2602,6 @@ LibraryManager.library = {
   },
   getline__deps: ['getdelim'],
   getline: function(lp, np, stream) {
-#if USE_PTHREADS
-    if (ENVIRONMENT_IS_PTHREAD) return _emscripten_sync_run_in_main_thread_3({{{ cDefine('EM_PROXIED_GETDELIM') }}}, lp, np, stream);
-#endif
     return _getdelim(lp, np, {{{ charCode('\n') }}}, stream);
   },
   fileno: function(stream) {

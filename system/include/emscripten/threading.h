@@ -251,6 +251,7 @@ void emscripten_main_thread_process_queued_calls();
 #define EM_PROXIED_TIMERFD_CREATE 10005
 #define EM_PROXIED_TIMERFD_SETTIME 10006
 #define EM_PROXIED_TIMERFD_GETTIME 10007
+#define EM_PROXIED_GETDELIM 10008
 
 #ifdef __cplusplus
 }
