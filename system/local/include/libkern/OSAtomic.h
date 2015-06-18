@@ -26,42 +26,42 @@ static __inline bool OSAtomicCompareAndSwap32Barrier(int32_t oldl, int32_t newl,
 
 static __inline int32_t OSAtomicDecrement32(volatile int32_t *dst)
 {
-  return __sync_fetch_and_sub(dst, 1) - 1;
+  return __sync_sub_and_fetch(dst, 1);
 }
 
 static __inline int32_t OSAtomicDecrement32Barrier(volatile int32_t *dst)
 {
-  return __sync_fetch_and_sub(dst, 1) - 1;
+  return __sync_sub_and_fetch(dst, 1);
 }
 
 static __inline int32_t OSAtomicIncrement32(volatile int32_t *dst)
 {
-  return __sync_fetch_and_add(dst, 1) + 1;
+  return __sync_add_and_fetch(dst, 1);
 }
 
 static __inline int32_t OSAtomicIncrement32Barrier(volatile int32_t *dst)
 {
-  return __sync_fetch_and_add(dst, 1) + 1;
+  return __sync_add_and_fetch(dst, 1);
 }
 
 static __inline int32_t OSAtomicOr32(uint32_t theMask, volatile uint32_t *theValue)
 {
-  return __sync_fetch_and_or(theValue, theMask) | theMask;
+  return __sync_or_and_fetch(theValue, theMask);
 }
 
 static __inline int32_t OSAtomicOr32Barrier(uint32_t theMask, volatile uint32_t *theValue)
 {
-  return __sync_fetch_and_or(theValue, theMask) | theMask;
+  return __sync_or_and_fetch(theValue, theMask);
 }
 
 static __inline int32_t OSAtomicXor32(uint32_t theMask, volatile uint32_t *theValue)
 {
-  return __sync_fetch_and_xor(theValue, theMask) ^ theMask;
+  return __sync_xor_and_fetch(theValue, theMask);
 }
 
 static __inline int32_t OSAtomicXor32Barrier(uint32_t theMask, volatile uint32_t *theValue)
 {
-  return __sync_fetch_and_xor(theValue, theMask) ^ theMask;
+  return __sync_xor_and_fetch(theValue, theMask);
 }
 
 static __inline void OSMemoryBarrier() {
