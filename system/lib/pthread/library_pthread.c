@@ -20,6 +20,9 @@
 #include <sys/ioctl.h>
 #include "../internal/pthread_impl.h"
 #include <assert.h>
+#include <sys/epoll.h>
+#include <sys/timerfd.h>
+#include <sys/eventfd.h>
 
 // With LLVM 3.6, C11 is the default compilation mode.
 // gets() is deprecated under that standard, but emcc
@@ -389,6 +392,14 @@ static void _do_call(em_queued_call *q)
 		case EM_PROXIED_RECVFROM: q->returnValue.i = recvfrom(q->args[0].i, q->args[1].vp, q->args[2].i, q->args[3].i, q->args[4].vp, q->args[5].vp); break;
 		case EM_PROXIED_GETSOCKOPT: q->returnValue.i = getsockopt(q->args[0].i, q->args[1].i, q->args[2].i, q->args[3].vp, q->args[4].vp); break;
 		case EM_PROXIED_PTHREAD_CREATE: q->returnValue.i = pthread_create(q->args[0].vp, q->args[1].vp, q->args[2].vp, q->args[3].vp); break;
+		case EM_PROXIED_EPOLL_CREATE1: q->returnValue.i = epoll_create1(q->args[0].i); break;
+		case EM_PROXIED_EPOLL_CTL: q->returnValue.i = epoll_ctl(q->args[0].i, q->args[1].i, q->args[2].i, q->args[3].vp); break;
+		case EM_PROXIED_EPOLL_PWAIT: q->returnValue.i = epoll_pwait(q->args[0].i, q->args[1].vp, q->args[2].i, q->args[3].i, q->args[4].vp); break;
+		case EM_PROXIED_EVENTFD: q->returnValue.i = eventfd(q->args[0].i, q->args[1].i); break;
+		case EM_PROXIED_TIMERFD_CREATE: q->returnValue.i = timerfd_create(q->args[0].i, q->args[1].i); break;
+		case EM_PROXIED_TIMERFD_SETTIME: q->returnValue.i = timerfd_settime(q->args[0].i, q->args[1].i, q->args[2].vp, q->args[3].vp); break;
+		case EM_PROXIED_TIMERFD_GETTIME: q->returnValue.i = timerfd_gettime(q->args[0].i, q->args[1].vp); break;
+		case EM_PROXIED_GETDELIM: q->returnValue.i = getdelim(q->args[0].vp, q->args[1].vp, q->args[2].i, q->args[3].vp); break;
 		default: assert(0 && "Invalid Emscripten pthread _do_call opcode!");
 	}
 	q->operationDone = 1;
