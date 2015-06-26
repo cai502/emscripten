@@ -73,18 +73,18 @@ static __inline void OSMemoryBarrier() {
 typedef int32_t OSSpinLock;
 #define OS_SPINLOCK_INIT 0
 
-inline void OSSpinLockLock(volatile OSSpinLock *lock) {
+static inline void OSSpinLockLock(volatile OSSpinLock *lock) {
 	while (__sync_val_compare_and_swap(lock, 0, ~0) != 0) {
 		sleep(0);
 	}
 }
 
-inline void OSSpinLockUnlock(volatile OSSpinLock *lock) {
+static inline void OSSpinLockUnlock(volatile OSSpinLock *lock) {
 	__sync_synchronize();
 	*lock = 0;
 }
 
-inline bool OSSpinLockTry(volatile OSSpinLock *lock) {
+static inline bool OSSpinLockTry(volatile OSSpinLock *lock) {
 	return (__sync_val_compare_and_swap(lock, 0, ~0) == 0);
 }
 
