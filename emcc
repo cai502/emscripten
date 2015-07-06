@@ -871,6 +871,8 @@ try:
       if filename_type_ending(input_file) in DYNAMICLIB_ENDINGS:
         if not ignore_dynamic_linking: logging.warning('ignoring dynamic library %s because not compiling to JS or HTML, remember to link it when compiling to JS or HTML at the end', os.path.basename(input_file))
         return False
+      elif not filename_type_ending(input_file) in SOURCE_ENDINGS:
+        return False
       else:
         return True
     input_files = [(i, input_file) for (i, input_file) in input_files if check(input_file)]
