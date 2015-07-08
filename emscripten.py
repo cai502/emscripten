@@ -627,9 +627,11 @@ function ftCall_%s(%s) {%s
         function_tables_impls.append('''
   function %s(self,sel%s) {
     self=self|0; sel=sel|0;%s
+    var cls = 0|0;
+    var imp = 0|0;
     if(!self) return%s;
-    var cls = HEAP32[(self+0)>>2]|0;
-    var imp = _cache_getImp(cls|0, sel|0)|0;
+    cls = HEAP32[(self+0)>>2]|0;
+    imp = _cache_getImp(cls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
@@ -640,9 +642,11 @@ function ftCall_%s(%s) {%s
         function_tables_impls.append('''
   function %s(staddr,self,sel%s) {
     staddr=staddr|0;self=self|0; sel=sel|0;%s
+    var cls = 0|0;
+    var imp = 0|0;
     if(!self) return%s;
-    var cls = HEAP32[(self+0)>>2]|0;
-    var imp = _cache_getImp(cls|0, sel|0)|0;
+    cls = HEAP32[(self+0)>>2]|0;
+    imp = _cache_getImp(cls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
