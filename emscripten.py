@@ -627,98 +627,106 @@ function ftCall_%s(%s) {%s
         function_tables_impls.append('''
   function %s(self,sel%s) {
     self=self|0; sel=sel|0;%s
+    var cls = 0, imp = 0;
     if(!self) return%s;
-    var cls = HEAP32[(self+0)>>2]|0;
-    var imp = _cache_getImp(cls|0, sel|0)|0;
+    cls = HEAP32[(self+0)>>2]|0;
+    imp = _cache_getImp(cls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s);
+    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSend_stret":
         function_tables_impls.append('''
   function %s(staddr,self,sel%s) {
     staddr=staddr|0;self=self|0; sel=sel|0;%s
+    var cls = 0, imp = 0;
     if(!self) return%s;
-    var cls = HEAP32[(self+0)>>2]|0;
-    var imp = _cache_getImp(cls|0, sel|0)|0;
+    cls = HEAP32[(self+0)>>2]|0;
+    imp = _cache_getImp(cls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSendSuper":
         function_tables_impls.append('''
   function %s(objcSuper,sel%s) {
     objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = HEAP32[(objcSuper+0)>>2]|0;
-    var superCls = HEAP32[(objcSuper+4)>>2]|0;
-    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    var self = 0, superCls = 0, imp = 0;
+    self = HEAP32[(objcSuper+0)>>2]|0;
+    superCls = HEAP32[(objcSuper+4)>>2]|0;
+    imp = _cache_getImp(superCls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s);
+    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSendSuper_stret":
         function_tables_impls.append('''
   function %s(staddr,objcSuper,sel%s) {
     staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = HEAP32[(objcSuper+0)>>2]|0;
-    var superCls = HEAP32[(objcSuper+4)>>2]|0;
-    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    var self = 0, superCls = 0, imp = 0;
+    self = HEAP32[(objcSuper+0)>>2]|0;
+    superCls = HEAP32[(objcSuper+4)>>2]|0;
+    imp = _cache_getImp(superCls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSendSuper2":
         function_tables_impls.append('''
   function %s(objcSuper,sel%s) {
     objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = HEAP32[(objcSuper+0)>>2]|0;
-    var cls = HEAP32[(objcSuper+4)>>2]|0;
-    var superCls = HEAP32[(cls+4)>>2]|0;
-    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    var self = 0, cls = 0, superCls = 0, imp = 0;
+    self = HEAP32[(objcSuper+0)>>2]|0;
+    cls = HEAP32[(objcSuper+4)>>2]|0;
+    superCls = HEAP32[(cls+4)>>2]|0;
+    imp = _cache_getImp(superCls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s);
+    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
       elif item == "_objc_msgSendSuper2_stret":
         function_tables_impls.append('''
   function %s(staddr,objcSuper,sel%s) {
     staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = HEAP32[(objcSuper+0)>>2]|0;
-    var cls = HEAP32[(objcSuper+4)>>2]|0;
-    var superCls = HEAP32[(cls+4)>>2]|0;
-    var imp = _cache_getImp(superCls|0, sel|0)|0;
+    var self = 0|0, cls = 0|0, superCls = 0|0, imp = 0|0;
+    self = HEAP32[(objcSuper+0)>>2]|0;
+    cls = HEAP32[(objcSuper+4)>>2]|0;
+    superCls = HEAP32[(cls+4)>>2]|0;
+    imp = _cache_getImp(superCls|0, sel|0)|0;
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
       elif item == "_method_invoke":
         function_tables_impls.append('''
   function %s(self,method%s) {
     self=self|0;method=method|0;%s
-    var imp = HEAP32[(method+8)>>2]|0;
-    var sel = HEAP32[(method)>>2]|0;
-    %sdynCall_%s(imp|0,self|0,sel|0%s);
+    var imp = 0, sel = 0;
+    imp = HEAP32[(method+8)>>2]|0;
+    sel = HEAP32[(method)>>2]|0;
+    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
       elif item == "_method_invoke_stret":
         function_tables_impls.append('''
   function %s(staddr,self,method%s) {
     staddr=staddr|0;self=self|0;method=method|0;%s
-    var imp = HEAP32[(method+8)>>2]|0;
-    var sel = HEAP32[(method)>>2]|0;
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s);
+    var imp = 0, sel = 0;
+    imp = HEAP32[(method+8)>>2]|0;
+    sel = HEAP32[(method)>>2]|0;
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
   }
 ''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
 
