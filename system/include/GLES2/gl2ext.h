@@ -262,6 +262,8 @@ typedef void* GLeglImageOES;
 #define GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE_IMG               0x9134
 #define GL_MAX_SAMPLES_IMG                                      0x9135
 #define GL_TEXTURE_SAMPLES_IMG                                  0x9136
+
+#define GL_MAX_SAMPLES_APPLE                                    0x9135
 #endif
 
 /*------------------------------------------------------------------------*
