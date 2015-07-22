@@ -400,6 +400,7 @@
                 "p_proto"
             ], 
             "sockaddr_in": [
+                "sin_len",
                 "sin_family", 
                 "sin_port", 
                 {
@@ -419,6 +420,7 @@
                 "cmsg_type"
             ], 
             "sockaddr_in6": [
+                "sin6_len",
                 "sin6_family", 
                 "sin6_port", 
                 "sin6_flowinfo", 
