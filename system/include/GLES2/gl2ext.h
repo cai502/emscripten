@@ -201,6 +201,7 @@ typedef void* GLeglImageOES;
 
 /* GL_EXT_read_format_bgra */
 #ifndef GL_EXT_read_format_bgra
+#define GL_BGRA                                                 0x80E1
 #define GL_BGRA_EXT                                             0x80E1
 #define GL_UNSIGNED_SHORT_4_4_4_4_REV_EXT                       0x8365
 #define GL_UNSIGNED_SHORT_1_5_5_5_REV_EXT                       0x8366
