@@ -2,3 +2,6 @@ Block*.h
 objc
 dispatch
 unicode
+bsd
+kqueue
+pthread_workqueue.h
