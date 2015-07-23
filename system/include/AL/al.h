@@ -165,6 +165,8 @@ extern void alSourcei(ALuint source, ALenum param, ALint value);
 extern void alSourceiv(ALuint source, ALenum param, const ALint *values);
 extern void alSpeedOfSound(ALfloat value);
 
+#define AL_APIENTRY
+
 #ifdef __cplusplus
 }
 #endif
