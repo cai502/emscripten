@@ -325,3 +325,5 @@
          T shm_open
          T shm_unlink
          T ctanl
+         T NSStartSearchPathEnumeration
+         T NSGetNextSearchPathEnumeration

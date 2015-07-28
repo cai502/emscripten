@@ -584,7 +584,10 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
          'wmemcpy.c',
          'wmemmove.c',
          'wmemset.c',
-       ]]
+      ]],
+      ['mac', [
+       'NSSystemDirectories.c'
+      ]]
     ]
     libcextra_files = []
     for directory, sources in musl_files:
