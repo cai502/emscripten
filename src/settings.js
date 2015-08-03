@@ -280,6 +280,8 @@ var NO_BROWSER = 0; // If set, disables building in browser support using the Br
                     // just doing pure computation in a library, and don't need any browser capabilities like a main loop
                     // (emscripten_set_main_loop), or setTimeout, etc.
 
+var NATIVE_LIBDISPATCH = 0;
+
 var NODE_STDOUT_FLUSH_WORKAROUND = 1; // Whether or not to work around node issues with not flushing stdout. This
                                       // can cause unnecessary whitespace to be printed.
 

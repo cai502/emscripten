@@ -134,6 +134,12 @@ var LibraryManager = {
       'library_vr.js'
     ]).concat(additionalLibraries);
 
+    if(NATIVE_LIBDISPATCH) {
+      libraries = libraries.concat([
+        'library_dispatch.js'
+      ]);
+    }
+
     if (BOOTSTRAPPING_STRUCT_INFO) libraries = ['library_bootstrap_structInfo.js', 'library_formatString.js'];
 
     for (var i = 0; i < libraries.length; i++) {
