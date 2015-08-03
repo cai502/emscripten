@@ -28,7 +28,19 @@ var LibraryDispatch = {
             DISPATCH.queueList[queue].queue.push({ctx:ctx, func:func});
         },
         sync: function(queue, ctx, func) {
-            throw "unimplemented";
+            var currentQueue = DISPATCH.currentQueue;
+            if(currentQueue != queue) {
+                DISPATCH.currentQueue = queue;
+                var q = DISPATCH.queueList[queue];
+                while(q.queue.length > 0) {
+                    var task = q.queue.shift();
+                    dynCall_vi(task.func, task.ctx);
+                }
+                DISPATCH.currentQueue = currentQueue;
+            } else {
+                throw new Error("dead lock!");
+                // dynCall_vi(func, ctx);
+            }
         },
         create: function(label, attr) {
             var queue = DISPATCH.queueMax++;
@@ -51,7 +63,7 @@ var LibraryDispatch = {
             return q.labelBuf;
         },
         setTargetQueue: function(obj, queue) {
-            throw "unimplemented";
+            throw new Error("unimplemented");
         },
         getSpecific: function(queue, key) {
             return DISPATCH.queueList[queue].tsd[key];
