@@ -12,7 +12,6 @@ args = [
     '-s', 'DEMANGLE_SUPPORT=1',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
     '-s', 'USE_ZLIB=1',
-    '-s', 'NATIVE_LIBDISPATCH=1',
     '-framework', 'Foundation',
     '-framework', 'CoreFoundation',
     '-framework', 'CFNetwork',
