@@ -2,89 +2,95 @@ var LibraryDispatch = {
     $DISPATCH__deps: [],
     $DISPATCH__postset: "DISPATCH.init();",
     $DISPATCH: {
-        currentQueue: 1,
+        currentQueueId: 0,
         queueList: [],
-        queueMax: 0,
+        queueIdNext: 0,
         init: function() {
-            // 0: reserved
-            // 1: main
-            // 2,4,6,8: high -> background
-            // 3,5,7,9: high -> background (overcommit)
-            for(var i = 0; i < 10; i++) {
+            // 0: main
+            // 1: background
+            for(var i = 0; i < 2; i++) {
                 DISPATCH.queueList[i] = {
                     label: "queueList"+i,
                     labelBuf: null,
                     target: null,
-                    concurrent: i%2 == 0,
                     suspend: false,
-                    queue: [],
+                    tasks: [],
                     tsd: {},
                     tsdDtor: {},
                 };
             }
-            queueMax = i;
+            queueIdNext = i;
         },
-        async: function(queue, ctx, func) {
-            DISPATCH.queueList[queue].queue.push({ctx:ctx, func:func});
+        pointerToQueueId : function(qp) {
+            return {{{ makeGetValue('qp', 0, 'i32') }}};;
         },
-        sync: function(queue, ctx, func) {
-            var currentQueue = DISPATCH.currentQueue;
-            if(currentQueue != queue) {
-                DISPATCH.currentQueue = queue;
-                var q = DISPATCH.queueList[queue];
-                while(q.queue.length > 0) {
-                    var task = q.queue.shift();
+        getQueue: function(qp) {
+            return DISPATCH.queueList[DISPATCH.pointerToQueueId(qp)];
+        },
+        async: function(qp, ctx, func) {
+            DISPATCH.getQueue(qp).tasks.push({ctx:ctx, func:func});
+        },
+        sync: function(qp, ctx, func) {
+            var currentQueueId = DISPATCH.currentQueueId;
+            var queueId = DISPATCH.pointerToQueueId(qp);
+            if(currentQueueId != queueId) {
+                DISPATCH.currentQueueId = queueId;
+                var queue = DISPATCH.queueList[queueId];
+                while(queue.tasks.length > 0) {
+                    var task = queue.tasks.shift();
                     dynCall_vi(task.func, task.ctx);
                 }
-                DISPATCH.currentQueue = currentQueue;
+                DISPATCH.currentQueueId = currentQueueId;
             } else {
                 throw new Error("dead lock!");
                 // dynCall_vi(func, ctx);
             }
         },
-        create: function(label, attr) {
-            var queue = DISPATCH.queueMax++;
-            DISPATCH.queueList[queue] = {
+        queueCreate: function(label) {
+            var queueId = DISPATCH.queueIdNext++;
+            DISPATCH.queueList[queueId] = {
                 label: Pointer_stringify(label),
                 labelBuf: null,
-                target: 4, // low priority
-                conccurent: attr == 0,
+                target: 1, // background
                 suspend: false,
-                queue: []
+                tasks: []
             };
-            return queue;
+            return queueId;
         },
-        getLabel: function(queue) {
-            var q = DISPATCH.queueList[queue];
-            if(!q.labelBuf) {
-                q.labelBuf = _malloc(q.label.length+1);
-                writeAsciiToMemory(q.label, q.labelBuf);
+        getLabel: function(qp) {
+            var queue = DISPATCH.getQueue(qp);
+            if(!queue.labelBuf) {
+                queue.labelBuf = _malloc(queue.label.length+1);
+                writeAsciiToMemory(queue.label, queue.labelBuf);
             }
-            return q.labelBuf;
+            return queue.labelBuf;
         },
         setTargetQueue: function(obj, queue) {
             throw new Error("unimplemented");
         },
-        getSpecific: function(queue, key) {
-            return DISPATCH.queueList[queue].tsd[key];
+        getSpecific: function(qp, key) {
+            return DISPATCH.getQueue(qp).tsd[key];
         },
-        setSpecific: function(queue, key, value, dtor) {
-            var prevValue = DISPATCH.queueList[queue].tsdDtor[key];
-            var prevDtor = DISPATCH.queueList[queue].tsdDtor[key];
+        setSpecific: function(qp, key, value, dtor) {
+            var queue = DISPATCH.getQueue(qp);
+
+            var prevValue = queue.tsd[key];
+            var prevDtor = queue.tsdDtor[key];
+
             if(prevValue && prevDtor) {
                 dynCall_vi(prevDtor, prevValue);
             }
 
-            DISPATCH.queueList[queue].tsd[key] = value;
-            DISPATCH.queueList[queue].tsdDtor[key] = dtor;
+            queue.tsd[key] = value;
+            queue.tsdDtor[key] = dtor;
         },
         selectNextQueue: function() {
             var queue;
             var queueList = DISPATCH.queueList;
             for(var i = 0; i < queueList.length; i++) {
                 var queue = queueList[i];
-                if(!queue.suspend && queue.queue.length > 0) {
-                    DISPATCH.currentQueue = i;
+                if(!queue.suspend && queue.tasks.length > 0) {
+                    DISPATCH.currentQueueId = i;
                     return queue;
                 }
             }
@@ -93,7 +99,7 @@ var LibraryDispatch = {
         handleQueue: function() {
             var queue = DISPATCH.selectNextQueue();
             if(!queue) return;
-            var task = queue.queue.shift();
+            var task = queue.tasks.shift();
             dynCall_vi(task.func, task.ctx);
         }
     },
@@ -104,11 +110,11 @@ var LibraryDispatch = {
     dispatch_sync_f: function(queue, ctx, func) {
         DISPATCH.sync(queue, ctx, func);
     },
-    dispatch_get_current_queue: function() {
-        return DISPATCH.currentQueue;
+    _dispatch_get_current_queue_id: function() {
+        return DISPATCH.currentQueueId;
     },
-    dispatch_queue_create: function(label, attr) {
-        return DISPATCH.queueCreate(label, attr);
+    _dispatch_queue_create_internal: function(label) {
+        return DISPATCH.queueCreate(label);
     },
     dispatch_queue_get_label: function() {
         return DISPATCH.getLabel(queue);
