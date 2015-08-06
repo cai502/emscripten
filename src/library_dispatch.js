@@ -4,7 +4,9 @@ var LibraryDispatch = {
     $DISPATCH: {
         currentQueueId: 0,
         queueList: [],
+        sourceList: [],
         queueIdNext: 0,
+        sourceIdNext: 0,
         init: function() {
             // 0: main
             // 1: background
@@ -19,20 +21,31 @@ var LibraryDispatch = {
                     tsdDtor: {},
                 };
             }
-            queueIdNext = i;
+            DISPATCH.queueIdNext = i;
         },
-        pointerToQueueId : function(qp) {
-            return {{{ makeGetValue('qp', 0, 'i32') }}};;
+        SourceType: {
+            Timer: 1
+        },
+        pointerToId: function(pointer) {
+            return {{{ makeGetValue('pointer', 0, 'i32') }}};
         },
         getQueue: function(qp) {
-            return DISPATCH.queueList[DISPATCH.pointerToQueueId(qp)];
+            return DISPATCH.queueList[DISPATCH.pointerToId(qp)];
+        },
+        getSource: function(sp) {
+            return DISPATCH.sourceList[DISPATCH.pointerToId(sp)];
+        },
+        nanoSec2MilliSec: function(low, high) {
+            if(low < 0) low += 0x100000000;
+            if(high < 0) high += 0x100000000;
+            return (low/1000000 + (high * (0x100000000 /1000000)))|0;
         },
         async: function(qp, ctx, func) {
             DISPATCH.getQueue(qp).tasks.push({ctx:ctx, func:func});
         },
         sync: function(qp, ctx, func) {
             var currentQueueId = DISPATCH.currentQueueId;
-            var queueId = DISPATCH.pointerToQueueId(qp);
+            var queueId = DISPATCH.pointerToId(qp);
             if(currentQueueId != queueId) {
                 DISPATCH.currentQueueId = queueId;
                 var queue = DISPATCH.queueList[queueId];
@@ -101,6 +114,48 @@ var LibraryDispatch = {
             if(!queue) return;
             var task = queue.tasks.shift();
             dynCall_vi(task.func, task.ctx);
+        },
+        sourceCreate: function(type, handle, mask, qp) {
+            var sourceId = DISPATCH.sourceIdNext++;
+            DISPATCH.sourceList[sourceId] = {
+                type: type,
+                handle: handle,
+                mask: mask,
+                queueId: DISPATCH.pointerToId(qp)
+            };
+            return sourceId;
+        },
+        sourceSetTimer: function(sp, start, interval, leeway) {
+            var source = DISPATCH.getSource(sp);
+            if(source.type != DISPATCH.SourceType.Timer) throw new Error("not a timer source");
+            source.start = start;
+            source.interval = interval;
+
+            var queueing = function(source) {
+                var event = source.event;
+                var queue = DISPATCH.queueList[source.queueId];
+                queue.tasks.push({ctx: event.ctx, func: event.func});
+                if(source.interval) {
+                    source.timeoutId = setTimeout(queueing, source.interval, source);
+                }
+            };
+            source.timeoutId = setTimeout(queueing, start - _emscripten_get_now(), source);
+        },
+        sourceSetEventHandler: function(sp, ctx, func, dtor) {
+            var source = DISPATCH.getSource(sp);
+            source.event = {ctx: ctx, func:func, dtor:dtor}; 
+        },
+        sourceSetCancelHandler: function(sp, ctx, func, dtor) {
+            var source = DISPATCH.getSource(sp);
+            source.cancel = {ctx: ctx, func:func, dtor:dtor}; 
+        },
+        sourceCancel: function(sp) {
+            var source = DISPATCH.getSource(sp);
+            clearTimeout(source.timeoutId); 
+            var cancel = source.cancel;
+            if(cancel) {
+                dynCall_vi(cancel.func, cancel.ctx);  // should call async?   
+            }
         }
     },
 
@@ -136,8 +191,26 @@ var LibraryDispatch = {
     },
     _dispatch_em_handle_queue: function() {
         DISPATCH.handleQueue(); 
+    },
+    _dispatch_source_create_internal: function(type, handle, mask, queue) {
+        return DISPATCH.sourceCreate(type, handle, mask, queue);
+    },
+    dispatch_source_set_timer: function(source, start_low, start_high, interval_low, interval_high, leeway_low, leeway_high) {
+        DISPATCH.sourceSetTimer(source,
+                DISPATCH.nanoSec2MilliSec(start_low, start_high),
+                DISPATCH.nanoSec2MilliSec(interval_low, interval_high),
+                DISPATCH.nanoSec2MilliSec(leeway_low, leeway_high)
+        );
+    },
+    _dispatch_source_set_event_handler_internal: function(source, ctx, func, dtor) {
+        DISPATCH.sourceSetEventHandler(source, ctx, func, dtor);
+    },
+    _dispatch_source_set_cancel_handler_internal: function(source, ctx, func, dtor) {
+        DISPATCH.sourceSetCancelHandler(source, ctx, func, dtor);
+    },
+    dispatch_source_cancel: function(source) {
+        DISPATCH.sourceCancel(source);
     }
-
 };
 
 autoAddDeps(LibraryDispatch, '$DISPATCH');
