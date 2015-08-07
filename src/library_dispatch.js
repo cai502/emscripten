@@ -27,7 +27,7 @@ var LibraryDispatch = {
             Timer: 1
         },
         pointerToId: function(pointer) {
-            return {{{ makeGetValue('pointer', 0, 'i32') }}};
+            return {{{ makeGetValue('pointer', 4, 'i32') }}};
         },
         getQueue: function(qp) {
             return DISPATCH.queueList[DISPATCH.pointerToId(qp)];
