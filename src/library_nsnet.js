@@ -5,6 +5,7 @@ var NSNetwork = {
         xhrs: {}
     },
     _xhr_create: function() {
+        if(typeof XMLHttpRequest === "undefined" && ENVIRONMENT_IS_NODE) XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
         var id = NSNetwork.nextId++;
         NSNetwork.xhrs[id] = new XMLHttpRequest();
     },
@@ -45,7 +46,6 @@ var NSNetwork = {
         var xhr = NSNetwork.xhrs[id];
         var responseText = xhr.responseText;
         var length = responseText.length+1;
-        console.log(responseText, length);
         var buf = _malloc(length);
         for(var i = 0; i < length; i++) {
             var c = responseText.charCodeAt(i) & 0xff;
