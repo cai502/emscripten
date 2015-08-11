@@ -131,6 +131,7 @@ var LibraryManager = {
       'library_signals.js',
       'library_idbstore.js',
       'library_async.js',
+      'library_nsnet.js',
       'library_vr.js'
     ]).concat(additionalLibraries);
 
