@@ -8,9 +8,9 @@ var LibraryPThreadStub = {
   pthread_mutexattr_init: function() {},
   pthread_mutexattr_settype: function() {},
   pthread_mutexattr_destroy: function() {},
-  pthread_mutex_lock: function() {},
-  pthread_mutex_unlock: function() {},
-  pthread_mutex_trylock: function() {
+  pthread_mutex_lock: function(lock) {},
+  pthread_mutex_unlock: function(lock) {},
+  pthread_mutex_trylock: function(lock) {
     return 0;
   },
   pthread_mutexattr_setpshared: function(attr, pshared) {
@@ -30,7 +30,7 @@ var LibraryPThreadStub = {
   },
   pthread_self: function() {
     //FIXME: assumes only a single thread
-    return 0;
+    return 1;
   },
   pthread_attr_init: function(attr) {
     /* int pthread_attr_init(pthread_attr_t *attr); */
@@ -123,7 +123,7 @@ var LibraryPThreadStub = {
   pthread_rwlock_unlock: function(lock) { return 0; },
 
   pthread_cond_signal: function() {},
-  pthread_equal: function() {},
+  pthread_equal: function(a, b) { return a == b; },
   pthread_join: function() {},
   pthread_detach: function() {},
 
