@@ -618,10 +618,21 @@ function ftCall_%s(%s) {%s
       # check args
       assert len(sig) >= 3
       assert sig[1:3] == "ii"
-      is_void = sig[0] == "v"
       args = ''.join([',a' + str(i) for i in range(3, len(sig))])
       arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(3, len(sig))])
       coerced_args = ''.join([','+shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(3, len(sig))])
+      if sig[0] == "v":
+        null_return = ""
+        func_prefix = ""
+        func_postfix = ""
+      elif sig[0] == "i":
+        null_return = " 0"
+        func_prefix = "return "
+        func_postfix = "|0"
+      elif sig[0] == "d" or sig[0] == "f":
+        null_return = " 0.0"
+        func_prefix = "return +"
+        func_postfix = ""
       
       if item == "_objc_msgSend":
         function_tables_impls.append('''
@@ -634,9 +645,9 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, null_return, func_prefix, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSend_stret":
         function_tables_impls.append('''
   function %s(staddr,self,sel%s) {
@@ -648,9 +659,9 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else " 0", "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, null_return, func_prefix, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper":
         function_tables_impls.append('''
   function %s(objcSuper,sel%s) {
@@ -662,9 +673,9 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper_stret":
         function_tables_impls.append('''
   function %s(staddr,objcSuper,sel%s) {
@@ -676,9 +687,9 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper2":
         function_tables_impls.append('''
   function %s(objcSuper,sel%s) {
@@ -691,9 +702,9 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper2_stret":
         function_tables_impls.append('''
   function %s(staddr,objcSuper,sel%s) {
@@ -706,9 +717,9 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
       elif item == "_method_invoke":
         function_tables_impls.append('''
   function %s(self,method%s) {
@@ -716,9 +727,9 @@ function ftCall_%s(%s) {%s
     var imp = 0, sel = 0;
     imp = HEAP32[(method+8)>>2]|0;
     sel = HEAP32[(method)>>2]|0;
-    %sdynCall_%s(imp|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
       elif item == "_method_invoke_stret":
         function_tables_impls.append('''
   function %s(staddr,self,method%s) {
@@ -726,9 +737,9 @@ function ftCall_%s(%s) {%s
     var imp = 0, sel = 0;
     imp = HEAP32[(method+8)>>2]|0;
     sel = HEAP32[(method)>>2]|0;
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)|0;
+    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, "" if is_void else "return ", sig, coerced_args))
+''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
 
 
     def quote(prop):
