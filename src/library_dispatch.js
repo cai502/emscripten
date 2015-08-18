@@ -5,8 +5,10 @@ var LibraryDispatch = {
         currentQueueId: 0,
         queueList: [],
         sourceList: [],
+        groupList: [],
         queueIdNext: 0,
         sourceIdNext: 0,
+        groupIdNext: 0,
         init: function() {
             // 0: main
             // 1: background
@@ -34,6 +36,9 @@ var LibraryDispatch = {
         },
         getSource: function(sp) {
             return DISPATCH.sourceList[DISPATCH.pointerToId(sp)];
+        },
+        getGroup: function(gp) {
+            return DISPATCH.groupList[DISPATCH.pointerToId(gp)];
         },
         nanoSec2MilliSec: function(low, high) {
             if(low < 0) low += 0x100000000;
@@ -114,6 +119,10 @@ var LibraryDispatch = {
             if(!queue) return;
             var task = queue.tasks.shift();
             dynCall_vi(task.func, task.ctx);
+            if(typeof task.groupId !== "undefined") {
+                var group = DISPATCH.groupList[task.groupId];
+                DISPATCH._groupLeave(group);
+            }
         },
         sourceCreate: function(type, handle, mask, qp) {
             var sourceId = DISPATCH.sourceIdNext++;
@@ -156,6 +165,50 @@ var LibraryDispatch = {
             if(cancel) {
                 dynCall_vi(cancel.func, cancel.ctx);  // should call async?   
             }
+        },
+        groupCreate: function() {
+            var groupId = DISPATCH.groupIdNext++;
+            DISPATCH.groupList[groupId] = {
+                count: 0,
+                notifies: []
+            };
+            return groupId;
+        },
+        groupAsync: function(gp, qp, ctx, func) {
+            var groupId = DISPATCH.pointerToId(gp);
+            DISPATCH.groupEnter(gp);
+            DISPATCH.getQueue(qp).tasks.push({ctx:ctx, func:func, groupId:groupId});
+        },
+        groupWait: function(gp, timeout) {
+            var group = DISPATCH.getGroup(gp);
+            if(group.count > 0) {
+                throw new Error("dead lock!");
+            }
+        },
+        groupNotify: function(gp, qp, ctx, func) {
+            var group = DISPATCH.getGroup(gp);
+            var queueId = DISPATCH.pointerToId(qp);
+            DISPATCH.groupEnter(gp);
+            group.notifies.push({queueId: queueId, ctx:ctx, func:func});
+            DISPATCH._groupLeave(group);
+        },
+        groupEnter: function(gp) {
+            var group = DISPATCH.getGroup(gp);
+            group.count++;
+        },
+        groupLeave: function(gp) {
+            var group = DISPATCH.getGroup(gp);
+            DISPATCH._groupLeave(group);
+        },
+        _groupLeave: function(group) {
+            group.count--;
+            if(group.count == 0) {
+                while(group.notifies.length > 0) {
+                    var notify = group.notifies.shift();
+                    var queue = DISPATCH.queueList[notify.queueId];
+                    queue.tasks.push({ctx:notify.ctx, func:notify.func});
+                }
+            }
         }
     },
 
@@ -181,7 +234,10 @@ var LibraryDispatch = {
         DISPATCH.after(when, queue, ctx, func);
     },
     dispatch_barrier_async_f: function(queue, ctx, func) {
-        DISPATCH.barrierAsync(queue, ctx, func);
+        DISPATCH.async(queue, ctx, func);
+    },
+    dispatch_barrier_sync_f: function(queue, ctx, func) {
+        DISPATCH.async(queue, ctx, func);
     },
     dispatch_get_specific: function() {
         return DISPATCH.getSpecific(queue, key);
@@ -210,6 +266,24 @@ var LibraryDispatch = {
     },
     dispatch_source_cancel: function(source) {
         DISPATCH.sourceCancel(source);
+    },
+    _dispatch_group_create_internal: function() {
+        return DISPATCH.groupCreate();
+    },
+    dispatch_group_async_f: function(group, queue, ctx, func) {
+        DISPATCH.groupAsync(group, queue, ctx, func);
+    },
+    dispatch_group_wait: function(group, timeout) {
+        DISPATCH.groupWait(group, timeout);
+    },
+    dispatch_group_notify_f: function(group, queue, ctx, func) {
+        DISPATCH.groupNotify(group, queue, ctx, func);
+    },
+    dispatch_group_enter: function(group) {
+        DISPATCH.groupEnter(group);
+    },
+    dispatch_group_leave: function(group) {
+        DISPATCH.groupLeave(group);
     }
 };
 
