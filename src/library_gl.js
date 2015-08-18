@@ -6382,7 +6382,7 @@ var LibraryGL = {
       GL.lastError = 0/*GL_NO_ERROR*/;
       return error;
     } else { // If there were none, return the GL error from the browser GL context.
-      return GLctx.getError();
+      return GLctx ? GLctx.getError() : 0;
     }
   },
   
