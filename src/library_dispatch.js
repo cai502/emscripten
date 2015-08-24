@@ -86,6 +86,12 @@ var LibraryDispatch = {
         setTargetQueue: function(obj, queue) {
             throw new Error("unimplemented");
         },
+        after: function(when, qp, ctx, func) {
+            setTimeout(function() {
+                var queue = DISPATCH.getQueue(qp);
+                queue.tasks.push({ctx:ctx, func:func});
+            }, when - _emscripten_get_now());
+        },
         getSpecific: function(qp, key) {
             return DISPATCH.getQueue(qp).tsd[key];
         },
@@ -230,8 +236,8 @@ var LibraryDispatch = {
     dispatch_set_target_queue: function(obj, queue) {
         DISPATCH.setTargetQueue(obj, queue);
     },
-    dispatch_after_f: function(when, queue, ctx, func) {
-        DISPATCH.after(when, queue, ctx, func);
+    dispatch_after_f: function(when_low, when_high, queue, ctx, func) {
+        DISPATCH.after(DISPATCH.nanoSec2MilliSec(when_low, when_high), queue, ctx, func);
     },
     dispatch_barrier_async_f: function(queue, ctx, func) {
         DISPATCH.async(queue, ctx, func);
@@ -239,7 +245,7 @@ var LibraryDispatch = {
     dispatch_barrier_sync_f: function(queue, ctx, func) {
         DISPATCH.async(queue, ctx, func);
     },
-    dispatch_get_specific: function() {
+    dispatch_queue_get_specific: function(queue, key) {
         return DISPATCH.getSpecific(queue, key);
     },
     dispatch_queue_set_specific: function(queue, key, value, dtor) {
