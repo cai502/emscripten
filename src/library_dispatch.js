@@ -20,7 +20,7 @@ var LibraryDispatch = {
                     suspend: false,
                     tasks: [],
                     tsd: {},
-                    tsdDtor: {},
+                    tsdDtor: {}
                 };
             }
             DISPATCH.queueIdNext = i;
@@ -71,7 +71,9 @@ var LibraryDispatch = {
                 labelBuf: null,
                 target: 1, // background
                 suspend: false,
-                tasks: []
+                tasks: [],
+                tsd: {},
+                tsdDtor: {}
             };
             return queueId;
         },
