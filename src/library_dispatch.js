@@ -17,7 +17,7 @@ var LibraryDispatch = {
                     label: "queueList"+i,
                     labelBuf: null,
                     target: null,
-                    suspend: false,
+                    suspend: 0,
                     tasks: [],
                     tsd: {},
                     tsdDtor: {}
@@ -70,7 +70,7 @@ var LibraryDispatch = {
                 label: Pointer_stringify(label),
                 labelBuf: null,
                 target: 1, // background
-                suspend: false,
+                suspend: 0,
                 tasks: [],
                 tsd: {},
                 tsdDtor: {}
@@ -138,20 +138,26 @@ var LibraryDispatch = {
                 type: type,
                 handle: handle,
                 mask: mask,
-                queueId: DISPATCH.pointerToId(qp)
+                queueId: DISPATCH.pointerToId(qp),
+                canceled: 0,
+                suspend: 1
             };
             return sourceId;
         },
         sourceSetTimer: function(sp, start, interval, leeway) {
             var source = DISPATCH.getSource(sp);
             if(source.type != DISPATCH.SourceType.Timer) throw new Error("not a timer source");
+            if(source.canceled) return;
+
             source.start = start;
             source.interval = interval;
 
             var queueing = function(source) {
                 var event = source.event;
                 var queue = DISPATCH.queueList[source.queueId];
-                queue.tasks.push({ctx: event.ctx, func: event.func});
+                if(!source.suspend) {
+                    queue.tasks.push({ctx: event.ctx, func: event.func});
+                }
                 if(source.interval) {
                     source.timeoutId = setTimeout(queueing, source.interval, source);
                 }
@@ -168,10 +174,37 @@ var LibraryDispatch = {
         },
         sourceCancel: function(sp) {
             var source = DISPATCH.getSource(sp);
+            if(source.canceled) return;
+
             clearTimeout(source.timeoutId); 
+
+
             var cancel = source.cancel;
             if(cancel) {
-                dynCall_vi(cancel.func, cancel.ctx);  // should call async?   
+                if(source.suspend) {
+                    source.canceled = 1; // cancel handler pending
+                    return;
+                } else {
+                    source.canceled = 2;
+                    var queue = DISPATCH.queueList[source.queueId];
+                    queue.tasks.push({ctx: cancel.ctx, func: cancel.func});
+                }
+            } else {
+                source.canceled = 2;
+            }
+        },
+        sourceSuspend: function(sp) {
+            var source = DISPATCH.getSource(sp);
+            source.suspend++;
+        },
+        sourceResume: function(sp) {
+            var source = DISPATCH.getSource(sp);
+            source.suspend--;
+            if(source.canceled == 1) {
+                source.canceled = 2;
+                var queue = DISPATCH.queueList[source.queueId];
+                var cancel = source.cancel;
+                queue.tasks.push({ctx: cancel.ctx, func: cancel.func});
             }
         },
         groupCreate: function() {
@@ -274,6 +307,12 @@ var LibraryDispatch = {
     },
     dispatch_source_cancel: function(source) {
         DISPATCH.sourceCancel(source);
+    },
+    _dispatch_source_suspend: function(source) {
+        DISPATCH.sourceSuspend(source);
+    },
+    _dispatch_source_resume: function(source) {
+        DISPATCH.sourceResume(source);
     },
     _dispatch_group_create_internal: function() {
         return DISPATCH.groupCreate();
