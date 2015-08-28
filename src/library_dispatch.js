@@ -48,21 +48,38 @@ var LibraryDispatch = {
         async: function(qp, ctx, func) {
             DISPATCH.getQueue(qp).tasks.push({ctx:ctx, func:func});
         },
+        _flashQueue: function(queueId) {
+            var queue = DISPATCH.queueList[queueId];
+            while(queue.tasks.length > 0) {
+                var task = queue.tasks.shift();
+                dynCall_vi(task.func, task.ctx);
+            }
+        },
         sync: function(qp, ctx, func) {
             var currentQueueId = DISPATCH.currentQueueId;
             var queueId = DISPATCH.pointerToId(qp);
-            if(currentQueueId != queueId) {
-                DISPATCH.currentQueueId = queueId;
-                var queue = DISPATCH.queueList[queueId];
-                while(queue.tasks.length > 0) {
-                    var task = queue.tasks.shift();
-                    dynCall_vi(task.func, task.ctx);
-                }
-                DISPATCH.currentQueueId = currentQueueId;
-            } else {
+            if(currentQueueId == queueId) {
                 throw new Error("dead lock!");
-                // dynCall_vi(func, ctx);
             }
+
+            DISPATCH.currentQueueId = queueId;
+            DISPATCH._flashQueue(queueId);
+            dynCall_vi(func, ctx);
+            DISPATCH.currentQueueId = currentQueueId;
+        },
+        apply: function(iter, qp, ctx, func) {
+            var currentQueueId = DISPATCH.currentQueueId;
+            var queueId = DISPATCH.pointerToId(qp);
+            if(currentQueueId == queueId) {
+                throw new Error("dead lock!");
+            }
+
+            DISPATCH.currentQueueId = queueId;
+            DISPATCH._flashQueue(queueId);
+            for(var i = 0; i < iter; i++) {
+                dynCall_vii(func, ctx, i);
+            }
+            DISPATCH.currentQueueId = currentQueueId;
         },
         queueCreate: function(label) {
             var queueId = DISPATCH.queueIdNext++;
@@ -258,6 +275,9 @@ var LibraryDispatch = {
     },
     dispatch_sync_f: function(queue, ctx, func) {
         DISPATCH.sync(queue, ctx, func);
+    },
+    dispatch_apply_f: function(iter, queue, ctx, func) {
+        DISPATCH.apply(iter, queue, ctx, func);
     },
     _dispatch_get_current_queue_id: function() {
         return DISPATCH.currentQueueId;
