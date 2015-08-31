@@ -1,5 +1,5 @@
 var NSNetwork = {
-    $NSNetwork__deps: [],
+    $NSNetwork__deps: ["dispatch_async_f"],
     $NSNetwork: {
         nextId: 0,
         xhrs: {}
@@ -18,24 +18,29 @@ var NSNetwork = {
         var pass = pass ? Pointer_stringify(pass) : null;
         xhr.open(method, url, async, user, pass);
     },
-    _xhr_set_onload: function(id, ctx, func) {
+    _xhr_set_onload: function(id, queue, ctx, func) {
         console.log("called", arguments);
         var xhr = NSNetwork.xhrs[id];
         xhr.onload = function(e) {
             console.log("onload", id, xhr.readyState, xhr.responseText, ctx, func);
-            dynCall_viii(func, id, xhr.readyState, ctx);
+            _dispatch_async_f(queue, ctx, func);
         }
     },
     _xhr_set_request_header: function(id, key, value) {
         var xhr = NSNetwork.xhrs[id];
         var key = Pointer_stringify(key);
         var value = Pointer_stringify(value);
+        if(key == "User-Agent") return;
         xhr.setRequestHeader(key, value);
     },
     _xhr_send: function(id, data) {
         var xhr = NSNetwork.xhrs[id];
         //var data = Pointer_stringify(data); // binary
         xhr.send();
+    },
+    _xhr_get_ready_state: function(id) {
+        var xhr = NSNetwork.xhrs[id];
+        return xhr.readyState;
     },
     _xhr_get_status: function(id) {
         var xhr = NSNetwork.xhrs[id];
