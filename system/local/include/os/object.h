@@ -73,9 +73,9 @@
 
 #if OS_OBJECT_USE_OBJC
 #if __DISPATCH_BUILDING_DISPATCH__
-#import <Foundation/NSObject.h>
-#else
 #import <objc/NSObject.h>
+#else
+#import <Foundation/NSObject.h>
 #endif
 #define OS_OBJECT_CLASS(name) OS_##name
 #define OS_OBJECT_DECL(name, ...) \
