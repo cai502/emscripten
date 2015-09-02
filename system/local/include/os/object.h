@@ -21,7 +21,7 @@
 #ifndef __OS_OBJECT__
 #define __OS_OBJECT__
 
-#ifdef __APPLE__
+#ifdef __APPLE__ || EMSCRIPTEN
 #include <Availability.h>
 #endif
 #include <os/base.h>
@@ -72,7 +72,7 @@
 #endif
 
 #if OS_OBJECT_USE_OBJC
-#import <objc/NSObject.h>
+#import <Foundation/NSObject.h>
 #define OS_OBJECT_CLASS(name) OS_##name
 #define OS_OBJECT_DECL(name, ...) \
 		@protocol OS_OBJECT_CLASS(name) __VA_ARGS__ \
