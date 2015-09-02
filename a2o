@@ -10,6 +10,7 @@ from tools import shared
 args = [
     '-fblocks',
     '-s', 'DEMANGLE_SUPPORT=1',
+    '-s', 'NATIVE_LIBDISPATCH=1',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
     '-s', 'USE_ZLIB=1',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
