@@ -72,7 +72,7 @@
 #endif
 
 #if OS_OBJECT_USE_OBJC
-#if __DISPATCH_BUILDING_DISPATCH__
+#if defined(__DISPATCH_BUILDING_DISPATCH__)
 #import <objc/NSObject.h>
 #else
 #import <Foundation/NSObject.h>
