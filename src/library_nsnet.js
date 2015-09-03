@@ -19,10 +19,8 @@ var NSNetwork = {
         xhr.open(method, url, async, user, pass);
     },
     _xhr_set_onload: function(id, queue, ctx, func) {
-        console.log("called", arguments);
         var xhr = NSNetwork.xhrs[id];
         xhr.onload = function(e) {
-            console.log("onload", id, xhr.readyState, xhr.responseText, ctx, func);
             _dispatch_async_f(queue, ctx, func);
         }
     },
