@@ -5,3 +5,5 @@ unicode
 bsd
 kqueue
 pthread_workqueue.h
+cairo
+pixman-1
