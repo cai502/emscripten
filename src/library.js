@@ -8585,6 +8585,19 @@ LibraryManager.library = {
   getpwent: function() { throw 'getpwent: TODO' },
   endpwent: function() { throw 'endpwent: TODO' },
 
+  // mach
+  mach_timebase_info__deps: ["emscripten_get_now_res"],
+  mach_timebase_info: function(info) {
+      var nsec = _emscripten_get_now_res();
+      {{{ makeSetValue('info', 0, 'nsec', 'i32') }}}
+      {{{ makeSetValue('info', 4, 1, 'i32') }}}
+  },
+
+  mach_absolute_time__deps: ["emscripten_get_now"],
+  mach_absolute_time: function() {
+      return _emscripten_get_now();
+  },
+
   // ==========================================================================
   // emscripten.h
   // ==========================================================================
