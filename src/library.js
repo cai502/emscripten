@@ -8591,6 +8591,7 @@ LibraryManager.library = {
       var nsec = _emscripten_get_now_res();
       {{{ makeSetValue('info', 0, 'nsec', 'i32') }}}
       {{{ makeSetValue('info', 4, 1, 'i32') }}}
+      return 0;
   },
 
   mach_absolute_time__deps: ["emscripten_get_now"],
