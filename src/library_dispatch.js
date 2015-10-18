@@ -48,7 +48,7 @@ var LibraryDispatch = {
         async: function(qp, ctx, func) {
             DISPATCH.getQueue(qp).tasks.push({ctx:ctx, func:func});
         },
-        _flashQueue: function(queueId) {
+        _flushQueue: function(queueId) {
             var queue = DISPATCH.queueList[queueId];
             while(queue.tasks.length > 0) {
                 var task = queue.tasks.shift();
@@ -63,7 +63,7 @@ var LibraryDispatch = {
             }
 
             DISPATCH.currentQueueId = queueId;
-            DISPATCH._flashQueue(queueId);
+            DISPATCH._flushQueue(queueId);
             dynCall_vi(func, ctx);
             DISPATCH.currentQueueId = currentQueueId;
         },
@@ -75,7 +75,7 @@ var LibraryDispatch = {
             }
 
             DISPATCH.currentQueueId = queueId;
-            DISPATCH._flashQueue(queueId);
+            DISPATCH._flushQueue(queueId);
             for(var i = 0; i < iter; i++) {
                 dynCall_vii(func, ctx, i);
             }
@@ -140,14 +140,17 @@ var LibraryDispatch = {
             return null;
         },
         handleQueue: function() {
-            var queue = DISPATCH.selectNextQueue();
-            if(!queue) return;
-            var task = queue.tasks.shift();
-            dynCall_vi(task.func, task.ctx);
-            if(typeof task.groupId !== "undefined") {
-                var group = DISPATCH.groupList[task.groupId];
-                DISPATCH._groupLeave(group);
-            }
+            var begin = Date.now();
+            do {
+	            var queue = DISPATCH.selectNextQueue();
+	            if(!queue) return;
+	            var task = queue.tasks.shift();
+	            dynCall_vi(task.func, task.ctx);
+	            if(typeof task.groupId !== "undefined") {
+	                var group = DISPATCH.groupList[task.groupId];
+	                DISPATCH._groupLeave(group);
+	            }
+            } while(Date.now() - begin < 100);
         },
         sourceCreate: function(type, handle, mask, qp) {
             var sourceId = DISPATCH.sourceIdNext++;
