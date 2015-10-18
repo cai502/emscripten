@@ -13,6 +13,9 @@ args = [
     '-s', 'NATIVE_LIBDISPATCH=1',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
     '-s', 'USE_ZLIB=1',
+    '-s', 'USE_LIBPNG=1',
+    '-s', 'FULL_ES2=1',
+#    '-s', 'LEGACY_GL_EMULATION=1',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
     '-framework', 'Foundation',
     '-framework', 'CoreFoundation',
@@ -22,6 +25,8 @@ args = [
     '-licudata',
     '-lbsd',
     '-lobjc4',
+    '-lcairo',
+    '-lpixman-1',
     '-lBlocksRuntime',
 ]
 if 'USE_PTHREADS=1' in sys.argv:
