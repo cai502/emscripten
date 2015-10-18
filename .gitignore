@@ -4,6 +4,7 @@
 
 *.diff
 *.pyc
+*.pyo
 *.bc
 
 node_modules/
