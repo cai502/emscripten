@@ -139,7 +139,10 @@ var LibraryDispatch = {
             }
             return null;
         },
+        //timeLimit: 0,
         handleQueue: function() {
+            //if(DISPATCH.timeLimit == 0) DISPATCH.timeLimit = Date.now() + 1000 * 5;
+            //if(DISPATCH.timeLimit < Date.now()) return;
             var begin = Date.now();
             do {
 	            var queue = DISPATCH.selectNextQueue();
