@@ -8637,9 +8637,9 @@ LibraryManager.library = {
       } else if (typeof dateNow !== 'undefined') {
         _emscripten_get_now.actual = dateNow;
       } else if (typeof self === 'object' && self['performance'] && typeof self['performance']['now'] === 'function') {
-        _emscripten_get_now.actual = function _emscripten_get_now_actual() { return self['performance']['now'](); };
+        _emscripten_get_now.actual = function _emscripten_get_now_actual() { return self['performance']['now']() * 1000; };
       } else if (typeof performance === 'object' && typeof performance['now'] === 'function') {
-        _emscripten_get_now.actual = function _emscripten_get_now_actual() { return performance['now'](); };
+        _emscripten_get_now.actual = function _emscripten_get_now_actual() { return performance['now']() * 1000; };
       } else {
         _emscripten_get_now.actual = Date.now;
       }
