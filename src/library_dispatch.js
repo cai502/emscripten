@@ -6,6 +6,8 @@ var LibraryDispatch = {
         queueList: [],
         sourceList: [],
         groupList: [],
+        tickEvents: [],
+        tickEventsMax: 7,
         queueIdNext: 0,
         sourceIdNext: 0,
         groupIdNext: 0,
@@ -144,6 +146,20 @@ var LibraryDispatch = {
             //if(DISPATCH.timeLimit == 0) DISPATCH.timeLimit = Date.now() + 1000 * 5;
             //if(DISPATCH.timeLimit < Date.now()) return;
             var begin = Date.now();
+
+            // exec high priority tasks(event loop, display) prior to normal queue
+            var tickEvents = DISPATCH.tickEvents;
+            for(var i = 0; i < tickEvents.length; i++) {
+                var source = tickEvents[i];
+                if(source) {
+                    var event = source.event;
+                    if(event && !source.suspend) {
+                        DISPATCH.currentQueueId = source.queueId;
+                        dynCall_vi(event.func, event.ctx);
+                    }
+                }
+            }
+
             do {
 	            var queue = DISPATCH.selectNextQueue();
 	            if(!queue) return;
@@ -171,6 +187,11 @@ var LibraryDispatch = {
             var source = DISPATCH.getSource(sp);
             if(source.type != DISPATCH.SourceType.Timer) throw new Error("not a timer source");
             if(source.canceled) return;
+            if((source.mask >> 10) & DISPATCH.tickEventsMax) {
+                var priority = (source.mask >> 10) & DISPATCH.tickEventsMax;
+                DISPATCH.tickEvents[priority-1] = source;
+                return;
+            }
 
             source.start = start;
             source.interval = interval;
@@ -189,17 +210,17 @@ var LibraryDispatch = {
         },
         sourceSetEventHandler: function(sp, ctx, func, dtor) {
             var source = DISPATCH.getSource(sp);
-            source.event = {ctx: ctx, func:func, dtor:dtor}; 
+            source.event = {ctx: ctx, func:func, dtor:dtor};
         },
         sourceSetCancelHandler: function(sp, ctx, func, dtor) {
             var source = DISPATCH.getSource(sp);
-            source.cancel = {ctx: ctx, func:func, dtor:dtor}; 
+            source.cancel = {ctx: ctx, func:func, dtor:dtor};
         },
         sourceCancel: function(sp) {
             var source = DISPATCH.getSource(sp);
             if(source.canceled) return;
 
-            clearTimeout(source.timeoutId); 
+            clearTimeout(source.timeoutId);
 
 
             var cancel = source.cancel;
@@ -313,7 +334,7 @@ var LibraryDispatch = {
         return DISPATCH.setSpecific(queue, key, value, dtor);
     },
     _dispatch_em_handle_queue: function() {
-        DISPATCH.handleQueue(); 
+        DISPATCH.handleQueue();
     },
     _dispatch_source_create_internal: function(type, handle, mask, queue) {
         return DISPATCH.sourceCreate(type, handle, mask, queue);
