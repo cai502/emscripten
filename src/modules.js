@@ -132,7 +132,8 @@ var LibraryManager = {
       'library_idbstore.js',
       'library_async.js',
       'library_nsnet.js',
-      'library_vr.js'
+      'library_vr.js',
+      'library_font.js'
     ]).concat(additionalLibraries);
 
     if(NATIVE_LIBDISPATCH) {
