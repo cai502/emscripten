@@ -6,7 +6,7 @@ var LibraryA2OFont = {
         },
         getTextMetrics: function(fontName, pointSize, text) {
             var span = document.createElement("span");
-            span.innerText = text;
+            span.innerHTML = text;
             span.style.fontFamily = fontName;
             span.style.fontSize = pointSize + "px";
             var base = document.createElement("div");
