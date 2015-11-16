@@ -7,3 +7,5 @@ kqueue
 pthread_workqueue.h
 cairo
 pixman-1
+openssl
+freetype2
