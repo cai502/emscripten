@@ -650,7 +650,7 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
 
   def create_dlmalloc(out_name, clflags):
     o = in_temp(out_name)
-    check_call([shared.PYTHON, shared.EMCC, shared.path_from_root('system', 'lib', 'dlmalloc.c'), '-o', o] + clflags)
+    check_call([shared.PYTHON, shared.EMCC, shared.path_from_root('system', 'lib', 'dlmalloc.c'), '-o', o] + clflags + default_opts)
     return o
 
   def create_dlmalloc_singlethreaded(libname):

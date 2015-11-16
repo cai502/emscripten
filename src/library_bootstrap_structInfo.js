@@ -49,5 +49,7 @@ LibraryManager.library = {
     Module.print(string);
     return result.length;
   },
+  emscripten_trace_record_allocation: function() {
+  }
 };
 
