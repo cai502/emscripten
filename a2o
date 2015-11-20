@@ -20,13 +20,8 @@ args = [
     '-framework', 'Foundation',
     '-framework', 'CoreFoundation',
     '-framework', 'CFNetwork',
-    '-licuuc',
-    '-licui18n',
-    '-licudata',
     '-lbsd',
     '-lobjc4',
-    '-lcairo',
-    '-lpixman-1',
     '-lBlocksRuntime',
 ]
 if 'USE_PTHREADS=1' in sys.argv:
