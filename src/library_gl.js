@@ -1249,8 +1249,7 @@ var LibraryGL = {
     }
     GL.mappedBuffers[target] = null;
 
-    if (!(mapping.access & 0x10)) /* GL_MAP_FLUSH_EXPLICIT_BIT */
-      GLctx.bufferSubData(target, mapping.offset, HEAPU8.subarray(mapping.mem, mapping.mem+mapping.length));
+    GLctx.bufferSubData(target, mapping.offset, HEAPU8.subarray(mapping.mem, mapping.mem+mapping.length));
     _free(mapping.mem);
     return 1;
   },
