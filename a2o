@@ -26,7 +26,8 @@ args = [
 ]
 if 'USE_PTHREADS=1' in sys.argv:
     args.extend(['-lpthread_workqueue'])
-args.extend(['-lkqueue', '-ldispatch'])
+#args.extend(['-lkqueue', '-ldispatch'])
+args.extend(['-ldispatch'])
 args += sys.argv[1:]
 
 exit(subprocess.call([shared.PYTHON, shared.EMCC] + args))
