@@ -1,11 +1,14 @@
-#!/bin/bash -exu
+#!/bin/bash -exu -o pipefail
 
 archive=$1
 entry_points=$2
 
 bc=`basename ${archive} .a`.bc
+files=`llvm-ar t ${archive}`
 
-llvm-ar p ${archive} | llvm-link - -f | opt - -internalize -internalize-public-api-list=$entry_points -globaldce -o ${bc}
+llvm-ar x ${archive}
+llvm-link -f ${files} | opt - -internalize -internalize-public-api-list=$entry_points -globaldce -o ${bc}
 rm ${archive}
 llvm-ar rc ${archive} ${bc}
+rm ${files}
 rm ${bc}
