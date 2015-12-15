@@ -1,0 +1,11 @@
+#!/bin/bash -exu
+
+archive=$1
+entry_points=$2
+
+bc=`basename ${archive} .a`.bc
+
+llvm-ar p ${archive} | llvm-link - -f | opt - -internalize -internalize-public-api-list=$entry_points -globaldce -o ${bc}
+rm ${archive}
+llvm-ar rc ${archive} ${bc}
+rm ${bc}
