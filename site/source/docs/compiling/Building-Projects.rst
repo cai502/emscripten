@@ -48,8 +48,6 @@ To build with Emscripten, you would instead use the following commands:
 
 	The file output from *make* might have a different suffix: **.a** for a static library archive, **.so** for a shared library, **.o** or **.bc** for object files (these file extensions are the same as *gcc* would use for the different types). Irrespective of the file extension, these files contain linked LLVM bitcode that *emcc* can compile into JavaScript in the final step.
 
-	Where possible it is better to generate shared library files (**.so**) rather than archives (**.a**) — this is generally a simple change in your project's build system. Shared libraries are simpler, and are more predictable with respect to linking and elimination of unneeded code. 
-
 The last step is to compile the linked bitcode into JavaScript. We do this by calling *emcc* again, specifying the linked LLVM bitcode file as an input, and a JavaScript file as the output.
 
 
@@ -130,7 +128,7 @@ For more general information, see the topic :ref:`Debugging`.
 Using libraries
 ===============
 
-Built in support is available for a number of standard libraries: *libc*, *libc++* and *SDL*. These will automatically be linked when you compile code that uses them (you do not even need to add ``-lSDL``, but see below for more SDL-specific details).
+Built-in support is available for a number of standard libraries: *libc*, *libc++* and *SDL*. These will automatically be linked when you compile code that uses them (you do not even need to add ``-lSDL``, but see below for more SDL-specific details).
 
 If your project uses other libraries, for example `zlib <https://github.com/kripken/emscripten/tree/master/tests/zlib>`_ or *glib*, you will need to build and link them. The normal approach is to build the libraries to bitcode and then compile library and main program bitcode together to JavaScript. 
 
@@ -178,7 +176,7 @@ You should see some notifications about SDL2 being used, and built if it wasn't 
 
 .. note:: *SDL_image* has also been added to ports, use it with ``-s USE_SDL_IMAGE=2``. To see a list of all available ports, run ``emcc --show-ports``.
 
-.. note:: Emscripten also has support for older SDL1, which is built in. If you do not specify SDL2 as in the command above, then SDL1 is linked in and the SDL1 include paths are used. SDL1 has support for *sdl-config*, which is present in `system/bin <https://github.com/kripken/emscripten/blob/master/system/bin/sdl-config>`_. Using the native *sdl-config* may result in compilation or missing-symbol errors. You will need to modify the build system to look for files in **emscripten/system** or **emscripten/system/bin** in order to use the Emscripten *sdl-config*.
+.. note:: Emscripten also has support for older SDL1, which is built-in. If you do not specify SDL2 as in the command above, then SDL1 is linked in and the SDL1 include paths are used. SDL1 has support for *sdl-config*, which is present in `system/bin <https://github.com/kripken/emscripten/blob/master/system/bin/sdl-config>`_. Using the native *sdl-config* may result in compilation or missing-symbol errors. You will need to modify the build system to look for files in **emscripten/system** or **emscripten/system/bin** in order to use the Emscripten *sdl-config*.
 
 Adding more ports
 -----------------
@@ -207,25 +205,11 @@ In some cases it makes sense to modify the build scripts so that they build the 
 Dynamic linking
 ---------------
 
-Emscripten's goal is to generate the fastest and smallest possible code, and for that reason it focuses on generating a single JavaScript file for an entire project. 
+Emscripten's goal is to generate the fastest and smallest possible code, and for that reason it focuses on generating a single JavaScript file for an entire project. For that reason, dynamic linking should be avoided when possible.
 
-Dynamic linking at runtime is not supported when using :ref:`Fastcomp <LLVM-Backend>` (it won't link in code from an arbitrary location when an app is loaded).
+By default, Emscripten ``.so`` files are the same as ``.bc`` or ``.o`` files, that is, they contain LLVM bitcode. Dynamic libraries that you specify in the final build stage (when generating JavaScript or HTML) are linked in as static libraries. *Emcc* ignores commands to dynamically link libraries when linking together bitcode (i.e., not in the final build stage). This is to ensure that the same dynamic library is not linked multiple times in intermediate build stages, which would result in duplicate symbol errors.
 
-.. note:: Dynamic linking would be an excellent :ref:`contribution <Contributing>` to Emscripten.
-
-Dynamic linking is supported when using the :ref:`original compiler <original-compiler-core>` but is **not** recommended.
-
-
-.. _building-projects-dynamic-linking-workaround:
-
-Pseudo-Dynamic linking
----------------------------
-
-.. note:: This section applies to the :ref:`current compiler <LLVM-Backend>` only. It is a workaround because *Fastcomp* does not support true dynamic linking.
-
-Dynamic libraries that you specify in the final build stage (when generating JavaScript or HTML) are linked in as static libraries. 
-
-*Emcc* ignores commands to dynamically link libraries when linking together bitcode. This is to ensure that the same dynamic library is not linked multiple times in intermediate build stages, which would result in duplicate symbol errors.
+There is `experimental support <https://github.com/kripken/emscripten/wiki/Linking>`_ for true dynamic libraries, loaded as runtime, either via dlopen or as a shared library. See that link for the details and limitations.
 
 
 Configure may run checks that appear to fail
@@ -237,6 +221,15 @@ Projects that use *configure*, *cmake*, or some other portable configuration met
 
 .. note:: In general *configure* is not a good match for a cross-compiler like Emscripten. *configure* is designed to build natively for the local setup, and works hard to find the native build system and the local system headers. With a cross-compiler, you are targeting a different system, and ignoring these headers etc.
 
+
+Archive (.a) files
+------------------
+
+Emscripten supports **.a** archive files, which are bundles of object files. This is an old format for libraries, and it has special semantics - for example, the order of linking matters with **.a** files, but not with plain object files (in **.bc**, **.o** or **.so**). For the most part those special semantics should work in Emscripten, however, we support **.a** files using llvm's tools, which have a few limitations.
+
+The main limitation is that if you have multiple files in a single **.a** archive that have the same basename (for example, ``dir1/a.o, dir2/a.o``), then llvm-ar cannot access both of those files. Emscripten will attempt to work around this by adding a hash to the basename, but collisions are still possible in principle.
+
+Where possible it is better to generate shared library files (**.so**) rather than archives (**.a**) — this is generally a simple change in your project's build system. Shared libraries are simpler, and are more predictable with respect to linking.
 
 
 Manually using emcc

@@ -25,16 +25,27 @@ Usage:
 Available operations and tasks:
 
   build libc
+        libc-mt
+        dlmalloc
+        dlmalloc_threadsafe
+        pthreads
         libcxx
         libcxx_noexcept
         libcxxabi
         gl
         struct_info
         native_optimizer
-        zlib
+        bullet
+        freetype
         libpng
+        ogg
         sdl2
         sdl2-image
+        sdl2-ttf
+        vorbis
+        zlib
+
+Issuing 'embuilder.py build ALL' causes each task to be built.
 
 It is also possible to build native_optimizer manually by using CMake. To
 do that, run
@@ -57,21 +68,43 @@ def build(src, result_libs, args=[]):
   shared.Building.emcc(temp, args, output_filename=temp_js)
   assert os.path.exists(temp_js), 'failed to build file'
   for lib in result_libs:
-    assert os.path.exists(shared.Cache.get_path(lib)), 'not seeing that requested library %s has been built' % lib
+    assert os.path.exists(shared.Cache.get_path(lib)), 'not seeing that requested library %s has been built because file %s does not exist' % (lib, shared.Cache.get_path(lib))
+
+def build_port(port_name, lib_name, params):
+  build('''
+    int main() {}
+  ''', [os.path.join('ports-builds', port_name, lib_name)], params)
 
 operation = sys.argv[1]
 
 if operation == 'build':
-  for what in sys.argv[2:]:
+  tasks = sys.argv[2:]
+  if 'ALL' in tasks:
+    tasks = ['libc', 'libc-mt', 'dlmalloc', 'dlmalloc_threadsafe', 'pthreads', 'libcxx', 'libcxx_noexcept', 'libcxxabi', 'gl', 'struct_info', 'bullet', 'freetype', 'libpng', 'ogg', 'sdl2', 'sdl2-image', 'vorbis', 'zlib']
+    if os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER'):
+      print 'Skipping building of native-optimizer since environment variable EMSCRIPTEN_NATIVE_OPTIMIZER is present and set to point to a prebuilt native optimizer path.'
+    elif hasattr(shared, 'EMSCRIPTEN_NATIVE_OPTIMIZER'):
+      print 'Skipping building of native-optimizer since .emscripten config file has set EMSCRIPTEN_NATIVE_OPTIMIZER to point to a prebuilt native optimizer path.'
+    else:
+      tasks += ['native_optimizer']
+  for what in tasks:
     shared.logging.info('building and verifying ' + what)
-    if what == 'libc':
+    if what in ('libc', 'dlmalloc'):
       build('''
         #include <string.h>
         #include <stdlib.h>
         int main() {
           return int(malloc(10)) + int(strchr("str", 'c'));
         }
-      ''', ['libc.bc', 'libcextra.bc'])
+      ''', ['libc.bc', 'dlmalloc.bc'])
+    elif what in ('libc-mt', 'pthreads', 'dlmalloc_threadsafe'):
+      build('''
+        #include <string.h>
+        #include <stdlib.h>
+        int main() {
+          return int(malloc(10)) + int(strchr("str", 'c'));
+        }
+      ''', ['libc-mt.bc', 'dlmalloc_threadsafe.bc', 'pthreads.bc'], ['-s', 'USE_PTHREADS=1'])
     elif what == 'libcxx':
       build('''
         #include <iostream>
@@ -114,21 +147,23 @@ if operation == 'build':
         int main() {}
       ''', ['optimizer.exe'], ['-O2'])
     elif what == 'zlib':
-      build('''
-        int main() {}
-      ''', [os.path.join('ports-builds', 'zlib', 'libz.a')], ['-s', 'USE_ZLIB=1'])
+      build_port('zlib', 'libz.a', ['-s', 'USE_ZLIB=1'])
+    elif what == 'bullet':
+      build_port('bullet', 'libbullet.bc', ['-s', 'USE_BULLET=1'])
+    elif what == 'vorbis':
+      build_port('vorbis', 'libvorbis.bc', ['-s', 'USE_VORBIS=1'])
+    elif what == 'ogg':
+      build_port('ogg', 'libogg.bc', ['-s', 'USE_OGG=1'])
     elif what == 'libpng':
-      build('''
-        int main() {}
-      ''', [os.path.join('ports-builds', 'libpng', 'libpng.bc')], ['-s', 'USE_ZLIB=1', '-s', 'USE_LIBPNG=1'])
+      build_port('libpng', 'libpng.bc', ['-s', 'USE_ZLIB=1', '-s', 'USE_LIBPNG=1'])
     elif what == 'sdl2':
-      build('''
-        int main() {}
-      ''', [os.path.join('ports-builds', 'sdl2', 'libsdl2.bc')], ['-s', 'USE_SDL=2'])
+      build_port('sdl2', 'libsdl2.bc', ['-s', 'USE_SDL=2'])
     elif what == 'sdl2-image':
-      build('''
-        int main() {}
-      ''', [os.path.join('ports-builds', 'sdl2-image', 'libsdl2_image.bc')], ['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2'])
+      build_port('sdl2-image', 'libsdl2_image.bc', ['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2'])
+    elif what == 'freetype':
+      build_port('freetype', 'libfreetype.a', ['-s', 'USE_FREETYPE=1'])
+    elif what == 'sdl2-ttf':
+      build_port('sdl2-ttf', 'libsdl2_ttf.bc', ['-s', 'USE_SDL=2', '-s', 'USE_SDL_TTF=2', '-s', 'USE_FREETYPE=1'])
     else:
       shared.logging.error('unfamiliar build target: ' + what)
       sys.exit(1)

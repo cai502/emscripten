@@ -180,6 +180,10 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
       logging.warning('disabling asm.js validation due to use of non-supported features: ' + metadata['cantValidate'])
       settings['ASM_JS'] = 2
 
+    settings['MAX_GLOBAL_ALIGN'] = metadata['maxGlobalAlign']
+
+    assert not (metadata['simd'] and settings['SPLIT_MEMORY']), 'SIMD is used, but not supported in SPLIT_MEMORY'
+
     # Save settings to a file to work around v8 issue 1579
     settings_file = temp_files.get('.txt').name
     def save_settings():
@@ -221,9 +225,13 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
 
     staticbump = mem_init.count(',')+1
     while staticbump % 16 != 0: staticbump += 1
-    pre = pre.replace('STATICTOP = STATIC_BASE + 0;', '''STATICTOP = STATIC_BASE + %d;
+    pre = pre.replace('STATICTOP = STATIC_BASE + 0;', '''STATICTOP = STATIC_BASE + %d;%s
   /* global initializers */ %s __ATINIT__.push(%s);
-  %s''' % (staticbump, 'if (!ENVIRONMENT_IS_PTHREAD)' if settings['USE_PTHREADS'] else '', global_initializers, mem_init)) # XXX wrong size calculation!
+  %s''' % (staticbump,
+           'assert(STATICTOP < SPLIT_MEMORY, "SPLIT_MEMORY size must be big enough so the entire static memory, need " + STATICTOP);' if settings['SPLIT_MEMORY'] else '',
+           'if (!ENVIRONMENT_IS_PTHREAD)' if settings['USE_PTHREADS'] else '',
+           global_initializers,
+           mem_init))
 
     if settings['SIDE_MODULE']:
       pre = pre.replace('Runtime.GLOBAL_BASE', 'gb').replace('{{{ STATIC_BUMP }}}', str(staticbump))
@@ -236,7 +244,8 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
 
     # merge forwarded data
     settings['EXPORTED_FUNCTIONS'] = forwarded_json['EXPORTED_FUNCTIONS']
-    all_exported_functions = set(settings['EXPORTED_FUNCTIONS']) # both asm.js and otherwise
+    all_exported_functions = set(shared.expand_response(settings['EXPORTED_FUNCTIONS'])) # both asm.js and otherwise
+
     for additional_export in settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE']: # additional functions to export from asm, if they are implemented
       all_exported_functions.add('_' + additional_export)
     if settings['EXPORT_FUNCTION_TABLES']:
@@ -256,8 +265,11 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
       original_exports = settings['ORIGINAL_EXPORTED_FUNCTIONS']
       if original_exports[0] == '@': original_exports = json.loads(open(original_exports[1:]).read())
       for requested in original_exports:
+        # check if already implemented
+        # special-case malloc, EXPORTED by default for internal use, but we bake in a trivial allocator and warn at runtime if used in ASSERTIONS \
         if requested not in all_implemented and \
-           requested != '_malloc': # special-case malloc, EXPORTED by default for internal use, but we bake in a trivial allocator and warn at runtime if used in ASSERTIONS
+           requested != '_malloc' and \
+           (('function ' + requested.encode('utf-8')) not in pre): # could be a js library func
           logging.warning('function requested to be exported, but not implemented: "%s"', requested)
 
     asm_consts = [0]*len(metadata['asmConsts'])
@@ -266,25 +278,25 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
       if const[0] == '"' and const[-1] == '"':
         const = const[1:-1]
       const = '{ ' + const + ' }'
-      i = 0
       args = []
-      while ('$' + str(i)) in const:
+      arity = max(metadata['asmConstArities'][k])
+      for i in range(arity):
         args.append('$' + str(i))
-        i += 1
       const = 'function(' + ', '.join(args ) + ') ' + const
       asm_consts[int(k)] = const
 
+    flatten_list_of_lists = lambda outer: (item for inner in outer for item in inner)
     asm_const_funcs = []
-    for arity in metadata['asmConstArities']:
+    for arity in set(flatten_list_of_lists(metadata['asmConstArities'].values())):
       forwarded_json['Functions']['libraryFunctions']['_emscripten_asm_const_%d' % arity] = 1
       args = ['a%d' % i for i in range(arity)]
       all_args = ['code'] + args
       asm_const_funcs.append(r'''
 function _emscripten_asm_const_%d(%s) {
- return ASM_CONSTS[code](%s) | 0;
+ return ASM_CONSTS[code](%s);
 }''' % (arity, ', '.join(all_args), ', '.join(args)))
 
-    pre = pre.replace('// === Body ===', '// === Body ===\n' + '\nvar ASM_CONSTS = [' + ', '.join(asm_consts) + '];\n' + '\n'.join(asm_const_funcs) + '\n')
+    pre = pre.replace('// === Body ===', '// === Body ===\n' + '\nvar ASM_CONSTS = [' + ',\n '.join(asm_consts) + '];\n' + '\n'.join(asm_const_funcs) + '\n')
 
     # objc
     pre += "var EMSCRIPTEN_OBJC_METADATA = {\n"
@@ -336,7 +348,7 @@ function _emscripten_asm_const_%d(%s) {
     def make_params(sig): return ','.join(['p%d' % p for p in range(len(sig)-1)])
     def make_coerced_params(sig): return ','.join([shared.JS.make_coercion('p%d', unfloat(sig[p+1]), settings) % p for p in range(len(sig)-1)])
     def make_coercions(sig): return ';'.join(['p%d = %s' % (p, shared.JS.make_coercion('p%d' % p, sig[p+1], settings)) for p in range(len(sig)-1)]) + ';'
-    def make_func(name, code, params, coercions): return 'function %s(%s) { %s %s }' % (name, params, coercions, code)
+    def make_func(name, code, params, coercions): return 'function %s(%s) {\n %s %s\n}' % (name, params, coercions, code)
 
     in_table = set()
 
@@ -416,9 +428,11 @@ function _emscripten_asm_const_%d(%s) {
             specific_bad, specific_bad_func = make_bad(j)
             Counter.pre.append(specific_bad_func)
             return specific_bad if not newline else (specific_bad + '\n')
-        if item not in implemented_functions and not settings['EMULATED_FUNCTION_POINTERS']: # when emulating function pointers, we don't need wrappers
+        clean_item = item.replace("asm['", '').replace("']", '')
+        if clean_item not in implemented_functions and not (settings['EMULATED_FUNCTION_POINTERS'] and not settings['RELOCATABLE']): # when emulating function pointers, we don't need wrappers
+                                                                                                                                     # but if relocating, then we also have the copies in-module, and do
           # this is imported into asm, we must wrap it
-          call_ident = item
+          call_ident = clean_item
           if call_ident in metadata['redirects']: call_ident = metadata['redirects'][call_ident]
           if not call_ident.startswith('_') and not call_ident.startswith('Math_'): call_ident = '_' + call_ident
           code = call_ident + '(' + coerced_params + ')'
@@ -427,8 +441,8 @@ function _emscripten_asm_const_%d(%s) {
             if sig[0] == 'f': code = '+' + code
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
-          Counter.pre.append(make_func(item + '__wrapper', code, params, coercions))
-          return str(j) + ":" + item + '__wrapper'
+          Counter.pre.append(make_func(clean_item + '__wrapper', code, params, coercions))
+          return str(j) + ":" + clean_item + '__wrapper'
         return str(j) + ":" + item if not newline else (str(j)+":"+item + '\n')
       if settings['ASSERTIONS'] >= 2:
         debug_tables[sig] = body
@@ -439,8 +453,7 @@ function _emscripten_asm_const_%d(%s) {
     Counter.pre = []
 
     function_tables_defs = '\n'.join([info[0] for info in infos]) + '\n'
-    if not settings['EMULATED_FUNCTION_POINTERS']:
-      function_tables_defs += '\n// EMSCRIPTEN_END_FUNCS\n'
+    function_tables_defs += '\n// EMSCRIPTEN_END_FUNCS\n'
     function_tables_defs += '\n'.join([info[1] for info in infos])
 
     asm_setup = ''
@@ -450,28 +463,40 @@ function _emscripten_asm_const_%d(%s) {
         asm_setup += '\nvar debug_table_' + sig + ' = ' + json.dumps(debug_tables[sig]) + ';'
 
     maths = ['Math.' + func for func in ['floor', 'abs', 'sqrt', 'pow', 'cos', 'sin', 'tan', 'acos', 'asin', 'atan', 'atan2', 'exp', 'log', 'ceil', 'imul', 'min', 'clz32']]
-    simdfloattypes = ['float32x4']
-    simdinttypes = ['int32x4']
-    simdtypes = simdfloattypes + simdinttypes
+    simdfloattypes = []
+    simdinttypes = []
     simdfuncs = ['check', 'add', 'sub', 'neg', 'mul',
                  'equal', 'lessThan', 'greaterThan',
                  'notEqual', 'lessThanOrEqual', 'greaterThanOrEqual',
                  'select', 'and', 'or', 'xor', 'not',
                  'splat', 'swizzle', 'shuffle',
-                 'withX', 'withY', 'withZ', 'withW',
-                 'load', 'store', 'loadX', 'storeX', 'loadXY', 'storeXY', 'loadXYZ', 'storeXYZ']
+                 'load', 'store', 'load1', 'store1', 'load2', 'store2', 'load3', 'store3',
+                 'extractLane', 'replaceLane']
+    if metadata['simdInt8x16']:
+      simdinttypes += ['Int8x16']
+      simdfuncs += ['fromInt8x16Bits']
+    if metadata['simdInt16x8']:
+      simdinttypes += ['Int16x8']
+      simdfuncs += ['fromInt16x8Bits']
+    if metadata['simdInt32x4']:
+      simdinttypes += ['Int32x4']
+      simdfuncs += ['fromInt32x4', 'fromInt32x4Bits']
+    if metadata['simdFloat32x4']:
+      simdfloattypes += ['Float32x4']
+      simdfuncs += ['fromFloat32x4', 'fromFloat32x4Bits']
+    if metadata['simdFloat64x2']:
+      simdfloattypes += ['Float64x2']
+      simdfuncs += ['fromFloat64x2', 'fromFloat64x2Bits']
+
     simdfloatfuncs = simdfuncs + ['div', 'min', 'max', 'minNum', 'maxNum', 'sqrt',
-                                  'abs', 'fromInt32x4', 'fromInt32x4Bits',
-                                  'reciprocalApproximation', 'reciprocalSqrtApproximation'];
-    simdintfuncs = simdfuncs + ['fromFloat32x4', 'fromFloat32x4Bits',
-                                'shiftRightArithmeticByScalar',
+                                  'abs', 'reciprocalApproximation', 'reciprocalSqrtApproximation'];
+    simdintfuncs = simdfuncs + ['shiftRightArithmeticByScalar',
                                 'shiftRightLogicalByScalar',
                                 'shiftLeftByScalar'];
+    simdtypes = simdfloattypes + simdinttypes
+
     fundamentals = ['Math']
-    if settings['USE_PTHREADS']:
-      fundamentals += ['SharedInt8Array', 'SharedInt16Array', 'SharedInt32Array', 'SharedUint8Array', 'SharedUint16Array', 'SharedUint32Array', 'SharedFloat32Array', 'SharedFloat64Array', 'Atomics']
-    else:
-      fundamentals += ['Int8Array', 'Int16Array', 'Int32Array', 'Uint8Array', 'Uint16Array', 'Uint32Array', 'Float32Array', 'Float64Array']
+    fundamentals += ['Int8Array', 'Int16Array', 'Int32Array', 'Uint8Array', 'Uint16Array', 'Uint32Array', 'Float32Array', 'Float64Array']
     fundamentals += ['NaN', 'Infinity']
     if metadata['simd']:
         fundamentals += ['SIMD']
@@ -514,7 +539,14 @@ function _emscripten_asm_const_%d(%s) {
              '"); ' + extra
 
     basic_funcs = ['abort', 'assert'] + [m.replace('.', '_') for m in math_envs]
-    if settings['SAFE_HEAP']: basic_funcs += ['SAFE_HEAP_LOAD', 'SAFE_HEAP_STORE', 'SAFE_FT_MASK']
+
+    asm_safe_heap = settings['SAFE_HEAP'] and not settings['SAFE_HEAP_LOG'] and not settings['RELOCATABLE'] # optimized safe heap in asm, when we can
+
+    if settings['SAFE_HEAP']:
+      if asm_safe_heap:
+        basic_funcs += ['segfault', 'alignfault', 'ftfault']
+      else:
+        basic_funcs += ['SAFE_HEAP_LOAD', 'SAFE_HEAP_LOAD_D', 'SAFE_HEAP_STORE', 'SAFE_HEAP_STORE_D', 'SAFE_FT_MASK']
     if settings['ASSERTIONS']:
       if settings['ASSERTIONS'] >= 2: import difflib
       for sig in last_forwarded_json['Functions']['tables'].iterkeys():
@@ -523,6 +555,8 @@ function _emscripten_asm_const_%d(%s) {
 
     basic_vars = ['STACKTOP', 'STACK_MAX', 'tempDoublePtr', 'ABORT']
     basic_float_vars = []
+
+    if settings['SAFE_HEAP']: basic_vars += ['DYNAMICTOP']
 
     if metadata.get('preciseI64MathUsed'):
       basic_vars += ['cttz_i8']
@@ -552,7 +586,10 @@ function _emscripten_asm_const_%d(%s) {
     if settings.get('EMTERPRETIFY'):
       asm_runtime_funcs += ['emterpret']
       if settings.get('EMTERPRETIFY_ASYNC'):
-        asm_runtime_funcs += ['setAsyncState', 'emtStackSave']
+        asm_runtime_funcs += ['setAsyncState', 'emtStackSave', 'emtStackRestore']
+
+    if settings['SAFE_HEAP']:
+      asm_runtime_funcs += ['setDynamicTop']
 
     # function tables
     if not settings['EMULATED_FUNCTION_POINTERS']:
@@ -742,14 +779,27 @@ function ftCall_%s(%s) {%s
 ''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
 
 
+        if settings.get('RELOCATABLE'):
+          params = ','.join(['ptr'] + ['p%d' % p for p in range(len(sig)-1)])
+          coerced_params = ','.join([shared.JS.make_coercion('ptr', 'i', settings)] + [shared.JS.make_coercion('p%d', unfloat(sig[p+1]), settings) % p for p in range(len(sig)-1)])
+          coercions = ';'.join(['ptr = ptr | 0'] + ['p%d = %s' % (p, shared.JS.make_coercion('p%d' % p, unfloat(sig[p+1]), settings)) for p in range(len(sig)-1)]) + ';'
+          mini_coerced_params = ','.join([shared.JS.make_coercion('p%d', sig[p+1], settings) % p for p in range(len(sig)-1)])
+          maybe_return = '' if sig[0] == 'v' else 'return'
+          final_return = maybe_return + ' ' + shared.JS.make_coercion('ftCall_' + sig + '(' + coerced_params + ')', unfloat(sig[0]), settings) + ';'
+          if settings['EMULATED_FUNCTION_POINTERS'] == 1:
+            body = final_return
+          else:
+            body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
+          funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
+
     def quote(prop):
-      if settings['CLOSURE_COMPILER'] == 2:
+      if settings['USE_CLOSURE_COMPILER'] == 2:
         return "'" + prop + "'"
       else:
         return prop
 
     def access_quote(prop):
-      if settings['CLOSURE_COMPILER'] == 2:
+      if settings['USE_CLOSURE_COMPILER'] == 2:
         return "['" + prop + "']"
       else:
         return '.' + prop
@@ -781,7 +831,7 @@ function ftCall_%s(%s) {%s
       global_funcs += ['g$' + extern for extern in metadata['externs']]
       side = 'parent' if settings['SIDE_MODULE'] else ''
       def check(extern):
-        if settings['ASSERTIONS']: return 'assert(' + side + 'Module["' + extern + '"]);'
+        if settings['ASSERTIONS']: return 'assert(' + side + 'Module["' + extern + '"], "external function \'' + extern + '\' is missing. perhaps a side module was not linked in? if this symbol was expected to arrive from a system library, try to build the MAIN_MODULE with EMCC_FORCE_STDLIBS=1 in the environment");'
         return ''
       for extern in metadata['externs']:
         asm_setup += 'var g$' + extern + ' = function() { ' + check(extern) + ' return ' + side + 'Module["' + extern + '"] };\n'
@@ -790,9 +840,25 @@ function ftCall_%s(%s) {%s
     asm_global_funcs = ''.join(['  var ' + g.replace('.', '_') + '=global' + access_quote(g) + ';\n' for g in maths]);
     asm_global_funcs += ''.join(['  var ' + g + '=env' + access_quote(math_fix(g)) + ';\n' for g in basic_funcs + global_funcs])
     if metadata['simd']:
+      def string_contains_any(s, str_list):
+        for sub in str_list:
+          if sub in s:
+            return True
+        return False
+      nonexisting_simd_symbols = ['Int32x4_fromInt32x4', 'Float32x4_fromFloat32x4']
+
       asm_global_funcs += ''.join(['  var SIMD_' + ty + '=global' + access_quote('SIMD') + access_quote(ty) + ';\n' for ty in simdtypes])
-      asm_global_funcs += ''.join(['  var SIMD_' + ty + '_' + g + '=SIMD_' + ty + access_quote(g) + ';\n' for ty in simdinttypes for g in simdintfuncs])
-      asm_global_funcs += ''.join(['  var SIMD_' + ty + '_' + g + '=SIMD_' + ty + access_quote(g) + ';\n' for ty in simdfloattypes for g in simdfloatfuncs])
+
+      simd_int_symbols = ['  var SIMD_' + ty + '_' + g + '=SIMD_' + ty + access_quote(g) + ';\n' for ty in simdinttypes for g in simdintfuncs]
+      simd_int_symbols = filter(lambda x: not string_contains_any(x, nonexisting_simd_symbols), simd_int_symbols)
+      asm_global_funcs += ''.join(simd_int_symbols)
+
+      simd_float_symbols = ['  var SIMD_' + ty + '_' + g + '=SIMD_' + ty + access_quote(g) + ';\n' for ty in simdfloattypes for g in simdfloatfuncs]
+      simd_float_symbols = filter(lambda x: not string_contains_any(x, nonexisting_simd_symbols), simd_float_symbols)
+      asm_global_funcs += ''.join(simd_float_symbols)
+      # Unofficial, Bool64x2 does not yet exist, but needed for Float64x2 comparisons.
+      if metadata['simdFloat64x2']:
+        asm_global_funcs += '  var SIMD_Int32x4_fromBool64x2Bits = global.SIMD.Int32x4.fromBool64x2Bits;\n';
     if settings['USE_PTHREADS']:
 #      asm_global_funcs += ''.join(['  var Atomics_' + ty + '=global' + access_quote('Atomics') + access_quote(ty) + ';\n' for ty in ['load', 'store', 'exchange', 'compareExchange', 'add', 'sub', 'and', 'or', 'xor', 'fence']])
 # TODO: Once bug https://bugzilla.mozilla.org/show_bug.cgi?id=1141986 is implemented, replace the following line with the above one!
@@ -806,13 +872,13 @@ function ftCall_%s(%s) {%s
     receiving = ''
     if settings['ASSERTIONS']:
       # assert on the runtime being in a valid state when calling into compiled code. The only exceptions are
-      # some support code like malloc TODO: verify that malloc is actually safe to use that way
+      # some support code
       receiving = '\n'.join(['var real_' + s + ' = asm["' + s + '"]; asm["' + s + '''"] = function() {
 assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
 assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
 return real_''' + s + '''.apply(null, arguments);
 };
-''' for s in exported_implemented_functions if s not in ['_malloc', '_free', '_memcpy', '_memset', 'runPostSets']])
+''' for s in exported_implemented_functions if s not in ['_memcpy', '_memset', 'runPostSets', '_emscripten_replace_memory']])
 
     if not settings['SWAPPABLE_ASM_MODULE']:
       receiving += ';\n'.join(['var ' + s + ' = Module["' + s + '"] = asm["' + s + '"]' for s in exported_implemented_functions + function_tables])
@@ -830,16 +896,16 @@ return real_''' + s + '''.apply(null, arguments);
 
     if DEBUG: logging.debug('asm text sizes' + str([map(len, funcs_js), len(asm_setup), len(asm_global_vars), len(asm_global_funcs), len(pre_tables), len('\n'.join(function_tables_impls)), len(function_tables_defs.replace('\n', '\n  ')), len(exports), len(the_global), len(sending), len(receiving)]))
 
-    if not settings.get('EMULATED_FUNCTION_POINTERS'):
-      final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
-    else:
+    final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
+    if settings.get('EMULATED_FUNCTION_POINTERS'):
       asm_setup += '\n' + '\n'.join(function_tables_impls) + '\n'
-      receiving += '\n' + function_tables_defs + '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
+      receiving += '\n' + function_tables_defs.replace('// EMSCRIPTEN_END_FUNCS\n', '') + '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
       for sig in last_forwarded_json['Functions']['tables'].keys():
         name = 'FUNCTION_TABLE_' + sig
         fullname = name if not settings['SIDE_MODULE'] else ('SIDE_' + name)
         receiving += 'Module["' + name + '"] = ' + fullname + ';\n'
-      final_function_tables = '\n// EMSCRIPTEN_END_FUNCS\n'
+
+      final_function_tables = final_function_tables.replace("asm['", '').replace("']", '').replace('var SIDE_FUNCTION_TABLE_', 'var FUNCTION_TABLE_').replace('var dynCall_', '//')
 
     if settings['RELOCATABLE']:
       receiving += '''
@@ -852,18 +918,116 @@ Module['NAMED_GLOBALS'] = NAMED_GLOBALS;
 
       receiving += ''.join(["Module['%s'] = Module['%s']\n" % (k, v) for k, v in metadata['aliases'].iteritems()])
 
+    if settings['USE_PTHREADS']:
+      shared_array_buffer = '''if (typeof SharedArrayBuffer !== 'undefined') Module.asmGlobalArg['Atomics'] = Atomics;
+if (typeof SharedInt8Array !== 'undefined') Module.asmGlobalArg['SharedInt8Array'] = SharedInt8Array;
+if (typeof SharedInt16Array !== 'undefined') Module.asmGlobalArg['SharedInt16Array'] = SharedInt16Array;
+if (typeof SharedInt32Array !== 'undefined') Module.asmGlobalArg['SharedInt32Array'] = SharedInt32Array;
+if (typeof SharedUint8Array !== 'undefined') Module.asmGlobalArg['SharedUint8Array'] = SharedUint8Array;
+if (typeof SharedUint16Array !== 'undefined') Module.asmGlobalArg['SharedUint16Array'] = SharedUint16Array;
+if (typeof SharedUint32Array !== 'undefined') Module.asmGlobalArg['SharedUint32Array'] = SharedUint32Array;
+if (typeof SharedFloat32Array !== 'undefined') Module.asmGlobalArg['SharedFloat32Array'] = SharedFloat32Array;
+if (typeof SharedFloat64Array !== 'undefined') Module.asmGlobalArg['SharedFloat64Array'] = SharedFloat64Array;
+'''
+    else:
+      shared_array_buffer = ''
+
+    first_in_asm = ''
+    if settings['SPLIT_MEMORY']:
+      if not settings['SAFE_SPLIT_MEMORY']:
+        first_in_asm += '''
+function get8(ptr) {
+  ptr = ptr | 0;
+  return HEAP8s[ptr >> SPLIT_MEMORY_BITS][ptr & SPLIT_MEMORY_MASK] | 0;
+}
+function get16(ptr) {
+  ptr = ptr | 0;
+  return HEAP16s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 1] | 0;
+}
+function get32(ptr) {
+  ptr = ptr | 0;
+  return HEAP32s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 2] | 0;
+}
+function getU8(ptr) {
+  ptr = ptr | 0;
+  return HEAPU8s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 0] | 0;
+}
+function getU16(ptr) {
+  ptr = ptr | 0;
+  return HEAPU16s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 1] | 0;
+}
+function getU32(ptr) {
+  ptr = ptr | 0;
+  return HEAPU32s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 2] | 0;
+}
+function getF32(ptr) {
+  ptr = ptr | 0;
+  return +HEAPF32s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 2]; // TODO: fround when present
+}
+function getF64(ptr) {
+  ptr = ptr | 0;
+  return +HEAPF64s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 3];
+}
+function set8(ptr, value) {
+  ptr = ptr | 0;
+  value = value | 0;
+  HEAP8s[ptr >> SPLIT_MEMORY_BITS][ptr & SPLIT_MEMORY_MASK] = value;
+}
+function set16(ptr, value) {
+  ptr = ptr | 0;
+  value = value | 0;
+  HEAP16s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 1] = value;
+}
+function set32(ptr, value) {
+  ptr = ptr | 0;
+  value = value | 0;
+  HEAP32s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 2] = value;
+}
+function setU8(ptr, value) {
+  ptr = ptr | 0;
+  value = value | 0;
+  HEAPU8s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 0] = value;
+}
+function setU16(ptr, value) {
+  ptr = ptr | 0;
+  value = value | 0;
+  HEAPU16s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 1] = value;
+}
+function setU32(ptr, value) {
+  ptr = ptr | 0;
+  value = value | 0;
+  HEAPU32s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 2] = value;
+}
+function setF32(ptr, value) {
+  ptr = ptr | 0;
+  value = +value;
+  HEAPF32s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 2] = value;
+}
+function setF64(ptr, value) {
+  ptr = ptr | 0;
+  value = +value;
+  HEAPF64s[ptr >> SPLIT_MEMORY_BITS][(ptr & SPLIT_MEMORY_MASK) >> 3] = value;
+}
+'''
+      first_in_asm += 'buffer = new ArrayBuffer(32); // fake\n'
+
     funcs_js = ['''
 %s
 Module%s = %s;
+%s
 Module%s = %s;
 // EMSCRIPTEN_START_ASM
 var asm = (function(global, env, buffer) {
   %s
   %s
+  %s
 ''' % (asm_setup,
        access_quote('asmGlobalArg'), the_global,
+       shared_array_buffer,
        access_quote('asmLibraryArg'), sending,
-       "'use asm';" if not metadata.get('hasInlineJS') and settings['ASM_JS'] == 1 else "'almost asm';", '''
+       "'use asm';" if not metadata.get('hasInlineJS') and settings['ASM_JS'] == 1 else "'almost asm';", 
+       first_in_asm,
+       '''
   var HEAP8 = new global%s(buffer);
   var HEAP16 = new global%s(buffer);
   var HEAP32 = new global%s(buffer);
@@ -971,6 +1135,10 @@ function setAsyncState(x) {
 function emtStackSave() {
   return EMTSTACKTOP|0;
 }
+function emtStackRestore(x) {
+  x = x | 0;
+  EMTSTACKTOP = x;
+}
 ''' if settings['EMTERPRETIFY_ASYNC'] else '') + '''
 function setThrew(threw, value) {
   threw = threw|0;
@@ -997,6 +1165,82 @@ function copyTempDouble(ptr) {
   HEAP8[tempDoublePtr+5>>0] = HEAP8[ptr+5>>0];
   HEAP8[tempDoublePtr+6>>0] = HEAP8[ptr+6>>0];
   HEAP8[tempDoublePtr+7>>0] = HEAP8[ptr+7>>0];
+}
+'''] + ['' if not settings['SAFE_HEAP'] else '''
+function setDynamicTop(value) {
+  value = value | 0;
+  DYNAMICTOP = value;
+}
+'''] + ['' if not asm_safe_heap else '''
+function SAFE_HEAP_STORE(dest, value, bytes) {
+  dest = dest | 0;
+  value = value | 0;
+  bytes = bytes | 0;
+  if ((dest|0) <= 0) segfault();
+  if (((dest + bytes)|0) > (DYNAMICTOP|0)) segfault();
+  if ((bytes|0) == 4) {
+    if ((dest&3)) alignfault();
+    HEAP32[dest>>2] = value;
+  } else if ((bytes|0) == 1) {
+    HEAP8[dest>>0] = value;
+  } else {
+    if ((dest&1)) alignfault();
+    HEAP16[dest>>1] = value;
+  }
+}
+function SAFE_HEAP_STORE_D(dest, value, bytes) {
+  dest = dest | 0;
+  value = +value;
+  bytes = bytes | 0;
+  if ((dest|0) <= 0) segfault();
+  if (((dest + bytes)|0) > (DYNAMICTOP|0)) segfault();
+  if ((bytes|0) == 8) {
+    if ((dest&7)) alignfault();
+    HEAPF64[dest>>3] = value;
+  } else {
+    if ((dest&3)) alignfault();
+    HEAPF32[dest>>2] = value;
+  }
+}
+function SAFE_HEAP_LOAD(dest, bytes, unsigned) {
+  dest = dest | 0;
+  bytes = bytes | 0;
+  unsigned = unsigned | 0;
+  if ((dest|0) <= 0) segfault();
+  if ((dest + bytes|0) > (DYNAMICTOP|0)) segfault();
+  if ((bytes|0) == 4) {
+    if ((dest&3)) alignfault();
+    return HEAP32[dest>>2] | 0;
+  } else if ((bytes|0) == 1) {
+    if (unsigned) {
+      return HEAPU8[dest>>0] | 0;
+    } else {
+      return HEAP8[dest>>0] | 0;
+    }
+  }
+  if ((dest&1)) alignfault();
+  if (unsigned) return HEAPU16[dest>>1] | 0;
+  return HEAP16[dest>>1] | 0;
+}
+function SAFE_HEAP_LOAD_D(dest, bytes) {
+  dest = dest | 0;
+  bytes = bytes | 0;
+  if ((dest|0) <= 0) segfault();
+  if ((dest + bytes|0) > (DYNAMICTOP|0)) segfault();
+  if ((bytes|0) == 8) {
+    if ((dest&7)) alignfault();
+    return +HEAPF64[dest>>3];
+  }
+  if ((dest&3)) alignfault();
+  return +HEAPF32[dest>>2];
+}
+function SAFE_FT_MASK(value, mask) {
+  value = value | 0;
+  mask = mask | 0;
+  var ret = 0;
+  ret = value & mask;
+  if ((ret|0) != (value|0)) ftfault();
+  return ret | 0;
 }
 '''] + ['''
 function setTempRet0(value) {
@@ -1026,6 +1270,11 @@ Runtime.stackSave = asm['stackSave'];
 Runtime.stackRestore = asm['stackRestore'];
 Runtime.establishStackSpace = asm['establishStackSpace'];
 ''')
+      if settings['SAFE_HEAP']:
+        funcs_js.append('''
+Runtime.setDynamicTop = asm['setDynamicTop'];
+''')
+
     if not settings['RELOCATABLE']:
       funcs_js.append('''
 Runtime.setTempRet0 = asm['setTempRet0'];
@@ -1095,17 +1344,20 @@ def main(args, compiler_engine, cache, temp_files, DEBUG, DEBUG_CACHE):
   emscript(args.infile, settings, args.outfile, libraries, compiler_engine=compiler_engine,
            temp_files=temp_files, DEBUG=DEBUG, DEBUG_CACHE=DEBUG_CACHE)
 
-def _main(environ):
+def _main(args=None):
+  if args is None:
+    args = sys.argv[1:]
+
   response_file = True
   while response_file:
     response_file = None
-    for index in range(1, len(sys.argv)):
-      if sys.argv[index][0] == '@':
+    for index in range(len(args)):
+      if args[index][0] == '@':
         # found one, loop again next time
         response_file = True
-        response_file_args = read_response_file(sys.argv[index])
+        response_file_args = read_response_file(args[index])
         # slice in extra_args in place of the response file arg
-        sys.argv[index:index+1] = response_file_args
+        args[index:index+1] = response_file_args
         break
 
   parser = optparse.OptionParser(
@@ -1147,11 +1399,11 @@ def _main(environ):
                     help='Hides debug output')
   parser.add_option('--suppressUsageWarning',
                     action='store_true',
-                    default=environ.get('EMSCRIPTEN_SUPPRESS_USAGE_WARNING'),
+                    default=os.environ.get('EMSCRIPTEN_SUPPRESS_USAGE_WARNING'),
                     help=('Suppress usage warning'))
 
   # Convert to the same format that argparse would have produced.
-  keywords, positional = parser.parse_args()
+  keywords, positional = parser.parse_args(args)
 
   if not keywords.suppressUsageWarning:
     logging.warning('''
@@ -1196,4 +1448,5 @@ WARNING: You should normally never use this! Use emcc instead.
   ))
 
 if __name__ == '__main__':
-  _main(environ=os.environ)
+  _main()
+

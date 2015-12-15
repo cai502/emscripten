@@ -14,7 +14,7 @@ from runner import test_modes, PYTHON, path_from_root
 assert not os.environ.get('EM_SAVE_DIR'), 'Need separate directories to avoid the parallel tests clashing'
 
 # run slower ones first, to optimize total time
-optimal_order = ['asm3i', 'asm1i', 'asm2nn', 'asm3', 'asm2', 'asm2g', 'asm2f', 'asm1', 'default']
+optimal_order = ['asm2i', 'asm2nn', 'asm3', 'asm2', 'asm2g', 'asm2f', 'asm1', 'default']
 assert set(optimal_order) == set(test_modes), 'need to update the list of slowest modes'
 
 # set up a background thread to report progress
@@ -23,15 +23,38 @@ class Watcher(threading.Thread):
 
   def run(self):
     last = -1
-    while not Watcher.stop:
-      total = 0
+    bytes_read = {}
+    bytes = {}
+    for mode in optimal_order:
+      bytes[mode] = ''
+      bytes_read[mode] = 0
+
+    running = True
+    while running:
+      time.sleep(2)
+      if Watcher.stop: running = False
       for mode in optimal_order:
-        if os.path.exists(mode + '.err'):
-          total += os.stat(mode + '.err').st_size
-      if total != last:
-        last = total
-        print '[parallel_test_copy.py watcher] total output: %d' % total
-      time.sleep(10)
+        logfile = mode + '.err'
+        if os.path.exists(logfile):
+          new_size = os.stat(logfile).st_size
+          if new_size > bytes_read[mode]:
+            with open(logfile, 'rb') as f:
+              f.seek(bytes_read[mode])
+              bytes[mode] += f.read(new_size - bytes_read[mode])
+            bytes_read[mode] = new_size
+
+            # Flush printed lines to stdout if we have enough worth of one full test.
+            most_recent_test_start_pos = bytes[mode].rfind('(test_core.')
+            if most_recent_test_start_pos != -1:
+              most_recent_line_end = bytes[mode].rfind('\ntest_', 0, most_recent_test_start_pos)
+              if most_recent_line_end != -1:
+                lines_ready_to_print = bytes[mode][0:most_recent_line_end+1].strip()
+                print lines_ready_to_print
+                bytes[mode] = bytes[mode][most_recent_line_end+1:]
+
+          # Flush all the remaining lines if we are quitting.
+          if not running:
+            print bytes[mode]
 
 # run tests for one mode
 def run_mode(args):
@@ -58,6 +81,9 @@ def main():
     if os.path.exists(mode + '.err'):
       os.unlink(mode + '.err')
 
+  # prebuild the cache before starting the parallel run of the whole suite to avoid a race condition where each thread would start building the cache separately
+  subprocess.check_call([PYTHON, path_from_root('embuilder.py'), 'build', 'ALL'])
+
   watcher = Watcher()
   watcher.start()
 
@@ -70,12 +96,6 @@ def main():
   # quit watcher
   Watcher.stop = True
 
-  # emit all outputs
-  for mode in optimal_order:
-    print '=== %s ===' % mode
-    if os.path.exists(mode + '.err'):
-      print open(mode + '.err').read()
-    print ''
   return sum(num_failures)
 
 if __name__ == '__main__':

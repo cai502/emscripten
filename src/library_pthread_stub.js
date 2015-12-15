@@ -3,6 +3,30 @@ var LibraryPThreadStub = {
   // Stub implementation for pthread.h when not compiling with pthreads support enabled.
   // ===================================================================================
 
+  emscripten_has_threading_support: function() {
+    return 0;
+  },
+
+  emscripten_num_logical_cores: function() {
+    return 1;
+  },
+
+  emscripten_force_num_logical_cores: function(cores) {
+    // Ignored, no threading available.
+  },
+
+  emscripten_is_main_runtime_thread: function() {
+    return 1;
+  },
+
+  emscripten_is_main_browser_thread: function() {
+    return !ENVIRONMENT_IS_WORKER;
+  },
+
+  emscripten_main_thread_process_queued_calls: function() {
+    // We will never have any queued calls to process, so no-op.
+  },
+
   pthread_mutex_init: function() {},
   pthread_mutex_destroy: function() {},
   pthread_mutexattr_init: function() {},
@@ -121,6 +145,13 @@ var LibraryPThreadStub = {
   pthread_rwlock_trywrlock: function(lock) { return 0; },
   pthread_rwlock_timedwrlock: function(lock, timespec) { return 0; },
   pthread_rwlock_unlock: function(lock) { return 0; },
+
+  pthread_attr_setdetachstate: function() {},
+
+  pthread_create: function() {
+    return {{{ cDefine('EAGAIN') }}};
+  },
+  pthread_exit: function() {},
 
   pthread_cond_signal: function() {},
   pthread_equal: function(a, b) { return a == b; },

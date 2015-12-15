@@ -24,7 +24,7 @@ passed to JavaScript.
 .. tip:: In addition to the code in this article:
 
    - There are many other examples of how to use *Embind* in the `Test Suite`_.
-   - `Connecting C++ and JavaScript on the Web with Embind>`_ (slides from
+   - `Connecting C++ and JavaScript on the Web with Embind`_ (slides from
      CppCon 2014) contains more examples and information about *Embind*'s
      design philosophy and implementation.
 
@@ -633,6 +633,51 @@ To expose a C++ :cpp:func:`constant` to JavaScript, simply write:
 ``SOME_CONSTANT`` can have any type known to *embind*.
 
 
+.. _embind-memory-view:
+
+Memory views
+============
+
+In some cases it is valuable to expose raw binary data directly to
+JavaScript code as a typed array, allowing it to be used without copying.
+This is useful for instance for uploading large WebGL textures directly
+from the heap.
+
+Memory views should be treated like raw pointers; lifetime and validity
+are not managed by the runtime and it's easy to corrupt data if the
+underlying object is modified or deallocated.
+
+.. code::cpp
+
+    #include <emscripten/bind.h>
+    #include <emscripten/val.h>
+
+    using namespace emscripten;
+
+    unsigned char *byteBuffer = /* ... */;
+    size_t bufferLength = /* ... */;
+
+    val getBytes() {
+        return val(typed_memory_view(bufferLength, byteBuffer));
+    }
+
+    EMSCRIPTEN_BINDINGS(memory_view_example) {
+        function("getBytes", &getBytes);
+    }
+
+The calling JavaScript code will receive a typed array view into the emscripten heap:
+
+.. code::js
+
+   var myUint8Array = Module.getBytes()
+   var xhr = new XMLHttpRequest();
+   xhr.open('POST', /* ... */);
+   xhr.send(myUint8Array);
+
+The typed array view will be of the appropriate matching type, such as Uint8Array
+for an ``unsigned char`` array or pointer.
+
+
 .. _embind-val-guide:
 
 Using ``val`` to transliterate JavaScript to C++
@@ -711,7 +756,7 @@ First we use :cpp:func:`~emscripten::val::global` to get the symbol for
 the global ``AudioContext`` object (or ``webkitAudioContext`` if that
 does not exist). We then use :cpp:func:`~emscripten::val::new_` to create
 the context, and from this context we can create an ``oscillator``,
-:cpp:func:`~emscripten::val::set` it's properties (again using ``val``)
+:cpp:func:`~emscripten::val::set` its properties (again using ``val``)
 and then play the tone.
 
 The example can be compiled on the Linux/Mac OS X terminal with::
@@ -787,7 +832,7 @@ real-world applications has proved to be more than acceptable.
 .. _Connecting C++ and JavaScript on the Web with Embind: http://chadaustin.me/2014/09/connecting-c-and-javascript-on-the-web-with-embind/
 .. _Boost.Python: http://www.boost.org/doc/libs/1_56_0/libs/python/doc/
 .. _finalizers: http://en.wikipedia.org/wiki/Finalizer
-.. _Boost.Python-like raw pointer policies`: https://wiki.python.org/moin/boost.python/CallPolicy
+.. _Boost.Python-like raw pointer policies: https://wiki.python.org/moin/boost.python/CallPolicy
 .. _Backbone.js: http://backbonejs.org/#Model-extend
 .. _Web Audio API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API
 .. _Making sine, square, sawtooth and triangle waves: http://stuartmemo.com/making-sine-square-sawtooth-and-triangle-waves/

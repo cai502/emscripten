@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <errno.h>
 #include <emscripten.h>
 #include <emscripten/threading.h>
 
@@ -20,8 +21,27 @@ static void *thread_start(void *arg) // thread: just flip the shared flag and qu
 
 int main()
 {
+  int result;
+  if (!emscripten_has_threading_support())
+  {
+#ifdef REPORT_RESULT
+    result = 1;
+    REPORT_RESULT();
+#endif
+    printf("Skipped: Threading is not supported.\n");
+    return 0;
+  }
+
   pthread_t thr;
-  pthread_create(&thr, NULL, thread_start, (void*)0);
+  int rc = pthread_create(&thr, NULL, thread_start, (void*)0);
+  if (rc != 0)
+  {
+#ifdef REPORT_RESULT
+    int result = (rc != EAGAIN);
+    REPORT_RESULT();
+    return 0;
+#endif
+  }
 
 #ifdef USE_C_VOLATILE
   while(sharedVar == 0)
@@ -31,7 +51,7 @@ int main()
 #endif
 
 #ifdef REPORT_RESULT
-  int result = sharedVar;
+  result = sharedVar;
   REPORT_RESULT();
 #endif
 }

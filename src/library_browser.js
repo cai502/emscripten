@@ -981,7 +981,7 @@ mergeInto(LibraryManager.library, {
     }
   },
 
-  emscripten_async_prepare: function(file, onload, onerror) {
+  emscripten_run_preload_plugins: function(file, onload, onerror) {
     Module['noExitRuntime'] = true;
 
     var _file = Pointer_stringify(file);
@@ -1002,7 +1002,7 @@ mergeInto(LibraryManager.library, {
     return 0;
   },
 
-  emscripten_async_prepare_data: function(data, size, suffix, arg, onload, onerror) {
+  emscripten_run_preload_plugins_data: function(data, size, suffix, arg, onload, onerror) {
     Module['noExitRuntime'] = true;
 
     var _suffix = Pointer_stringify(suffix);
@@ -1072,15 +1072,36 @@ mergeInto(LibraryManager.library, {
     }
 
     if (mode == 0 /*EM_TIMING_SETTIMEOUT*/) {
-      Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler() {
+      Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler_setTimeout() {
         setTimeout(Browser.mainLoop.runner, value); // doing this each time means that on exception, we stop
       };
       Browser.mainLoop.method = 'timeout';
     } else if (mode == 1 /*EM_TIMING_RAF*/) {
-      Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler() {
+      Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler_rAF() {
         Browser.requestAnimationFrame(Browser.mainLoop.runner);
       };
       Browser.mainLoop.method = 'rAF';
+    } else if (mode == 2 /*EM_TIMING_SETIMMEDIATE*/) {
+      if (!window['setImmediate']) {
+        // Emulate setImmediate. (note: not a complete polyfill, we don't emulate clearImmediate() to keep code size to minimum, since not needed)
+        var setImmediates = [];
+        var emscriptenMainLoopMessageId = '__emcc';
+        function Browser_setImmediate_messageHandler(event) {
+          if (event.source === window && event.data === emscriptenMainLoopMessageId) {
+            event.stopPropagation();
+            setImmediates.shift()();
+          }
+        }
+        window.addEventListener("message", Browser_setImmediate_messageHandler, true);
+        window['setImmediate'] = function Browser_emulated_setImmediate(func) {
+          setImmediates.push(func);
+          window.postMessage(emscriptenMainLoopMessageId, "*");
+        }
+      }
+      Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler_setImmediate() {
+        window['setImmediate'](Browser.mainLoop.runner);
+      };
+      Browser.mainLoop.method = 'immediate';
     }
     return 0;
   },
@@ -1380,7 +1401,8 @@ mergeInto(LibraryManager.library, {
 
   emscripten_get_preloaded_image_data_from_FILE__deps: ['emscripten_get_preloaded_image_data'],
   emscripten_get_preloaded_image_data_from_FILE: function(file, w, h) {
-    var stream = FS.getStreamFromPtr(file);
+    var fd = Module['_fileno'](file);
+    var stream = FS.getStream(fd);
     if (stream) {
       return _emscripten_get_preloaded_image_data(stream.path, w, h);
     }

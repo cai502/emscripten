@@ -5,26 +5,25 @@ mergeInto(LibraryManager.library, {
   // Returns the resulting string string as a character array.
   _formatString__deps: ['strlen', '_reallyNegative'],
   _formatString: function(format, varargs) {
-    assert((varargs & 7) === 0);
+    assert((varargs & 3) === 0);
     var textIndex = format;
-    var argIndex = 0;
+    var argIndex = varargs;
     function getNextArg(type) {
       // NOTE: Explicitly ignoring type safety. Otherwise this fails:
       //       int x = 4; printf("%c\n", (char)x);
       var ret;
       argIndex = Runtime.prepVararg(argIndex, type);
       if (type === 'double') {
-        ret = {{{ makeGetValue('varargs', 'argIndex', 'double', undefined, undefined, true, 4) }}};
+        ret = {{{ makeGetValue('argIndex', 0, 'double', undefined, undefined, true) }}};
         argIndex += 8;
       } else if (type == 'i64') {
-        ret = [{{{ makeGetValue('varargs', 'argIndex', 'i32', undefined, undefined, true, 4) }}},
-               {{{ makeGetValue('varargs', 'argIndex+4', 'i32', undefined, undefined, true, 4) }}}];
-
+        ret = [{{{ makeGetValue('argIndex', 0, 'i32', undefined, undefined, true, 4) }}},
+               {{{ makeGetValue('argIndex', 4, 'i32', undefined, undefined, true, 4) }}}];
         argIndex += 8;
       } else {
         assert((argIndex & 3) === 0);
         type = 'i32'; // varargs are always i32, i64, or double
-        ret = {{{ makeGetValue('varargs', 'argIndex', 'i32', undefined, undefined, true) }}};
+        ret = {{{ makeGetValue('argIndex', 0, 'i32', undefined, undefined, true) }}};
         argIndex += 4;
       }
       return ret;
@@ -418,6 +417,27 @@ mergeInto(LibraryManager.library, {
       }
     }
     return ret;
-  }
+  },
+
+  // printf/puts implementations for when musl is not pulled in - very partial. useful for tests, and when bootstrapping structInfo
+  printf__deps: ['_formatString'],
+  printf: function(format, varargs) {
+    // int printf(const char *restrict format, ...);
+    // http://pubs.opengroup.org/onlinepubs/000095399/functions/printf.html
+    // extra effort to support printf, even without a filesystem. very partial, very hackish
+    var result = __formatString(format, varargs);
+    var string = intArrayToString(result);
+    if (string[string.length-1] === '\n') string = string.substr(0, string.length-1); // remove a final \n, as Module.print will do that
+    Module.print(string);
+    return result.length;
+  },
+  puts: function(s) {
+    // extra effort to support puts, even without a filesystem. very partial, very hackish
+    var result = Pointer_stringify(s);
+    var string = result.substr(0);
+    if (string[string.length-1] === '\n') string = string.substr(0, string.length-1); // remove a final \n, as Module.print will do that
+    Module.print(string);
+    return result.length;
+  },
 });
 

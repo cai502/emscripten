@@ -33,6 +33,10 @@ extern "C" {
 
 typedef short __attribute__((aligned(1))) emscripten_align1_short;
 
+typedef long long __attribute__((aligned(4))) emscripten_align4_int64;
+typedef long long __attribute__((aligned(2))) emscripten_align2_int64;
+typedef long long __attribute__((aligned(1))) emscripten_align1_int64;
+
 typedef int __attribute__((aligned(2))) emscripten_align2_int;
 typedef int __attribute__((aligned(1))) emscripten_align1_int;
 
@@ -70,6 +74,7 @@ extern void emscripten_set_main_loop(em_callback_func func, int fps, int simulat
 
 #define EM_TIMING_SETTIMEOUT 0
 #define EM_TIMING_RAF 1
+#define EM_TIMING_SETIMMEDIATE 2
 
 extern int emscripten_set_main_loop_timing(int mode, int value);
 extern void emscripten_get_main_loop_timing(int *mode, int *value);
@@ -198,10 +203,16 @@ void emscripten_idb_free_blob(int blob);
 
 // other async utilities
 
-int emscripten_async_prepare(const char* file, em_str_callback_func onload, em_str_callback_func onerror);
+int emscripten_run_preload_plugins(const char* file, em_str_callback_func onload, em_str_callback_func onerror);
 
-typedef void (*em_async_prepare_data_onload_func)(void*, const char*);
-void emscripten_async_prepare_data(char* data, int size, const char *suffix, void *arg, em_async_prepare_data_onload_func onload, em_arg_callback_func onerror);
+typedef void (*em_run_preload_plugins_data_onload_func)(void*, const char*);
+void emscripten_run_preload_plugins_data(char* data, int size, const char *suffix, void *arg, em_run_preload_plugins_data_onload_func onload, em_arg_callback_func onerror);
+
+// show an error on some renamed methods
+#define emscripten_async_prepare(...) _Pragma("GCC error(\"emscripten_async_prepare has been replaced by emscripten_run_preload_plugins\")")
+#define emscripten_async_prepare_data(...) _Pragma("GCC error(\"emscripten_async_prepare_data has been replaced by emscripten_run_preload_plugins_data\")")
+
+// worker APIs
 
 typedef int worker_handle;
 
@@ -214,6 +225,8 @@ void emscripten_worker_respond(char *data, int size);
 void emscripten_worker_respond_provisionally(char *data, int size);
 
 int emscripten_get_worker_queue_size(worker_handle worker);
+
+// misc.
 
 int emscripten_get_compiler_setting(const char *name);
 
@@ -235,6 +248,7 @@ void emscripten_log(int flags, ...);
 
 int emscripten_get_callstack(int flags, char *out, int maxbytes);
 
+int emscripten_print_double(double x, char *to, signed max);
 
 /* ===================================== */
 /* Internal APIs. Be careful with these. */

@@ -56,6 +56,7 @@ class browser(BrowserCore):
   @classmethod
   def setUpClass(self):
     super(browser, self).setUpClass()
+    self.browser_timeout = 10
     print
     print 'Running the browser tests. Make sure the browser allows popups from localhost.'
     print
@@ -123,29 +124,6 @@ If manually bisecting:
         Popen(['sh', './doit.sh']).communicate()
     finally:
       os.chdir(cwd)
-
-  def test_compression(self):
-    open(os.path.join(self.get_dir(), 'main.cpp'), 'w').write(self.with_report_result(r'''
-      #include <stdio.h>
-      #include <emscripten.h>
-      int main() {
-        printf("hello compressed world\n");
-        int result = 1;
-        REPORT_RESULT();
-        return 0;
-      }
-    '''))
-
-    self.build_native_lzma()
-    Popen([PYTHON, EMCC, os.path.join(self.get_dir(), 'main.cpp'), '-o', 'page.html',
-           '--compression', '%s,%s,%s' % (path_from_root('third_party', 'lzma.js', 'lzma-native'),
-                                          path_from_root('third_party', 'lzma.js', 'lzma-decoder.js'),
-                                          'LZMA.decompress')]).communicate()
-    assert os.path.exists(os.path.join(self.get_dir(), 'page.js')), 'must be side js'
-    assert os.path.exists(os.path.join(self.get_dir(), 'page.js.compress')), 'must be side compressed js'
-    assert os.stat(os.path.join(self.get_dir(), 'page.js')).st_size > os.stat(os.path.join(self.get_dir(), 'page.js.compress')).st_size, 'compressed file must be smaller'
-    shutil.move(os.path.join(self.get_dir(), 'page.js'), 'page.js.renamedsoitcannotbefound');
-    self.run_browser('page.html', '', '/report_result?1')
 
   def test_preload_file(self):
     absolute_src_path = os.path.join(self.get_dir(), 'somefile.txt').replace('\\', '/')
@@ -427,43 +405,6 @@ If manually bisecting:
     #open(self.in_dir('shell.html'), 'w').write(open(path_from_root('src', 'shell.html')).read().replace('var Module = {', 'var Module = { filePackagePrefixURL: "http:/localhost:8888/cdn/", '))
     #test()
 
-  def test_compressed_file(self):
-    open(os.path.join(self.get_dir(), 'datafile.txt'), 'w').write('compress this please' + (2000*'.'))
-    open(os.path.join(self.get_dir(), 'datafile2.txt'), 'w').write('moar' + (100*'!'))
-    open(os.path.join(self.get_dir(), 'main.cpp'), 'w').write(self.with_report_result(r'''
-      #include <stdio.h>
-      #include <string.h>
-      #include <emscripten.h>
-      int main() {
-        char buf[21];
-        FILE *f = fopen("datafile.txt", "r");
-        fread(buf, 1, 20, f);
-        buf[20] = 0;
-        fclose(f);
-        printf("file says: |%s|\n", buf);
-        int result = !strcmp("compress this please", buf);
-        FILE *f2 = fopen("datafile2.txt", "r");
-        fread(buf, 1, 5, f2);
-        buf[5] = 0;
-        fclose(f2);
-        result = result && !strcmp("moar!", buf);
-        printf("file 2 says: |%s|\n", buf);
-        REPORT_RESULT();
-        return 0;
-      }
-    '''))
-
-    self.build_native_lzma()
-    Popen([PYTHON, EMCC, os.path.join(self.get_dir(), 'main.cpp'), '-o', 'page.html', '--preload-file', 'datafile.txt', '--preload-file', 'datafile2.txt',
-           '--compression', '%s,%s,%s' % (path_from_root('third_party', 'lzma.js', 'lzma-native'),
-                                          path_from_root('third_party', 'lzma.js', 'lzma-decoder.js'),
-                                          'LZMA.decompress')]).communicate()
-    assert os.path.exists(os.path.join(self.get_dir(), 'datafile.txt')), 'must be data file'
-    assert os.path.exists(os.path.join(self.get_dir(), 'page.data.compress')), 'must be data file in compressed form'
-    assert os.stat(os.path.join(self.get_dir(), 'page.js')).st_size != os.stat(os.path.join(self.get_dir(), 'page.js.compress')).st_size, 'compressed file must be different'
-    shutil.move(os.path.join(self.get_dir(), 'datafile.txt'), 'datafile.txt.renamedsoitcannotbefound');
-    self.run_browser('page.html', '', '/report_result?1')
-
   def test_sdl_swsurface(self):
     self.btest('sdl_swsurface.c', expected='1')
 
@@ -481,7 +422,7 @@ If manually bisecting:
                                       ('screenshot.jpg@/assets/screenshot.jpg', '/assets', 'screenshot.jpg')]:
         Popen([
           PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl_image.c'), '-o', 'page.html', '-O2', '--memory-init-file', str(mem),
-          '--preload-file', dest, '-DSCREENSHOT_DIRNAME="' + dirname + '"', '-DSCREENSHOT_BASENAME="' + basename + '"'
+          '--preload-file', dest, '-DSCREENSHOT_DIRNAME="' + dirname + '"', '-DSCREENSHOT_BASENAME="' + basename + '"', '--use-preload-plugins'
         ]).communicate()
         self.run_browser('page.html', '', '/report_result?600')
 
@@ -490,30 +431,9 @@ If manually bisecting:
     open(os.path.join(self.get_dir(), 'sdl_image_jpeg.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl_image.c')).read()))
     Popen([
       PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl_image_jpeg.c'), '-o', 'page.html',
-      '--preload-file', 'screenshot.jpeg', '-DSCREENSHOT_DIRNAME="/"', '-DSCREENSHOT_BASENAME="screenshot.jpeg"'
+      '--preload-file', 'screenshot.jpeg', '-DSCREENSHOT_DIRNAME="/"', '-DSCREENSHOT_BASENAME="screenshot.jpeg"', '--use-preload-plugins'
     ]).communicate()
     self.run_browser('page.html', '', '/report_result?600')
-
-  def test_sdl_image_compressed(self):
-    for image, width in [(path_from_root('tests', 'screenshot2.png'), 300),
-                         (path_from_root('tests', 'screenshot.jpg'), 600)]:
-      self.clear()
-      print image
-
-      basename = os.path.basename(image)
-      shutil.copyfile(image, os.path.join(self.get_dir(), basename))
-      open(os.path.join(self.get_dir(), 'sdl_image.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl_image.c')).read()))
-
-      self.build_native_lzma()
-      Popen([
-        PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl_image.c'), '-o', 'page.html',
-        '--preload-file', basename, '-DSCREENSHOT_DIRNAME="/"', '-DSCREENSHOT_BASENAME="' + basename + '"',
-        '--compression', '%s,%s,%s' % (path_from_root('third_party', 'lzma.js', 'lzma-native'),
-                                       path_from_root('third_party', 'lzma.js', 'lzma-decoder.js'),
-                                       'LZMA.decompress')
-      ]).communicate()
-      shutil.move(os.path.join(self.get_dir(), basename), basename + '.renamedsoitcannotbefound');
-      self.run_browser('page.html', '', '/report_result?' + str(width))
 
   def test_sdl_image_prepare(self):
     # load an image file, get pixel data.
@@ -524,6 +444,11 @@ If manually bisecting:
     # load an image file, get pixel data.
     shutil.copyfile(path_from_root('tests', 'screenshot.jpg'), os.path.join(self.get_dir(), 'screenshot.not'))
     self.btest('sdl_image_prepare_data.c', reference='screenshot.jpg', args=['--preload-file', 'screenshot.not'])
+
+  def test_sdl_image_must_prepare(self):
+    # load an image file, get pixel data.
+    shutil.copyfile(path_from_root('tests', 'screenshot.jpg'), os.path.join(self.get_dir(), 'screenshot.jpg'))
+    self.btest('sdl_image_must_prepare.c', reference='screenshot.jpg', args=['--preload-file', 'screenshot.jpg'])
 
   def test_sdl_stb_image(self):
     # load an image file, get pixel data.
@@ -621,7 +546,7 @@ window.close = function() {
       ]:
         for emterps in [
           [],
-          ['-DTEST_SLEEP', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-s', 'ASSERTIONS=1', '-s', 'EMTERPRETIFY_YIELDLIST=["_EventHandler"]', '-s', "SAFE_HEAP=1"]
+          ['-DTEST_SLEEP', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-s', 'ASSERTIONS=1', '-s', "SAFE_HEAP=1"]
         ]:
           print delay, defines, emterps
           open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
@@ -1006,6 +931,78 @@ keydown(100);keyup(100); // trigger the end
       secret = str(time.time())
       self.btest(path_from_root('tests', 'fs', 'test_memfs_fsync.c'), '1', force_c=True, args=args + mode + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main']'''])
 
+  def test_fs_workerfs_read(self):
+    secret = 'a' * 10;
+    secret2 = 'b' * 10;
+    open(self.in_dir('pre.js'), 'w').write('''
+      var Module = {};
+      Module.preRun = function() {
+        var blob = new Blob(['%s']);
+        var file = new File(['%s'], 'file.txt');
+        FS.mkdir('/work');
+        FS.mount(WORKERFS, {
+          blobs: [{ name: 'blob.txt', data: blob }],
+          files: [file],
+        }, '/work');
+      };
+    ''' % (secret, secret2))
+    self.btest(path_from_root('tests', 'fs', 'test_workerfs_read.c'), '1', force_c=True, args=['--pre-js', 'pre.js', '-DSECRET=\"' + secret + '\"', '-DSECRET2=\"' + secret2 + '\"', '--proxy-to-worker'])
+
+  def test_fs_workerfs_package(self):
+    open('file1.txt', 'w').write('first')
+    if not os.path.exists('sub'): os.makedirs('sub')
+    open(os.path.join('sub', 'file2.txt'), 'w').write('second')
+    Popen([PYTHON, FILE_PACKAGER, 'files.data', '--preload', 'file1.txt', os.path.join('sub', 'file2.txt'), '--separate-metadata', '--js-output=files.js']).communicate()
+    self.btest(os.path.join('fs', 'test_workerfs_package.cpp'), '1', args=['--proxy-to-worker'])
+
+  def test_fs_lz4fs_package(self):
+    # generate data
+    import random
+    self.clear()
+    os.mkdir('subdir')
+    open('file1.txt', 'wb').write('0123456789' * (1024*128))
+    open(os.path.join('subdir', 'file2.txt'), 'wb').write('1234567890' * (1024*128))
+    random_data = [chr(random.randint(0,255)) for x in range(1024*128*10 + 1)]
+    random_data[17] = 'X'
+    open('file3.txt', 'wb').write(''.join(random_data))
+
+    # compress in emcc,  -s LZ4=1  tells it to tell the file packager
+    print 'emcc-normal'
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '2', args=['-s', 'LZ4=1', '--preload-file', 'file1.txt', '--preload-file', 'subdir/file2.txt', '--preload-file', 'file3.txt'], timeout=60)
+    assert os.stat('file1.txt').st_size + os.stat(os.path.join('subdir', 'file2.txt')).st_size + os.stat('file3.txt').st_size == 3*1024*128*10 + 1
+    assert os.stat('test.data').st_size < (3*1024*128*10)/2 # over half is gone
+    print '    emcc-opts'
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '2', args=['-s', 'LZ4=1', '--preload-file', 'file1.txt', '--preload-file', 'subdir/file2.txt', '--preload-file', 'file3.txt', '-O2'], timeout=60)
+
+    # compress in the file packager, on the server. the client receives compressed data and can just use it. this is typical usage
+    print 'normal'
+    out = subprocess.check_output([PYTHON, FILE_PACKAGER, 'files.data', '--preload', 'file1.txt', 'subdir/file2.txt', 'file3.txt', '--lz4'])
+    open('files.js', 'wb').write(out)
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '2', args=['--pre-js', 'files.js', '-s', 'LZ4=1'], timeout=60)
+    print '    opts'
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '2', args=['--pre-js', 'files.js', '-s', 'LZ4=1', '-O2'], timeout=60)
+
+    # load the data into LZ4FS manually at runtime. This means we compress on the client. This is generally not recommended
+    print 'manual'
+    subprocess.check_output([PYTHON, FILE_PACKAGER, 'files.data', '--preload', 'file1.txt', 'subdir/file2.txt', 'file3.txt', '--separate-metadata', '--js-output=files.js'])
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '1', args=['-DLOAD_MANUALLY', '-s', 'LZ4=1'], timeout=60)
+    print '    opts'
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '1', args=['-DLOAD_MANUALLY', '-s', 'LZ4=1', '-O2'], timeout=60)
+    print '    opts+closure'
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '1', args=['-DLOAD_MANUALLY', '-s', 'LZ4=1', '-O2', '--closure', '1', '-g1'], timeout=60)
+
+    '''# non-lz4 for comparison
+    try:
+      os.mkdir('files')
+    except:
+      pass
+    shutil.copyfile('file1.txt', os.path.join('files', 'file1.txt'))
+    shutil.copyfile('file2.txt', os.path.join('files', 'file2.txt'))
+    shutil.copyfile('file3.txt', os.path.join('files', 'file3.txt'))
+    out = subprocess.check_output([PYTHON, FILE_PACKAGER, 'files.data', '--preload', 'files/file1.txt', 'files/file2.txt', 'files/file3.txt'])
+    open('files.js', 'wb').write(out)
+    self.btest(os.path.join('fs', 'test_lz4fs.cpp'), '2', args=['--pre-js', 'files.js'], timeout=60)'''
+
   def test_idbstore(self):
     secret = str(time.time())
     for stage in [0, 1, 2, 3, 0, 1, 2, 0, 0, 1, 4, 2, 5]:
@@ -1055,60 +1052,64 @@ keydown(100);keyup(100); // trigger the end
   def test_sdl_ogl(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_ogl.c', reference='screenshot-gray-purple.png', reference_slack=1,
-      args=['-O2', '--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['-O2', '--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with gray at the top.')
 
   def test_sdl_ogl_defaultmatrixmode(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_ogl_defaultMatrixMode.c', reference='screenshot-gray-purple.png', reference_slack=1,
-      args=['--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with gray at the top.')
 
   def test_sdl_ogl_p(self):
     # Immediate mode with pointers
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_ogl_p.c', reference='screenshot-gray.png', reference_slack=1,
-      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with gray at the top.')
 
   def test_sdl_ogl_proc_alias(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_ogl_proc_alias.c', reference='screenshot-gray-purple.png', reference_slack=1,
-               args=['-O2', '-g2', '-s', 'INLINING_LIMIT=1', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'])
+               args=['-O2', '-g2', '-s', 'INLINING_LIMIT=1', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'])
 
   def test_sdl_fog_simple(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_fog_simple.c', reference='screenshot-fog-simple.png',
-      args=['-O2', '--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['-O2', '--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl_fog_negative(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_fog_negative.c', reference='screenshot-fog-negative.png',
-      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl_fog_density(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_fog_density.c', reference='screenshot-fog-density.png',
-      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl_fog_exp2(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_fog_exp2.c', reference='screenshot-fog-exp2.png',
-      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl_fog_linear(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl_fog_linear.c', reference='screenshot-fog-linear.png', reference_slack=1,
-      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_glfw(self):
     self.btest('glfw.c', '1', args=['-s', 'LEGACY_GL_EMULATION=1'])
     self.btest('glfw.c', '1', args=['-s', 'LEGACY_GL_EMULATION=1', '-s', 'USE_GLFW=2'])
+
+  def test_glfw_minimal(self):
+    self.btest('glfw_minimal.c', '1', args=[])
+    self.btest('glfw_minimal.c', '1', args=['-s', 'USE_GLFW=2'])
 
   def test_egl(self):
     open(os.path.join(self.get_dir(), 'test_egl.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'test_egl.c')).read()))
@@ -1236,7 +1237,7 @@ keydown(100);keyup(100); // trigger the end
   def test_glgears_long(self):
     for proxy in [0, 1]:
       print 'proxy', proxy
-      self.btest('hello_world_gles.c', expected=map(str, range(30, 500)), args=['-DHAVE_BUILTIN_SINCOS', '-DLONGTEST'] + (['--proxy-to-worker'] if proxy else []))
+      self.btest('hello_world_gles.c', expected=map(str, range(30, 500)), args=['-DHAVE_BUILTIN_SINCOS', '-DLONGTEST'] + (['--proxy-to-worker'] if proxy else []), timeout=30)
 
   def test_glgears_animation(self):
     es2_suffix = ['', '_full', '_full_944']
@@ -1284,7 +1285,7 @@ keydown(100);keyup(100); // trigger the end
         args = ['--preload-file', 'smoke.tga', '-O2'] # test optimizations and closure here as well for more coverage
 
       self.btest(program,
-          reference=book_path(basename.replace('.bc', '.png')), args=args)
+          reference=book_path(basename.replace('.bc', '.png')), args=args, timeout=30)
 
   def test_gles2_emulation(self):
     shutil.copyfile(path_from_root('tests', 'glbook', 'Chapter_10', 'MultiTexture', 'basemap.tga'), self.in_dir('basemap.tga'))
@@ -1375,16 +1376,20 @@ keydown(100);keyup(100); // trigger the end
   def test_gl_ps(self):
     # pointers and a shader
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
-    self.btest('gl_ps.c', reference='gl_ps.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'], reference_slack=1)
+    self.btest('gl_ps.c', reference='gl_ps.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'], reference_slack=1)
 
   def test_gl_ps_packed(self):
     # packed data that needs to be strided
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
-    self.btest('gl_ps_packed.c', reference='gl_ps.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'], reference_slack=1)
+    self.btest('gl_ps_packed.c', reference='gl_ps.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'], reference_slack=1)
 
   def test_gl_ps_strides(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
-    self.btest('gl_ps_strides.c', reference='gl_ps_strides.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'])
+    self.btest('gl_ps_strides.c', reference='gl_ps_strides.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'])
+
+  def test_gl_ps_worker(self):
+    shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
+    self.btest('gl_ps_worker.c', reference='gl_ps.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'], reference_slack=1, also_proxied=True)
 
   def test_gl_renderers(self):
     self.btest('gl_renderers.c', reference='gl_renderers.png', args=['-s', 'GL_UNSAFE_OPTS=0', '-s', 'LEGACY_GL_EMULATION=1'])
@@ -1480,6 +1485,10 @@ void *getBindBuffer() {
   def test_cubegeom_pre2_vao2(self):
     self.btest('cubegeom_pre2_vao2.c', reference='cubegeom_pre2_vao2.png', args=['-s', 'LEGACY_GL_EMULATION=1'])
 
+  def test_cubegeom_u4fv_2(self):
+    self.btest('cubegeom_u4fv_2.c', reference='cubegeom_u4fv_2.png', args=['-s', 'LEGACY_GL_EMULATION=1'])
+    self.btest('cubegeom_u4fv_2.c', reference='cubegeom_u4fv_2.png', args=['-s', 'LEGACY_GL_EMULATION=1', '-s', 'SPLIT_MEMORY=16777216']) # check for uniform4fv slice being valid in split memory
+
   def test_cube_explosion(self):
     self.btest('cube_explosion.c', reference='cube_explosion.png', args=['-s', 'LEGACY_GL_EMULATION=1'], also_proxied=True)
 
@@ -1506,7 +1515,7 @@ void *getBindBuffer() {
 
   def test_sdl_rotozoom(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
-    self.btest('sdl_rotozoom.c', reference='sdl_rotozoom.png', args=['--preload-file', 'screenshot.png'], reference_slack=3)
+    self.btest('sdl_rotozoom.c', reference='sdl_rotozoom.png', args=['--preload-file', 'screenshot.png', '--use-preload-plugins'], reference_slack=3)
 
   def test_sdl_gfx_primitives(self):
     self.btest('sdl_gfx_primitives.c', reference='sdl_gfx_primitives.png', reference_slack=1)
@@ -1545,7 +1554,7 @@ void *getBindBuffer() {
 
   def test_glbegin_points(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
-    self.btest('glbegin_points.c', reference='glbegin_points.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'])
+    self.btest('glbegin_points.c', reference='glbegin_points.png', args=['--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'])
 
   def test_s3tc(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.dds'), os.path.join(self.get_dir(), 'screenshot.dds'))
@@ -1556,17 +1565,30 @@ void *getBindBuffer() {
     self.btest('s3tc.c', reference='s3tc.png', args=['--preload-file', 'screenshot.dds', '-s', 'LEGACY_GL_EMULATION=1', '-s', 'GL_FFP_ONLY=1'])
 
   def test_s3tc_crunch(self):
-    shutil.copyfile(path_from_root('tests', 'ship.dds'), 'ship.dds')
-    shutil.copyfile(path_from_root('tests', 'bloom.dds'), 'bloom.dds')
-    shutil.copyfile(path_from_root('tests', 'water.dds'), 'water.dds')
-    Popen([PYTHON, FILE_PACKAGER, 'test.data', '--crunch', '--preload', 'ship.dds', 'bloom.dds', 'water.dds'], stdout=open('pre.js', 'w')).communicate()
-    assert os.stat('test.data').st_size < 0.5*(os.stat('ship.dds').st_size+os.stat('bloom.dds').st_size+os.stat('water.dds').st_size), 'Compressed should be smaller than dds'
-    shutil.move('ship.dds', 'ship.donotfindme.dds') # make sure we load from the compressed
-    shutil.move('bloom.dds', 'bloom.donotfindme.dds') # make sure we load from the compressed
-    shutil.move('water.dds', 'water.donotfindme.dds') # make sure we load from the compressed
-    self.btest('s3tc_crunch.c', reference='s3tc_crunch.png', reference_slack=11, args=['--pre-js', 'pre.js', '-s', 'LEGACY_GL_EMULATION=1'])
+    try:
+      print 'Crunch is located at ' + CRUNCH
+    except:
+      return self.skip('Skipped: Crunch is not present on the current system. Please install it (manually or via emsdk) and make sure it is activated in the Emscripten configuration file.')
+    def test(args):
+      print args
+      shutil.copyfile(path_from_root('tests', 'ship.dds'), 'ship.dds')
+      shutil.copyfile(path_from_root('tests', 'bloom.dds'), 'bloom.dds')
+      shutil.copyfile(path_from_root('tests', 'water.dds'), 'water.dds')
+      open('text.txt', 'w').write('123')
+      Popen([PYTHON, FILE_PACKAGER, 'test.data', '--crunch', '--preload', 'ship.dds', 'bloom.dds', 'water.dds'] + args, stdout=open('pre.js', 'w')).communicate()
+      assert os.stat('test.data').st_size < 0.5*(os.stat('ship.dds').st_size+os.stat('bloom.dds').st_size+os.stat('water.dds').st_size), 'Compressed should be smaller than dds'
+      shutil.move('ship.dds', 'ship.donotfindme.dds') # make sure we load from the compressed
+      shutil.move('bloom.dds', 'bloom.donotfindme.dds') # make sure we load from the compressed
+      shutil.move('water.dds', 'water.donotfindme.dds') # make sure we load from the compressed
+      self.btest('s3tc_crunch.c', reference='s3tc_crunch.png', reference_slack=11, args=['--pre-js', 'pre.js', '-s', 'LEGACY_GL_EMULATION=1'])
+    test([])
+    test(['text.txt']) # also package a non-crunch file
 
   def test_s3tc_crunch_split(self): # load several datafiles/outputs of file packager
+    try:
+      print 'Crunch is located at ' + CRUNCH
+    except:
+      return self.skip('Skipped: Crunch is not present on the current system. Please install it (manually or via emsdk) and make sure it is activated in the Emscripten configuration file.')
     shutil.copyfile(path_from_root('tests', 'ship.dds'), 'ship.dds')
     shutil.copyfile(path_from_root('tests', 'bloom.dds'), 'bloom.dds')
     shutil.copyfile(path_from_root('tests', 'water.dds'), 'water.dds')
@@ -1661,15 +1683,18 @@ void *getBindBuffer() {
         xhr.responseType = 'arraybuffer';
         xhr.send(null);
 
-        window.onerror = function() {
-          Module.print('fail!');
-          var xhr = new XMLHttpRequest();
-          xhr.open('GET', 'http://localhost:8888/report_result?0');
-          xhr.onload = function() {
-            console.log('close!');
-            window.close();
-          };
-          xhr.send();
+        console.warn = function(x) {
+          if (x.indexOf('a problem seems to have happened with Module.memoryInitializerRequest') >= 0) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://localhost:8888/report_result?0');
+            setTimeout(xhr.onload = function() {
+              console.log('close!');
+              window.close();
+            }, 1000);
+            xhr.send();
+            throw 'halt';
+          }
+          console.log('WARNING: ' + x);
         };
       ''')
       self.btest('mem_init_request.cpp', expected=status, args=['--pre-js', 'pre.js', '--memory-init-file', '1'])
@@ -1736,7 +1761,13 @@ void *getBindBuffer() {
         doDirectCall(300);
       }
 
-      setTimeout(Module['_free'], 1000); // free is valid to call even after the runtime closes
+      setTimeout(function() {
+        var xhr = new XMLHttpRequest();
+        assert(Module.noted);
+        xhr.open('GET', 'http://localhost:8888/report_result?' + HEAP32[Module.noted>>2]);
+        xhr.send();
+        setTimeout(function() { window.close() }, 1000);
+      }, 1000);
     '''
 
     open('pre_main.js', 'w').write(r'''
@@ -1814,9 +1845,11 @@ void *getBindBuffer() {
     # and the browser will not close as part of the test, pinning down the cwd on Windows and it wouldn't be possible to delete it. Therefore switch away from that directory
     # before launching.
     os.chdir(path_from_root())
-    args = [PYTHON, path_from_root('emrun'), '--timeout', '30', '--verbose', '--log_stdout', os.path.join(outdir, 'stdout.txt'), '--log_stderr', os.path.join(outdir, 'stderr.txt')]
+    args = [PYTHON, path_from_root('emrun'), '--timeout', '30', '--safe_firefox_profile', '--verbose', '--log_stdout', os.path.join(outdir, 'stdout.txt'), '--log_stderr', os.path.join(outdir, 'stderr.txt')]
     if emscripten_browser is not None:
-      args += ['--browser', emscripten_browser]
+      # If EMSCRIPTEN_BROWSER carried command line arguments to pass to the browser, (e.g. "firefox -profile /path/to/foo") those can't be passed via emrun, so strip them out.
+      browser_name = shlex.split(emscripten_browser)[0]
+      args += ['--browser', browser_name]
     args += [os.path.join(outdir, 'hello_world.html'), '1', '2', '--3']
     process = subprocess.Popen(args)
     process.communicate()
@@ -1829,6 +1862,11 @@ void *getBindBuffer() {
     assert 'Testing ASCII characters: !"$%&\'()*+,-./:;<=>?@[\\]^_`{|}~' in stdout
     assert 'Testing char sequences: %20%21 &auml;' in stdout
     assert 'hello, error stream!' in stderr
+
+  # This does not actually verify anything except that --cpuprofiler and --memoryprofiler compiles.
+  # Run interactive.test_cpuprofiler_memoryprofiler for interactive testing.
+  def test_cpuprofiler_memoryprofiler(self):
+    self.btest('hello_world_gles.c', expected='0', args=['-DLONGTEST=1', '-DTEST_MEMORYPROFILER_ALLOCATIONS_MAP=1', '-O2', '--cpuprofiler', '--memoryprofiler'], timeout=30)
 
   def test_uuid(self):
     # Run with ./runner.py browser.test_uuid
@@ -1876,17 +1914,22 @@ Module["preRun"].push(function () {
   def test_html5(self):
     for opts in [[], ['-O2', '-g1', '--closure', '1']]:
       print opts
-      self.btest(path_from_root('tests', 'test_html5.c'), args=opts, expected='0')
+      self.btest(path_from_root('tests', 'test_html5.c'), args=opts, expected='0', timeout=20)
 
   def test_html5_webgl_create_context(self):
     for opts in [[], ['-O2', '-g1', '--closure', '1'], ['-s', 'FULL_ES2=1']]:
       print opts
-      self.btest(path_from_root('tests', 'webgl_create_context.cpp'), args=opts, expected='0')
+      self.btest(path_from_root('tests', 'webgl_create_context.cpp'), args=opts, expected='0', timeout=20)
 
   def test_html5_webgl_destroy_context(self):
     for opts in [[], ['-O2', '-g1'], ['-s', 'FULL_ES2=1']]:
       print opts
-      self.btest(path_from_root('tests', 'webgl_destroy_context.cpp'), args=opts + ['--shell-file', path_from_root('tests/webgl_destroy_context_shell.html'), '-s', 'NO_EXIT_RUNTIME=1'], expected='0')
+      self.btest(path_from_root('tests', 'webgl_destroy_context.cpp'), args=opts + ['--shell-file', path_from_root('tests/webgl_destroy_context_shell.html'), '-s', 'NO_EXIT_RUNTIME=1'], expected='0', timeout=20)
+
+  def test_webgl2(self):
+    for opts in [[], ['-O2', '-g1', '--closure', '1'], ['-s', 'FULL_ES2=1']]:
+      print opts
+      self.btest(path_from_root('tests', 'webgl2.cpp'), args=['-s', 'USE_WEBGL2=1'] + opts, expected='0')
 
   def test_sdl_touch(self):
     for opts in [[], ['-O2', '-g1', '--closure', '1']]:
@@ -1910,7 +1953,7 @@ Module["preRun"].push(function () {
       # sanity checks, building with and without precise float semantics generates different results
       self.btest(path_from_root('tests', 'codemods.cpp'), expected='2', args=[opts])
       self.btest(path_from_root('tests', 'codemods.cpp'), expected='1', args=[opts, '-s', 'PRECISE_F32=1'])
-      self.btest(path_from_root('tests', 'codemods.cpp'), expected='1', args=[opts, '-s', 'PRECISE_F32=2']) # empty polyfill, but browser has support, so semantics are like float
+      self.btest(path_from_root('tests', 'codemods.cpp'), expected='1', args=[opts, '-s', 'PRECISE_F32=2', '--separate-asm']) # empty polyfill, but browser has support, so semantics are like float
 
       # now use a shell to remove the browser's fround support
       open(self.in_dir('shell.html'), 'w').write(open(path_from_root('src', 'shell.html')).read().replace('var Module = {', '''
@@ -1919,7 +1962,7 @@ Module["preRun"].push(function () {
   '''))
       self.btest(path_from_root('tests', 'codemods.cpp'), expected='2', args=[opts, '--shell-file', 'shell.html'])
       self.btest(path_from_root('tests', 'codemods.cpp'), expected='1', args=[opts, '--shell-file', 'shell.html', '-s', 'PRECISE_F32=1'])
-      self.btest(path_from_root('tests', 'codemods.cpp'), expected='2', args=[opts, '--shell-file', 'shell.html', '-s', 'PRECISE_F32=2']) # empty polyfill, no browser support, so semantics are like double
+      self.btest(path_from_root('tests', 'codemods.cpp'), expected='2', args=[opts, '--shell-file', 'shell.html', '-s', 'PRECISE_F32=2', '--separate-asm']) # empty polyfill, no browser support, so semantics are like double
 
       # finally, remove fround, patch up fround as the code executes (after polyfilling etc.), to verify that we got rid of it entirely on the client side
       fixer = 'python fix.py'
@@ -1933,7 +1976,7 @@ open(filename, 'w').write(replaced)
   ''')
       self.btest(path_from_root('tests', 'codemods.cpp'), expected='2', args=[opts, '--shell-file', 'shell.html', '--js-transform', fixer]) # no fround anyhow
       self.btest(path_from_root('tests', 'codemods.cpp'), expected='121378', args=[opts, '--shell-file', 'shell.html', '--js-transform', fixer, '-s', 'PRECISE_F32=1']) # proper polyfill was enstated, then it was replaced by the fix so 0 is returned all the time, hence a different result here
-      self.btest(path_from_root('tests', 'codemods.cpp'), expected='2', args=[opts, '--shell-file', 'shell.html', '--js-transform', fixer, '-s', 'PRECISE_F32=2']) # we should remove the calls to the polyfill ENTIRELY here, on the clientside, so we should NOT see any calls to fround here, and result should be like double
+      self.btest(path_from_root('tests', 'codemods.cpp'), expected='2', args=[opts, '--shell-file', 'shell.html', '--js-transform', fixer, '-s', 'PRECISE_F32=2', '--separate-asm']) # we should remove the calls to the polyfill ENTIRELY here, on the clientside, so we should NOT see any calls to fround here, and result should be like double
 
   def test_wget(self):
     with open(os.path.join(self.get_dir(), 'test.txt'), 'w') as f:
@@ -1978,6 +2021,44 @@ open(filename, 'w').write(replaced)
     shutil.move('test.data', os.path.join('sub', 'test.data'))
     self.run_browser('page.html', None, '/report_result?1')
 
+    # alternatively, put locateFile in the HTML
+    print 'in html'
+
+    open('shell.html', 'w').write('''
+      <body>
+        <script>
+          var Module = {
+            locateFile: function(x) { return "sub/" + x }
+          };
+        </script>
+
+        {{{ SCRIPT }}}
+      </body>
+    ''')
+
+    def in_html(expected):
+      Popen([PYTHON, EMCC, 'src.cpp', '-O2', '-g', '--shell-file', 'shell.html', '--pre-js', 'data.js', '-o', 'page.html']).communicate()
+      self.run_browser('page.html', None, '/report_result?' + expected)
+
+    in_html('1')
+
+    # verify that the mem init request succeeded in the latter case
+    open('src.cpp', 'w').write(self.with_report_result(r'''
+#include<stdio.h>
+#include<emscripten.h>
+
+int main() {
+  int result = EM_ASM_INT_V({
+    return Module['memoryInitializerRequest'].status;
+  });
+  printf("memory init request: %d\n", result);
+  REPORT_RESULT();
+  return 0;
+}
+    '''))
+
+    in_html('200')
+
   def test_glfw3(self):
     self.btest(path_from_root('tests', 'glfw3.c'), args=['-s', 'LEGACY_GL_EMULATION=1', '-s', 'USE_GLFW=3'], expected='1')
 
@@ -2013,6 +2094,7 @@ Module['_main'] = function() {
 ''')
     for opts in [[], ['-O1'], ['-O2', '-profiling'], ['-O2']]:
       print opts
+      opts += ['-s', 'NO_EXIT_RUNTIME=1', '--pre-js', 'run.js', '-s', 'SWAPPABLE_ASM_MODULE=1'] # important that both modules are built with the same opts
       open('second.cpp', 'w').write(self.with_report_result(open(path_from_root('tests', 'asm_swap2.cpp')).read()))
       Popen([PYTHON, EMCC, 'second.cpp'] + opts).communicate()
       Popen([PYTHON, path_from_root('tools', 'distill_asm.py'), 'a.out.js', 'second.js', 'swap-in']).communicate()
@@ -2024,7 +2106,7 @@ Module['_main'] = function() {
       else:
         print 'Skipping asm validation check, spidermonkey is not configured'
 
-      self.btest(path_from_root('tests', 'asm_swap.cpp'), args=['-s', 'SWAPPABLE_ASM_MODULE=1', '-s', 'NO_EXIT_RUNTIME=1', '--pre-js', 'run.js'] + opts, expected='999')
+      self.btest(path_from_root('tests', 'asm_swap.cpp'), args=opts, expected='999')
 
   def test_sdl2_image(self):
     # load an image file, get pixel data. Also O2 coverage for --preload-file, and memory-init
@@ -2036,7 +2118,7 @@ Module['_main'] = function() {
                                       ('screenshot.jpg@/assets/screenshot.jpg', '/assets', 'screenshot.jpg')]:
         Popen([
           PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl2_image.c'), '-o', 'page.html', '-O2', '--memory-init-file', str(mem),
-          '--preload-file', dest, '-DSCREENSHOT_DIRNAME="' + dirname + '"', '-DSCREENSHOT_BASENAME="' + basename + '"', '-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2'
+          '--preload-file', dest, '-DSCREENSHOT_DIRNAME="' + dirname + '"', '-DSCREENSHOT_BASENAME="' + basename + '"', '-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2', '--use-preload-plugins'
         ]).communicate()
         self.run_browser('page.html', '', '/report_result?600')
 
@@ -2045,9 +2127,14 @@ Module['_main'] = function() {
     open(os.path.join(self.get_dir(), 'sdl2_image_jpeg.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl2_image.c')).read()))
     Popen([
       PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl2_image_jpeg.c'), '-o', 'page.html',
-      '--preload-file', 'screenshot.jpeg', '-DSCREENSHOT_DIRNAME="/"', '-DSCREENSHOT_BASENAME="screenshot.jpeg"', '-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2'
+      '--preload-file', 'screenshot.jpeg', '-DSCREENSHOT_DIRNAME="/"', '-DSCREENSHOT_BASENAME="screenshot.jpeg"', '-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2', '--use-preload-plugins'
     ]).communicate()
     self.run_browser('page.html', '', '/report_result?600')
+
+  def test_sdl2_image_formats(self):
+    shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
+    self.btest('sdl2_image.c', expected='512', args=['--preload-file', 'screenshot.png', '-DSCREENSHOT_DIRNAME="/"', '-DSCREENSHOT_BASENAME="screenshot.png"',
+                                                     '-DNO_PRELOADED','-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2', '-s', 'SDL2_IMAGE_FORMATS=["png"]'])
 
   def test_sdl2_key(self):
     for defines in [[]]:
@@ -2065,7 +2152,15 @@ Module['_main'] = function() {
           event.initKeyEvent("keydown", true, true, window,
                              0, 0, 0, 0,
                              c, c);
-          document.dispatchEvent(event);
+          var prevented = !document.dispatchEvent(event);
+
+          //send keypress if not prevented
+          if (!prevented) {
+            event = document.createEvent("KeyboardEvent");
+            event.initKeyEvent("keypress", true, true, window,
+                               0, 0, 0, 0, 0, c);
+            document.dispatchEvent(event);
+          }
         }
 
         function keyup(c) {
@@ -2079,7 +2174,7 @@ Module['_main'] = function() {
       open(os.path.join(self.get_dir(), 'sdl2_key.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl2_key.c')).read()))
 
       Popen([PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl2_key.c'), '-o', 'page.html'] + defines + ['-s', 'USE_SDL=2','--pre-js', 'pre.js', '-s', '''EXPORTED_FUNCTIONS=['_main', '_one']''', '-s', 'NO_EXIT_RUNTIME=1']).communicate()
-      self.run_browser('page.html', '', '/report_result?7436429')
+      self.run_browser('page.html', '', '/report_result?37182145')
 
   def test_sdl2_text(self):
     open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
@@ -2134,7 +2229,7 @@ Module['_main'] = function() {
     open(os.path.join(self.get_dir(), 'sdl2_mouse.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl2_mouse.c')).read()))
 
     Popen([PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl2_mouse.c'), '-O2', '--minify', '0', '-o', 'page.html', '--pre-js', 'pre.js', '-s', 'USE_SDL=2']).communicate()
-    self.run_browser('page.html', '', '/report_result?712')
+    self.run_browser('page.html', '', '/report_result?712', timeout=30)
 
   def test_sdl2_mouse_offsets(self):
     open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
@@ -2250,27 +2345,6 @@ Module['_main'] = function() {
   def test_sdl2_swsurface(self):
     self.btest('sdl2_swsurface.c', expected='1', args=['-s', 'USE_SDL=2'])
 
-  def test_sdl2_image_compressed(self):
-    for image, width in [(path_from_root('tests', 'screenshot2.png'), 300),
-                         (path_from_root('tests', 'screenshot.jpg'), 600)]:
-      self.clear()
-      print image
-
-      basename = os.path.basename(image)
-      shutil.copyfile(image, os.path.join(self.get_dir(), basename))
-      open(os.path.join(self.get_dir(), 'sdl2_image.c'), 'w').write(self.with_report_result(open(path_from_root('tests', 'sdl2_image.c')).read()))
-
-      self.build_native_lzma()
-      Popen([
-        PYTHON, EMCC, os.path.join(self.get_dir(), 'sdl2_image.c'), '-o', 'page.html',
-        '--preload-file', basename, '-DSCREENSHOT_DIRNAME="/"', '-DSCREENSHOT_BASENAME="' + basename + '"', '-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2',
-        '--compression', '%s,%s,%s' % (path_from_root('third_party', 'lzma.js', 'lzma-native'),
-                                       path_from_root('third_party', 'lzma.js', 'lzma-decoder.js'),
-                                       'LZMA.decompress')
-      ]).communicate()
-      shutil.move(os.path.join(self.get_dir(), basename), basename + '.renamedsoitcannotbefound');
-      self.run_browser('page.html', '', '/report_result?' + str(width))
-
   def test_sdl2_image_prepare(self):
     # load an image file, get pixel data.
     shutil.copyfile(path_from_root('tests', 'screenshot.jpg'), os.path.join(self.get_dir(), 'screenshot.not'))
@@ -2326,31 +2400,31 @@ window.close = function() {
   def test_sdl2_fog_simple(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl2_fog_simple.c', reference='screenshot-fog-simple.png',
-      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','-O2', '--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','-O2', '--minify', '0', '--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl2_fog_negative(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl2_fog_negative.c', reference='screenshot-fog-negative.png',
-      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl2_fog_density(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl2_fog_density.c', reference='screenshot-fog-density.png',
-      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl2_fog_exp2(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl2_fog_exp2.c', reference='screenshot-fog-exp2.png',
-      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl2_fog_linear(self):
     shutil.copyfile(path_from_root('tests', 'screenshot.png'), os.path.join(self.get_dir(), 'screenshot.png'))
     self.btest('sdl2_fog_linear.c', reference='screenshot-fog-linear.png', reference_slack=1,
-      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1'],
+      args=['-s', 'USE_SDL=2', '-s', 'USE_SDL_IMAGE=2','--preload-file', 'screenshot.png', '-s', 'LEGACY_GL_EMULATION=1', '--use-preload-plugins'],
       message='You should see an image with fog.')
 
   def test_sdl2_unwasteful(self):
@@ -2358,6 +2432,22 @@ window.close = function() {
 
   def test_sdl2_canvas_write(self):
     self.btest('sdl2_canvas_write.cpp', expected='0', args=['-s', 'USE_SDL=2'])
+
+  def test_sdl2_gl_frames_swap(self):
+    def post_build(*args):
+      self.post_manual_reftest(*args)
+      html = open('test.html').read()
+      html2 = html.replace('''Module['postRun'] = doReftest;''', '') # we don't want the very first frame
+      assert html != html2
+      open('test.html', 'w').write(html2)
+    self.btest('sdl2_gl_frames_swap.c', reference='sdl2_gl_frames_swap.png', args=['--proxy-to-worker', '-s', 'GL_TESTING=1', '-s', 'USE_SDL=2'], manual_reference=True, post_build=post_build)
+
+  def test_sdl2_ttf(self):
+    shutil.copy2(path_from_root('tests', 'freetype', 'LiberationSansBold.ttf'), self.get_dir())
+    self.btest('sdl2_ttf.c', reference='sdl2_ttf.png',
+      args=['-O2', '-s', 'USE_SDL=2', '-s', 'USE_SDL_TTF=2', '--embed-file', 'LiberationSansBold.ttf'],
+      message='You should see colorful "hello" and "world" in the window',
+      timeout=30)
 
   def test_emterpreter_async(self):
     for opts in [0, 1, 2, 3]:
@@ -2385,21 +2475,27 @@ window.close = function() {
   def test_emterpreter_async_mainloop(self):
     for opts in [0, 1, 2, 3]:
       print opts
-      self.btest('emterpreter_async_mainloop.cpp', '121', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts)])
+      self.btest('emterpreter_async_mainloop.cpp', '121', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts)], timeout=20)
 
   def test_emterpreter_async_with_manual(self):
     for opts in [0, 1, 2, 3]:
       print opts
-      self.btest('emterpreter_async_with_manual.cpp', '121', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts), '-s', 'EMTERPRETIFY_BLACKLIST=["_acall"]'])
+      self.btest('emterpreter_async_with_manual.cpp', '121', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-O' + str(opts), '-s', 'EMTERPRETIFY_BLACKLIST=["_acall"]'], timeout=20)
 
   def test_emterpreter_async_sleep2(self):
     self.btest('emterpreter_async_sleep2.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Oz'])
 
   def test_sdl_audio_beep_sleep(self):
-    self.btest('sdl_audio_beep_sleep.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Os', '-s', 'ASSERTIONS=1', '-s', 'DISABLE_EXCEPTION_CATCHING=0', '-profiling', '-s', 'EMTERPRETIFY_YIELDLIST=["__Z14audio_callbackPvPhi", "__ZN6Beeper15generateSamplesIhEEvPT_i", "__ZN6Beeper15generateSamplesIsEEvPT_i"]', '-s', 'SAFE_HEAP=1'])
+    self.btest('sdl_audio_beep_sleep.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Os', '-s', 'ASSERTIONS=1', '-s', 'DISABLE_EXCEPTION_CATCHING=0', '-profiling', '-s', 'SAFE_HEAP=1'], timeout=60)
 
   def test_mainloop_reschedule(self):
-    self.btest('mainloop_reschedule.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Os'])
+    self.btest('mainloop_reschedule.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-Os'], timeout=30)
+
+  def test_mainloop_infloop(self):
+    self.btest('mainloop_infloop.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1'], timeout=30)
+
+  def test_emterpreter_async_iostream(self):
+    self.btest('emterpreter_async_iostream.cpp', '1', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1'])
 
   def test_modularize(self):
     for opts in [[], ['-O1'], ['-O2', '-profiling'], ['-O2']]:
@@ -2514,126 +2610,321 @@ window.close = function() {
 
     self.btest(self.in_dir('main.cpp'), '1', args=['-s', 'MAIN_MODULE=1', '-O2', '-s', 'LEGACY_GL_EMULATION=1', '--pre-js', 'pre.js'])
 
+  def test_memory_growth_during_startup(self):
+    open('data.dat', 'w').write('X' * (30*1024*1024))
+    self.btest('browser_test_hello_world.c', '0', args=['-s', 'ASSERTIONS=1', '-s', 'ALLOW_MEMORY_GROWTH=1', '-s', 'TOTAL_MEMORY=10000', '-s', 'TOTAL_STACK=5000', '--preload-file', 'data.dat'])
+
+  # pthreads tests
+
   # Test that the emscripten_ atomics api functions work.
-  def test_pthread_atomics(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_atomics.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_aaa_pthread_atomics(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_atomics.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=120) # extra time on first test, to be sure to build all libraries
 
   # Test 64-bit atomics.
-  def test_pthread_64bit_atomics(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_64bit_atomics.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_64bit_atomics(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_64bit_atomics.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test the old GCC atomic __sync_fetch_and_op builtin operations.
-  def test_pthread_gcc_atomic_fetch_and_op(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_atomic_fetch_and_op.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_gcc_atomic_fetch_and_op(self):
+    # We need to resort to using regexes to optimize out SharedArrayBuffer when pthreads are not supported, which is brittle!
+    # Therefore perform very extensive testing of different codegen modes to catch any problems.
+    for opt in [[], ['-O1'], ['-O2'], ['-O3'], ['-Os'], ['-Oz']]:
+      for debug in [[], ['-g1'], ['-g2'], ['-g4']]:
+        for f32 in [[], ['-s', 'PRECISE_F32=1']]:
+          print opt, debug, f32
+          self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_atomic_fetch_and_op.cpp'), expected='0', args=opt+debug+f32+['-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=60)
 
   # 64 bit version of the above test.
-  def test_pthread_gcc_64bit_atomic_fetch_and_op(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_64bit_atomic_fetch_and_op.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_gcc_64bit_atomic_fetch_and_op(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_64bit_atomic_fetch_and_op.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test the old GCC atomic __sync_op_and_fetch builtin operations.
-  def test_pthread_gcc_atomic_op_and_fetch(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_atomic_op_and_fetch.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_gcc_atomic_op_and_fetch(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_atomic_op_and_fetch.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # 64 bit version of the above test.
-  def test_pthread_gcc_64bit_atomic_op_and_fetch(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_64bit_atomic_op_and_fetch.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_gcc_64bit_atomic_op_and_fetch(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_64bit_atomic_op_and_fetch.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Tests the rest of the remaining GCC atomics after the two above tests.
-  def test_pthread_gcc_atomics(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_atomics.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_gcc_atomics(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_atomics.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test the __sync_lock_test_and_set and __sync_lock_release primitives.
-  def test_pthread_gcc_spinlock(self):
+  def test_zzz_pthread_gcc_spinlock(self):
     for arg in [[], ['-DUSE_EMSCRIPTEN_INTRINSICS']]:
-      self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_spinlock.cpp'), expected='800', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'] + arg)
+      self.btest(path_from_root('tests', 'pthread', 'test_pthread_gcc_spinlock.cpp'), expected='800', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'] + arg, timeout=30)
 
   # Test that basic thread creation works.
-  def test_pthread_create(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_create.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_create(self):
+    for opt in [['-O0'], ['-O3']]:
+      for pthreads in [['-s', 'USE_PTHREADS=1'], ['-s', 'USE_PTHREADS=2', '--separate-asm']]:
+        print str(opt) + ' ' + str(pthreads)
+        self.btest(path_from_root('tests', 'pthread', 'test_pthread_create.cpp'), expected='0', args=opt + pthreads + ['-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test that a pthread can spawn another pthread of its own.
-  def test_pthread_create_pthread(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_create_pthread.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=2', '-s', 'NO_EXIT_RUNTIME=1'])
+  def test_zzz_pthread_create_pthread(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_create_pthread.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=2', '-s', 'NO_EXIT_RUNTIME=1'], timeout=30)
 
   # Test another case of pthreads spawning pthreads, but this time the callers immediately join on the threads they created.
-  def test_pthread_nested_spawns(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_nested_spawns.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=2'])
+  def test_zzz_pthread_nested_spawns(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_nested_spawns.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=2'], timeout=30)
 
   # Test that main thread can wait for a pthread to finish via pthread_join().
-  def test_pthread_join(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_join.cpp'), expected='6765', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_join(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_join.cpp'), expected='6765', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test pthread_cancel() operation
-  def test_pthread_cancel(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_cancel.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_cancel(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_cancel.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test pthread_kill() operation
-  def test_pthread_kill(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_kill.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_kill(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_kill.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test that pthread cleanup stack (pthread_cleanup_push/_pop) works.
-  def test_pthread_cleanup(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_cleanup.cpp'), expected='907640832', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_cleanup(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_cleanup.cpp'), expected='907640832', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Tests the pthread mutex api.
-  def test_pthread_mutex(self):
+  def test_zzz_pthread_mutex(self):
     for arg in [[], ['-DSPINLOCK_TEST']]:
-      self.btest(path_from_root('tests', 'pthread', 'test_pthread_mutex.cpp'), expected='50', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'] + arg)
+      self.btest(path_from_root('tests', 'pthread', 'test_pthread_mutex.cpp'), expected='50', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'] + arg, timeout=20)
 
   # Test that memory allocation is thread-safe.
-  def test_pthread_malloc(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_malloc.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_malloc(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_malloc.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Stress test pthreads allocating memory that will call to sbrk(), and main thread has to free up the data.
-  def test_pthread_malloc_free(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_malloc_free.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8', '-s', 'TOTAL_MEMORY=268435456'])
+  def test_zzz_pthread_malloc_free(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_malloc_free.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8', '-s', 'TOTAL_MEMORY=268435456'], timeout=30)
 
   # Test that the pthread_barrier API works ok.
-  def test_pthread_barrier(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_barrier.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_barrier(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_barrier.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test the pthread_once() function.
-  def test_pthread_once(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_once.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_once(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_once.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test against a certain thread exit time handling bug by spawning tons of threads.
-  def test_pthread_spawns(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_spawns.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_spawns(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_spawns.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # It is common for code to flip volatile global vars for thread control. This is a bit lax, but nevertheless, test whether that
   # kind of scheme will work with Emscripten as well.
-  def test_pthread_volatile(self):
+  def test_zzz_pthread_volatile(self):
     for arg in [[], ['-DUSE_C_VOLATILE']]:
-      self.btest(path_from_root('tests', 'pthread', 'test_pthread_volatile.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'] + arg)
+      self.btest(path_from_root('tests', 'pthread', 'test_pthread_volatile.cpp'), expected='1', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'] + arg, timeout=30)
 
   # Test thread-specific data (TLS).
-  def test_pthread_thread_local_storage(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_thread_local_storage.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_thread_local_storage(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_thread_local_storage.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test the pthread condition variable creation and waiting.
-  def test_pthread_condition_variable(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_condition_variable.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8'])
+  def test_zzz_pthread_condition_variable(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_condition_variable.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8'], timeout=30)
 
   # Test that pthreads are able to do printf.
-  def test_pthread_printf(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_printf.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=1'])
+  def test_zzz_pthread_printf(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_printf.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=1'], timeout=30)
 
   # Test that pthreads are able to do cout. Failed due to https://bugzilla.mozilla.org/show_bug.cgi?id=1154858.
-  def test_pthread_iostream(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_iostream.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=1'])
+  def test_zzz_pthread_iostream(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_iostream.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=1'], timeout=30)
 
   # Test that the main thread is able to use pthread_set/getspecific.
-  def test_pthread_setspecific_mainthread(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_setspecific_mainthread.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1'])
+  def test_zzz_pthread_setspecific_mainthread(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_setspecific_mainthread.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm'], timeout=30)
 
   # Test the -s PTHREAD_HINT_NUM_CORES=x command line variable.
-  def test_pthread_num_logical_cores(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_num_logical_cores.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_HINT_NUM_CORES=2'])
+  def test_zzz_pthread_num_logical_cores(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_num_logical_cores.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_HINT_NUM_CORES=2'], timeout=30)
 
   # Test that pthreads have access to filesystem.
-  def test_pthread_file_io(self):
-    self.btest(path_from_root('tests', 'pthread', 'test_pthread_file_io.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=1'])
+  def test_zzz_pthread_file_io(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_file_io.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=1'], timeout=30)
+
+  # Test that the pthread_create() function operates benignly in the case that threading is not supported.
+  def test_zzz_pthread_supported(self):
+    for args in [[], ['-s', 'USE_PTHREADS=2', '--separate-asm', '-s', 'PTHREAD_POOL_SIZE=8']]:
+      self.btest(path_from_root('tests', 'pthread', 'test_pthread_supported.cpp'), expected='0', args=['-O3'] + args, timeout=30)
+
+  def test_zzz_separate_asm_pthreads(self):
+    self.btest(path_from_root('tests', 'pthread', 'test_pthread_atomics.cpp'), expected='0', args=['-O3', '-s', 'USE_PTHREADS=1', '-s', 'PTHREAD_POOL_SIZE=8', '--separate-asm', '--profiling'], timeout=30)
 
   # Test that it is possible to send a signal via calling alarm(timeout), which in turn calls to the signal handler set by signal(SIGALRM, func);
   def test_sigalrm(self):
-    self.btest(path_from_root('tests', 'sigalrm.cpp'), expected='0', args=['-O3'])
+    self.btest(path_from_root('tests', 'sigalrm.cpp'), expected='0', args=['-O3'], timeout=30)
+
+  def test_meminit_pairs(self):
+    d = 'const char *data[] = {\n  "'
+    d += '",\n  "'.join(''.join('\\x{:02x}\\x{:02x}'.format(i, j)
+                                for j in range(256)) for i in range(256))
+    with open(path_from_root('tests', 'meminit_pairs.c')) as f:
+      d += '"\n};\n' + f.read()
+    args = ["-O2", "--memory-init-file", "0", "-s", "MEM_INIT_METHOD=2", "-s", "ASSERTIONS=1"]
+    self.btest(d, expected='0', args=args + ["--closure", "0"])
+    self.btest(d, expected='0', args=args + ["--closure", "0", "-g"])
+    self.btest(d, expected='0', args=args + ["--closure", "1"])
+
+  def test_meminit_big(self):
+    d = 'const char *data[] = {\n  "'
+    d += '",\n  "'.join([''.join('\\x{:02x}\\x{:02x}'.format(i, j)
+                                 for j in range(256)) for i in range(256)]*256)
+    with open(path_from_root('tests', 'meminit_pairs.c')) as f:
+      d += '"\n};\n' + f.read()
+    assert len(d) > (1 << 27) # more than 32M memory initializer
+    args = ["-O2", "--memory-init-file", "0", "-s", "MEM_INIT_METHOD=2", "-s", "ASSERTIONS=1"]
+    self.btest(d, expected='0', args=args + ["--closure", "0"])
+    self.btest(d, expected='0', args=args + ["--closure", "0", "-g"])
+    self.btest(d, expected='0', args=args + ["--closure", "1"])
+
+  def test_wasm_polyfill_prototype(self):
+    self.clear()
+    open('main.cpp', 'w').write(self.with_report_result(r'''
+      #include <iostream>
+      int main() {
+        std::cout << "Hello!\n";
+        int result = 7;
+        REPORT_RESULT();
+        return 0;
+      }
+    '''))
+    def separate():
+      print '*** verify that running the wasmator after emcc works'
+      Popen([PYTHON, EMCC, 'main.cpp', '-O2', '-o', 'test.o.html']).communicate()
+      subprocess.check_call([PYTHON, path_from_root('third_party', 'wasm-polyfill', 'wasmator.py'), 'test.o.js', 'test.o.wasm', 'Module'])
+    def together():
+      print '*** verify that running the wasmator using  emcc -s WASM=1  works'
+      Popen([PYTHON, EMCC, 'main.cpp', '-O2', '-o', 'test.o.html', '-s', 'WASM=1']).communicate()
+    def together_worker():
+      print '*** verify that running the wasmator using  emcc -s WASM=1  works, running in a worker'
+      Popen([PYTHON, EMCC, 'main.cpp', '-O2', '-o', 'test.o.html', '-s', 'WASM=1', '--proxy-to-worker']).communicate()
+    for build, check_error in [
+      (separate,        True),
+      (together,        True),
+      (together_worker, False) # onerror does not work in workers
+    ]:
+      build()
+      src = open('test.o.js').read()
+      open('test.o.js', 'w').write('''
+        onerror = function() {
+          Module.print('fail!');
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', 'http://localhost:8888/report_result?99');
+          xhr.onload = function() {
+            console.log('close!');
+            window.close();
+          };
+          setTimeout(xhr.onload, 2000); 
+          xhr.send();
+        };
+
+      ''' + src)
+      print 'browser'
+      self.run_browser('test.o.html', None, '/report_result?7')
+      print 'shell'
+      self.do_run('', 'Hello!', no_build=True, basename='test') # test in the shell too
+      assert os.path.exists('test.o.wasm')
+      os.unlink('test.o.wasm')
+      if check_error:
+        print 'error verify'
+        self.run_browser('test.o.html', None, '/report_result?99') # without the wasm, we failz
+        print 'shell'
+        ok = False
+        try:
+          self.do_run('', 'Hello!', no_build=True, basename='test') # test in the shell too
+          ok = True
+        except:
+          pass
+        assert not ok
+      os.unlink('test.o.js')
+
+  def test_canvas_style_proxy(self):
+    self.btest('canvas_style_proxy.c', expected='1', args=['--proxy-to-worker', '--shell-file', path_from_root('tests/canvas_style_proxy_shell.html'), '--pre-js', path_from_root('tests/canvas_style_proxy_pre.js')])
+
+  def test_canvas_size_proxy(self):
+    self.btest(path_from_root('tests', 'canvas_size_proxy.c'), expected='0', args=['--proxy-to-worker'])
+
+  def test_separate_asm(self):
+    for opts in [0, 1, 2]:
+      print opts
+      open('src.cpp', 'w').write(self.with_report_result(open(path_from_root('tests', 'browser_test_hello_world.c')).read()))
+      Popen([PYTHON, EMCC, 'src.cpp', '-o', 'test.html', '-O' + str(opts)]).communicate()
+      self.run_browser('test.html', None, '/report_result?0')
+
+      open('one.html', 'w').write('<script src="test.js"></script>')
+      self.run_browser('one.html', None, '/report_result?0')
+
+      Popen([PYTHON, path_from_root('tools', 'separate_asm.py'), 'test.js', 'asm.js', 'rest.js']).communicate()
+      open('two.html', 'w').write('''
+        <script>
+          var Module = {};
+        </script>
+        <script src="asm.js"></script>
+        <script src="rest.js"></script>
+      ''')
+      self.run_browser('two.html', None, '/report_result?0')
+
+      self.clear()
+      assert not os.path.exists('tests.asm.js')
+      self.btest('browser_test_hello_world.c', expected='0', args=['-O' + str(opts), '--separate-asm'])
+      assert os.path.exists('test.asm.js')
+      os.unlink('test.asm.js')
+      self.run_browser('test.html', None, '[no http server activity]', timeout=5) # fail without the asm
+
+  def test_emterpretify_file(self):
+    open('shell.html', 'w').write('''
+      <!--
+        {{{ SCRIPT }}} // ignore this, we do it ourselves
+      -->
+      <script>
+        var Module = {};
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'code.dat', true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload = function() {
+          Module.emterpreterFile = xhr.response;
+          var script = document.createElement('script');
+          script.src = "test.js";
+          document.body.appendChild(script);
+        };
+        xhr.send(null);
+      </script>
+''')
+    try_delete('code.dat');
+    self.btest('browser_test_hello_world.c', expected='0', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_FILE="code.dat"', '-O2', '-g', '--shell-file', 'shell.html', '-s', 'ASSERTIONS=1'])
+    assert os.path.exists('code.dat')
+
+    try_delete('code.dat');
+    self.btest('browser_test_hello_world.c', expected='0', args=['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_FILE="code.dat"', '-O2', '-g', '-s', 'ASSERTIONS=1'])
+    assert os.path.exists('code.dat')
+
+  def test_vanilla_html_when_proxying(self):
+    for opts in [0, 1, 2]:
+      print opts
+      open('src.cpp', 'w').write(self.with_report_result(open(path_from_root('tests', 'browser_test_hello_world.c')).read()))
+      Popen([PYTHON, EMCC, 'src.cpp', '-o', 'test.js', '-O' + str(opts), '--proxy-to-worker']).communicate()
+      open('test.html', 'w').write('<script src="test.js"></script>')
+      self.run_browser('test.html', None, '/report_result?0')
+
+  def test_in_flight_memfile_request(self):
+    for o in [0, 1, 2]:
+      print o
+      opts = ['-O' + str(o)]
+
+      print 'plain html'
+      open('src.cpp', 'w').write(self.with_report_result(open(path_from_root('tests', 'in_flight_memfile_request.c')).read()))
+      Popen([PYTHON, EMCC, 'src.cpp', '-o', 'test.js'] + opts).communicate()
+      open('test.html', 'w').write('<script src="test.js"></script>')
+      self.run_browser('test.html', None, '/report_result?0') # never when we provide our own HTML like this.
+
+      print 'default html'
+      self.btest('in_flight_memfile_request.c', expected='0' if o < 2 else '1', args=opts) # should happen when there is a mem init file (-O2+)
+
+  def test_split_memory_large_file(self):
+    size = 2*1024*1024
+    open('huge.dat', 'w').write(''.join([chr((x*x)&255) for x in range(size*2)])) # larger than a memory chunk
+    self.btest('split_memory_large_file.cpp', expected='1', args=['-s', 'SPLIT_MEMORY=' + str(size), '-s', 'TOTAL_MEMORY=100000000', '-s', 'TOTAL_STACK=10240', '--preload-file', 'huge.dat'], timeout=60)
+

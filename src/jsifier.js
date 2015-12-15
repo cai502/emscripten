@@ -16,6 +16,8 @@ var INDENTATION = ' ';
 
 var functionStubSigs = {};
 
+var ALWAYS_EMITTED_I64_FUNCS = set('i64Add', 'i64Subtract', 'bitshift64Shl', 'bitshift64Lshr', 'bitshift64Ashr'); // even in side modules
+
 // JSifier
 function JSify(data, functionsOnly) {
   //B.start('jsifier');
@@ -128,8 +130,10 @@ function JSify(data, functionsOnly) {
       if ((!LibraryManager.library.hasOwnProperty(ident) && !LibraryManager.library.hasOwnProperty(ident + '__inline')) || SIDE_MODULE) {
         if (notDep) {
           if (VERBOSE || ident.substr(0, 11) !== 'emscripten_') { // avoid warning on emscripten_* functions which are for internal usage anyhow
-            if (ERROR_ON_UNDEFINED_SYMBOLS) error('unresolved symbol: ' + ident);
-            else if (VERBOSE || (WARN_ON_UNDEFINED_SYMBOLS && !LINKABLE)) warn('unresolved symbol: ' + ident);
+            if (!LINKABLE) {
+              if (ERROR_ON_UNDEFINED_SYMBOLS) error('unresolved symbol: ' + ident);
+              else if (VERBOSE || WARN_ON_UNDEFINED_SYMBOLS) warn('unresolved symbol: ' + ident);
+            }
           }
         }
         if (!(MAIN_MODULE || SIDE_MODULE)) {
@@ -137,6 +141,7 @@ function JSify(data, functionsOnly) {
           LibraryManager.library[shortident] = new Function("Module['printErr']('missing function: " + shortident + "'); abort(-1);");
         } else {
           var target = (MAIN_MODULE ? '' : 'parent') + "Module['_" + shortident + "']";
+          if (SIDE_MODULE && (ident in ALWAYS_EMITTED_I64_FUNCS)) return ''; // we emit i64Add etc. even in side modules (small, and should be fast)
           var assertion = '';
           if (ASSERTIONS) assertion = 'if (!' + target + ') abort("external function \'' + shortident + '\' is missing. perhaps a side module was not linked in? if this function was expected to arrive from a system library, try to build the MAIN_MODULE with EMCC_FORCE_STDLIBS=1 in the environment");';
           LibraryManager.library[shortident] = new Function(assertion + "return " + target + ".apply(null, arguments);");
@@ -282,7 +287,7 @@ function JSify(data, functionsOnly) {
           print('STATIC_BASE = ' + Runtime.GLOBAL_BASE + ';\n');
           print('STATICTOP = STATIC_BASE + ' + Runtime.alignMemory(Variables.nextIndexedOffset) + ';\n');
         } else {
-          print('gb = getMemory({{{ STATIC_BUMP }}});\n');
+          print('gb = Runtime.alignMemory(getMemory({{{ STATIC_BUMP }}}, ' + MAX_GLOBAL_ALIGN + ' || 1));\n');
           print('// STATICTOP = STATIC_BASE + ' + Runtime.alignMemory(Variables.nextIndexedOffset) + ';\n'); // comment as metadata only
         }
       }
@@ -371,6 +376,9 @@ function JSify(data, functionsOnly) {
       print('DYNAMIC_BASE = DYNAMICTOP = Runtime.alignMemory(STACK_MAX);\n');
       print('assert(DYNAMIC_BASE < TOTAL_MEMORY, "TOTAL_MEMORY not big enough for stack");\n');
     }
+    if (SPLIT_MEMORY) {
+      print('assert(STACK_MAX < SPLIT_MEMORY, "SPLIT_MEMORY size must be big enough so the entire static memory + stack can fit in one chunk, need " + STACK_MAX);\n');
+    }
 
     if (asmLibraryFunctions.length > 0) {
       print('// ASM_LIBRARY FUNCTIONS');
@@ -417,11 +425,8 @@ function JSify(data, functionsOnly) {
       // these may be duplicated in side modules and the main module without issue
       print(processMacros(read('fastLong.js')));
       print('// EMSCRIPTEN_END_FUNCS\n');
-      print(read('long.js'));
     } else {
       print('// EMSCRIPTEN_END_FUNCS\n');
-      print('// Warning: printing of i64 values may be slightly rounded! No deep i64 math used, so precise i64 code not included');
-      print('var i64Math = null;');
     }
 
     if (HEADLESS) {

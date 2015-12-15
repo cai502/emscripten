@@ -21,7 +21,7 @@
   "inet_ntoa": ["malloc"],
   "gethostbyname": ["malloc"],
   "gethostbyname_r": ["free"],
-  "getaddrinfo": ["malloc"],
+  "getaddrinfo": ["malloc", "htonl", "htons", "ntohs"],
   "freeaddrinfo": ["free"],
   "gai_strerror": ["malloc"],
   "setprotoent": ["malloc"],
@@ -29,15 +29,21 @@
   "uuid_compare": ["memcmp"],
   "SDL_Init": ["malloc", "free"],
   "SDL_GL_GetProcAddress": ["emscripten_GetProcAddress"],
+  "Mix_LoadWAV_RW": ["fileno"],
   "eglGetProcAddress": ["emscripten_GetProcAddress"],
   "glfwGetProcAddress": ["emscripten_GetProcAddress"],
   "emscripten_GetProcAddress": ["strstr"],
   "objc_msgSend": ["_class_lookupMethodAndLoadCache3"],
   "objc_msgSendSuper": ["_class_lookupMethodAndLoadCache3"],
   "objc_msgSendSuper2": ["_class_lookupMethodAndLoadCache3"],
+  "emscripten_get_preloaded_image_data_from_FILE": ["fileno"],
   "__cxa_begin_catch": ["__cxa_can_catch", "__cxa_is_pointer_type"],
-  "sleep": ["usleep"],
-  "epoll_wait": ["usleep"],
-  "epoll_pwait": ["usleep"]
+  "emscripten_log": ["strlen"],
+  "setjmp": ["realloc"],
+  "glfwSleep": ["sleep"],
+  "bind": ["htonl", "htons", "ntohs"],
+  "connect": ["htonl", "htons", "ntohs"],
+  "socket": ["htonl", "htons", "ntohs"],
+  "sleep": ["usleep"]
 }
 

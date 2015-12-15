@@ -2,21 +2,14 @@
 # This Python file uses the following encoding: utf-8
 
 '''
-Simple test runner
-
-These tests can be run in parallel using nose, for example
-
-  nosetests --processes=4 -v -s tests/runner.py
-
-will use 4 processes. To install nose do something like
-|pip install nose| or |sudo apt-get install python-nose|.
-
-Note however that emcc now uses multiple cores when optimizing,
-so you may prefer to use fewer cores here.
+Simple test runner. Consider using parallel_test_core.py for faster iteration times.
 '''
 
+# XXX Use EM_ALL_ENGINES=1 in the env to test all engines!
+
+
 from subprocess import Popen, PIPE, STDOUT
-import os, unittest, tempfile, shutil, time, inspect, sys, math, glob, re, difflib, webbrowser, hashlib, threading, platform, BaseHTTPServer, SimpleHTTPServer, multiprocessing, functools, stat, string, random
+import os, unittest, tempfile, shutil, time, inspect, sys, math, glob, re, difflib, webbrowser, hashlib, threading, platform, BaseHTTPServer, SimpleHTTPServer, multiprocessing, functools, stat, string, random, operator
 from urllib import unquote
 
 # Setup
@@ -36,16 +29,63 @@ try:
 except:
   raise Exception('Cannot find "COMPILER_OPTS" definition. Is %s set up properly? You may need to copy the template settings file into it.' % EM_CONFIG)
 
+HELP_TEXT = '''
+==============================================================================
+Running the main part of the test suite. Don't forget to run the other parts!
+A recommended order is:
+
+  sanity - tests for first run, etc., modifies ~/.emscripten
+  (the main test suite)
+  other - tests separate from the main suite
+  browser - runs pages in a web browser
+  interactive - runs interactive browser tests that need human verification, and could not be automated
+  sockets - runs websocket networking tests
+  benchmark - run before and after each set of changes before pushing to
+              master, verify no regressions
+
+To run one of those parts, do something like
+
+  python tests/runner.py sanity
+
+To run a specific set of tests, you can do things like
+
+  python tests/runner.py asm2
+
+(that runs the asm2 (asm.js, -O2) tests). You can run individual tests with
+
+  python tests/runner.py test_hello_world
+
+Combinations work too, for example
+
+  python tests/runner.py browser.test_sdl_image
+
+In the main test suite, you can run all variations (O0, O1, O2, etc.) of
+an individual test with
+
+  python tests/runner.py ALL.test_hello_world
+
+You can run a random set of N tests with a command like
+
+  python tests/runner.py random50
+
+Debugging: You can run
+
+  EM_SAVE_DIR=1 python tests/runner.py ALL.test_hello_world
+
+in order to save the test runner directory, in /tmp/emscripten_temp. All files
+created by the test will be present there. You can also use EMCC_DEBUG to
+further debug the compiler itself, see emcc.
+==============================================================================
+
+'''
+
 # Core test runner class, shared between normal tests and benchmarks
 checked_sanity = False
-test_modes = ['default', 'asm1', 'asm2', 'asm3', 'asm2f', 'asm2g', 'asm1i', 'asm3i', 'asm2nn']
+test_modes = ['default', 'asm1', 'asm2', 'asm3', 'asm2f', 'asm2g', 'asm2i', 'asm2nn']
 test_index = 0
 
 use_all_engines = os.environ.get('EM_ALL_ENGINES') # generally js engines are equivalent, testing 1 is enough. set this
                                                    # to force testing on all js engines, good to find js engine bugs
-
-if use_all_engines:
-  print '(using ALL js engines)'
 
 class RunnerCore(unittest.TestCase):
   emcc_args = None
@@ -62,9 +102,18 @@ class RunnerCore(unittest.TestCase):
   def is_emterpreter(self):
     return False
 
+  def uses_memory_init_file(self):
+    if self.emcc_args is None:
+      return None
+    elif '--memory-init-file' in self.emcc_args:
+      return int(self.emcc_args[self.emcc_args.index('--memory-init-file')+1])
+    else:
+      return ('-O2' in self.emcc_args or '-O3' in self.emcc_args or '-Oz' in self.emcc_args) and not Settings.SIDE_MODULE
+
   def setUp(self):
     Settings.reset()
     self.banned_js_engines = []
+    self.use_all_engines = use_all_engines
     if not self.save_dir:
       dirname = tempfile.mkdtemp(prefix='emscripten_test_' + self.__class__.__name__ + '_', dir=TEMP_DIR)
     else:
@@ -88,7 +137,7 @@ class RunnerCore(unittest.TestCase):
     if not self.save_dir:
       # rmtree() fails on Windows if the current working directory is inside the tree.
       os.chdir(os.path.join(self.get_dir(), '..'))
-      shutil.rmtree(self.get_dir())
+      try_delete(self.get_dir())
 
       # Make sure we don't leave stuff around
       #if not self.has_prev_ll:
@@ -215,8 +264,8 @@ class RunnerCore(unittest.TestCase):
                ['-I', dirname, '-I', os.path.join(dirname, 'include')] + \
                map(lambda include: '-I' + include, includes) + \
                ['-c', f, '-o', f + '.o']
-        output = Popen(args, stdout=PIPE, stderr=self.stderr_redirect if not DEBUG else None).communicate()[0]
-        assert os.path.exists(f + '.o'), 'Source compilation error: ' + output
+        output = subprocess.check_call(args, stderr=self.stderr_redirect if not DEBUG else None)
+        assert os.path.exists(f + '.o')
 
       # Link all files
       if len(additional_files) + len(libraries) > 0:
@@ -245,25 +294,28 @@ class RunnerCore(unittest.TestCase):
              map(lambda include: '-I' + include, includes) + \
              all_files + \
              ['-o', filename + '.o.js']
-      output = Popen(args, stdout=PIPE, stderr=self.stderr_redirect if not DEBUG else None).communicate()[0]
-      assert os.path.exists(filename + '.o.js'), 'Source compilation error: ' + output
+      output = subprocess.check_call(args, stderr=self.stderr_redirect if not DEBUG else None)
+      assert os.path.exists(filename + '.o.js')
 
     if output_processor is not None:
       output_processor(open(filename + '.o.js').read())
 
     if self.emcc_args is not None:
-      if '--memory-init-file' in self.emcc_args:
-        memory_init_file = int(self.emcc_args[self.emcc_args.index('--memory-init-file')+1])
-      else:
-        memory_init_file = ('-O2' in self.emcc_args or '-O3' in self.emcc_args or '-Oz' in self.emcc_args) and not Settings.SIDE_MODULE
       src = open(filename + '.o.js').read()
-      if memory_init_file:
+      if self.uses_memory_init_file():
         # side memory init file, or an empty one in the js
         assert ('/* memory initializer */' not in src) or ('/* memory initializer */ allocate([]' in src)
-      else:
-        assert 'memory initializer */' in src or '/*' not in src # memory initializer comment, or cleaned-up source with no comments
 
   def validate_asmjs(self, err):
+    if "asm.js type error: 'Int8x16' is not a standard SIMD type" in err:
+      err = err.replace("asm.js type error: 'Int8x16' is not a standard SIMD type", "")
+      print >> sys.stderr, "\nWARNING: ignoring asm.js type error from Int8x16 due to implementation not yet available in SpiderMonkey\n"
+    if "asm.js type error: 'Int16x8' is not a standard SIMD type" in err:
+      err = err.replace("asm.js type error: 'Int16x8' is not a standard SIMD type", "")
+      print >> sys.stderr, "\nWARNING: ignoring asm.js type error from Int16x8 due to implementation not yet available in SpiderMonkey\n"
+    if "asm.js type error: 'Float64x2' is not a standard SIMD type" in err:
+      err = err.replace("asm.js type error: 'Float64x2' is not a standard SIMD type", "")
+      print >> sys.stderr, "\nWARNING: ignoring asm.js type error from Float64x2 due to implementation not yet available in SpiderMonkey\n"
     if 'uccessfully compiled asm.js code' in err and 'asm.js link error' not in err:
       print >> sys.stderr, "[was asm.js'ified]"
     elif 'asm.js' in err: # if no asm.js error, then not an odin build
@@ -495,12 +547,13 @@ class RunnerCore(unittest.TestCase):
     for engine in self.banned_js_engines: assert type(engine) == list
     js_engines = filter(lambda engine: engine[0] not in map(lambda engine: engine[0], self.banned_js_engines), js_engines)
     if len(js_engines) == 0: return self.skip('No JS engine present to run this test with. Check %s and the paths therein.' % EM_CONFIG)
-    if len(js_engines) > 1 and not use_all_engines:
+    if len(js_engines) > 1 and not self.use_all_engines:
       if SPIDERMONKEY_ENGINE in js_engines: # make sure to get asm.js validation checks, using sm
         js_engines = [SPIDERMONKEY_ENGINE]
       else:
         js_engines = js_engines[:1]
     for engine in js_engines:
+      #print 'test in', engine
       js_output = self.run_generated_code(engine, filename + '.o.js', args, output_nicerizer=output_nicerizer, assert_returncode=assert_returncode)
       try:
         self.assertContained(expected_output, js_output.replace('\r\n', '\n'))
@@ -597,7 +650,7 @@ class BrowserCore(RunnerCore):
     # WindowsError: [Error 32] The process cannot access the file because it is being used by another process.
     time.sleep(0.1)
 
-  def run_browser(self, html_file, message, expectedResult=None):
+  def run_browser(self, html_file, message, expectedResult=None, timeout=None):
     print '[browser launch:', html_file, ']'
     if expectedResult is not None:
       try:
@@ -607,7 +660,8 @@ class BrowserCore(RunnerCore):
         self.harness_queue.put('http://localhost:8888/' + html_file)
         output = '[no http server activity]'
         start = time.time()
-        while time.time() - start < 60:
+        if timeout is None: timeout = self.browser_timeout
+        while time.time() - start < timeout:
           if not queue.empty():
             output = queue.get()
             break
@@ -629,18 +683,17 @@ class BrowserCore(RunnerCore):
 
   def with_report_result(self, code):
     return r'''
-      #ifdef __EMSCRIPTEN__
-      #include <emscripten.h>
-      #define REPORT_RESULT_INTERNAL(sync) \
-        char output[1000]; \
-        sprintf(output, \
-                "xhr = new XMLHttpRequest();" \
-                "xhr.open('GET', 'http://localhost:8888/report_result?%d'%s);" \
-                "xhr.send();", result, sync ? ", false" : ""); \
-        emscripten_run_script(output); \
-        emscripten_run_script("setTimeout(function() { window.close() }, 1000)"); // comment this out to keep the test runner window open to debug
-      #define REPORT_RESULT() REPORT_RESULT_INTERNAL(0)
-      #endif
+#ifdef __EMSCRIPTEN__
+  #include <emscripten.h>
+  #define REPORT_RESULT_INTERNAL(sync) \
+    EM_ASM_({ \
+      var xhr = new XMLHttpRequest(); \
+      xhr.open('GET', 'http://localhost:8888/report_result?' + $0, !$1); \
+      xhr.send(); \
+      setTimeout(function() { window.close() }, 1000); \
+    }, result, sync);
+  #define REPORT_RESULT() REPORT_RESULT_INTERNAL(0)
+#endif
 ''' + code
 
   def reftest(self, expected):
@@ -730,7 +783,7 @@ class BrowserCore(RunnerCore):
 ''' % basename)
 
   def btest(self, filename, expected=None, reference=None, force_c=False, reference_slack=0, manual_reference=False, post_build=None,
-      args=[], outfile='test.html', message='.', also_proxied=False, url_suffix=''): # TODO: use in all other tests
+      args=[], outfile='test.html', message='.', also_proxied=False, url_suffix='', timeout=None): # TODO: use in all other tests
     # if we are provided the source and not a path, use that
     filename_is_src = '\n' in filename
     src = filename if filename_is_src else ''
@@ -757,7 +810,7 @@ class BrowserCore(RunnerCore):
     assert os.path.exists(outfile)
     if post_build: post_build()
     if type(expected) is str: expected = [expected]
-    self.run_browser(outfile + url_suffix, message, ['/report_result?' + e for e in expected])
+    self.run_browser(outfile + url_suffix, message, ['/report_result?' + e for e in expected], timeout=timeout)
     if also_proxied:
       print 'proxied...'
       # save non-proxied
@@ -771,7 +824,7 @@ class BrowserCore(RunnerCore):
         assert not post_build
         post_build = self.post_manual_reftest
       # run proxied
-      self.btest(filename, expected, reference, force_c, reference_slack, manual_reference, post_build, original_args + ['--proxy-to-worker', '-s', 'GL_TESTING=1'], outfile, message)
+      self.btest(filename, expected, reference, force_c, reference_slack, manual_reference, post_build, original_args + ['--proxy-to-worker', '-s', 'GL_TESTING=1'], outfile, message, timeout=timeout)
 
 ###################################################################################################
 
@@ -802,6 +855,21 @@ def get_bullet_library(runner_core, use_cmake):
   return runner_core.get_library('bullet', generated_libs, configure=configure_commands, configure_args=configure_args, cache_name_extra=configure_commands[0])
 
 if __name__ == '__main__':
+  if len(sys.argv) == 2 and sys.argv[1] in ['--help', '-h']:
+    print HELP_TEXT
+    sys.exit(0)
+
+  # If no tests were specified, run the core suite
+  if len(sys.argv) == 1:
+    sys.argv = [sys.argv[0]] + map(lambda mode: mode, test_modes)
+    print HELP_TEXT
+    time.sleep(2)
+
+  if use_all_engines:
+    print '(using ALL js engines)'
+  else:
+    logging.warning('use EM_ALL_ENGINES=1 in the env to run against all JS engines, which is slower but provides more coverage')
+
   # Sanity checks
   total_engines = len(JS_ENGINES)
   JS_ENGINES = filter(check_engine, JS_ENGINES)
@@ -831,10 +899,16 @@ if __name__ == '__main__':
   sys.argv = map(lambda arg: arg if not arg.startswith('test_') else 'default.' + arg, sys.argv)
 
   # If a test (e.g. test_html) is specified as ALL.test_html, add an entry for each test_mode
-  if len(sys.argv) == 2 and sys.argv[1].startswith('ALL.'):
-    ignore, test = sys.argv[1].split('.')
-    print 'Running all test modes on test "%s"' % test
-    sys.argv = [sys.argv[0]] + map(lambda mode: mode+'.'+test, test_modes)
+  new_args = [sys.argv[0]]
+  for i in range(1, len(sys.argv)):
+    arg = sys.argv[i]
+    if arg.startswith('ALL.'):
+      ignore, test = arg.split('.')
+      print 'Running all test modes on test "%s"' % test
+      new_args += map(lambda mode: mode+'.'+test, test_modes)
+    else:
+      new_args += [arg]
+  sys.argv = new_args
 
   # Skip requested tests
   for i in range(len(sys.argv)):
@@ -859,81 +933,42 @@ if __name__ == '__main__':
       sys.argv[i] = None
   sys.argv = filter(lambda arg: arg is not None, sys.argv)
 
-  # If no tests were specified, run the core suite
-  if len(sys.argv) == 1:
-    sys.argv = [sys.argv[0]] + map(lambda mode: mode, test_modes)
-    print '''
-==============================================================================
-Running the main part of the test suite. Don't forget to run the other parts!
-A recommended order is:
-
-  sanity - tests for first run, etc., modifies ~/.emscripten
-  (the main test suite)
-  other - tests separate from the main suite
-  browser - runs pages in a web browser
-  interactive - runs interactive browser tests that need human verification, and could not be automated
-  sockets - runs websocket networking tests
-  benchmark - run before and after each set of changes before pushing to
-              master, verify no regressions
-
-To run one of those parts, do something like
-
-  python tests/runner.py sanity
-
-To run a specific set of tests, you can do things like
-
-  python tests/runner.py asm2
-
-(that runs the asm2 (asm.js, -O2) tests). You can run individual tests with
-
-  python tests/runner.py test_hello_world
-
-Combinations work too, for example
-
-  python tests/runner.py browser.test_sdl_image
-
-In the main test suite, you can run all variations (O0, O1, O2, etc.) of
-an individual test with
-
-  python tests/runner.py ALL.test_hello_world
-
-You can run a random set of N tests with a command like
-
-  python tests/runner.py random50
-
-Debugging: You can run
-
-  EM_SAVE_DIR=1 python tests/runner.py ALL.test_hello_world
-
-in order to save the test runner directory, in /tmp/emscripten_temp. All files
-created by the test will be present there. You can also use EMCC_DEBUG to
-further debug the compiler itself, which works outside of the test suite as
-well: EMCC_DEBUG=1 will emit emcc-* files in that temp dir for each stage
-of the compiler, while EMCC_DEBUG=2 will emit even more files, one for each
-js optimizer phase.
-==============================================================================
-
-'''
-    time.sleep(2)
-
-  # If we asked to run random tests, do that
+  # If we were asked to run random tests, do that
   first = sys.argv[1]
   if first.startswith('random'):
     num = 1
     first = first[6:]
+    base_module = 'default'
+    relevant_modes = test_modes
     if len(first) > 0:
+      if first.startswith('other'):
+        base_module = 'other'
+        relevant_modes = ['other']
+        first = first.replace('other', '')
+      elif first.startswith('browser'):
+        base_module = 'browser'
+        relevant_modes = ['browser']
+        first = first.replace('browser', '')
       num = int(first)
     for m in modules:
-      if hasattr(m, 'default'):
+      if hasattr(m, base_module):
         sys.argv = [sys.argv[0]]
-        tests = filter(lambda t: t.startswith('test_'), dir(getattr(m, 'default')))
+        tests = filter(lambda t: t.startswith('test_'), dir(getattr(m, base_module)))
         print
         chosen = set()
         while len(chosen) < num:
           test = random.choice(tests)
-          mode = random.choice(test_modes)
-          print '* ' + mode + '.' + test
-          chosen.add(mode + '.' + test)
+          mode = random.choice(relevant_modes)
+          new_test = mode + '.' + test
+          before = len(chosen)
+          chosen.add(new_test)
+          if len(chosen) > before:
+            print '* ' + new_test
+          else:
+            # we may have hit the limit
+            if len(chosen) == len(tests)*len(relevant_modes):
+              print '(all possible tests chosen! %d = %d*%d)' % (len(chosen), len(tests), len(relevant_modes))
+              break
         sys.argv += list(chosen)
         std = 0.5/math.sqrt(num)
         print
@@ -947,26 +982,46 @@ js optimizer phase.
 
   # Filter and load tests from the discovered modules
   loader = unittest.TestLoader()
-  names = sys.argv[1:]
+  names = set(sys.argv[1:])
   suites = []
   for m in modules:
-    try:
-      suites.append(loader.loadTestsFromNames(names, m))
-    except:
-      pass
+    mnames = []
+    for name in list(names):
+      try:
+        operator.attrgetter(name)(m)
+        mnames.append(name)
+        names.remove(name)
+      except AttributeError:
+        pass
+    if len(mnames) > 0:
+      suites.append((m.__name__, loader.loadTestsFromNames(sorted(mnames), m)))
 
-  numFailures = 0 # Keep count of the total number of failing tests.
+  resultMessages = []
+  numFailures = 0
+
+  if len(names) > 0:
+    print 'WARNING: could not find the following tests: ' + ' '.join(names)
+    numFailures += len(names)
+    resultMessages.append('Could not find %s tests' % (len(names),))
 
   # Run the discovered tests
-  if not len(suites):
-    print >> sys.stderr, 'No tests found for %s' % str(sys.argv[1:])
-    numFailures = 1
-  else:
-    testRunner = unittest.TextTestRunner(verbosity=2)
-    for suite in suites:
-      results = testRunner.run(suite)
-      numFailures += len(results.errors) + len(results.failures)
+  testRunner = unittest.TextTestRunner(verbosity=2)
+  for mod_name, suite in suites:
+    res = testRunner.run(suite)
+    msg = '%s: %s run, %s errors, %s failures, %s skipped' % (mod_name,
+        res.testsRun, len(res.errors), len(res.failures), len(res.skipped)
+    )
+    numFailures += len(res.errors) + len(res.failures)
+    resultMessages.append(msg)
+
+  if len(resultMessages) > 1:
+    print '===================='
+    print
+    print 'TEST SUMMARY'
+    for msg in resultMessages:
+      print '    ' + msg
 
   # Return the number of failures as the process exit code for automating success/failure reporting.
-  exit(numFailures)
+  exitcode = min(numFailures, 255)
+  sys.exit(exitcode)
 

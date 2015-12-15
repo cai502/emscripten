@@ -1,6 +1,35 @@
 
 // === Auto-generated postamble setup entry stuff ===
 
+#if MEM_INIT_METHOD == 2
+#if USE_PTHREADS
+if (memoryInitializer && !ENVIRONMENT_IS_PTHREAD) (function(s) {
+#else
+if (memoryInitializer) (function(s) {
+#endif
+  var i, n = s.length;
+#if ASSERTIONS
+  n -= 4;
+  var crc, bit, table = new Int32Array(256);
+  for (i = 0; i < 256; ++i) {
+    for (crc = i, bit = 0; bit < 8; ++bit)
+      crc = (crc >>> 1) ^ ((crc & 1) * 0xedb88320);
+    table[i] = crc >>> 0;
+  }
+  crc = -1;
+  crc = table[(crc ^ n) & 0xff] ^ (crc >>> 8);
+  crc = table[(crc ^ (n >>> 8)) & 0xff] ^ (crc >>> 8);
+  for (i = 0; i < s.length; ++i) {
+    crc = table[(crc ^ s.charCodeAt(i)) & 0xff] ^ (crc >>> 8);
+  }
+  assert(crc === 0, "memory initializer checksum");
+#endif
+  for (i = 0; i < n; ++i) {
+    HEAPU8[Runtime.GLOBAL_BASE + i] = s.charCodeAt(i);
+  }
+})(memoryInitializer);
+#else
+#if MEM_INIT_METHOD == 1
 #if USE_PTHREADS
 if (memoryInitializer && !ENVIRONMENT_IS_PTHREAD) {
 #else
@@ -13,45 +42,51 @@ if (memoryInitializer) {
   }
   if (ENVIRONMENT_IS_NODE || ENVIRONMENT_IS_SHELL) {
     var data = Module['readBinary'](memoryInitializer);
-    HEAPU8.set(data, STATIC_BASE);
+    HEAPU8.set(data, Runtime.GLOBAL_BASE);
   } else {
     addRunDependency('memory initializer');
     var applyMemoryInitializer = function(data) {
       if (data.byteLength) data = new Uint8Array(data);
 #if ASSERTIONS
       for (var i = 0; i < data.length; i++) {
-        assert(HEAPU8[STATIC_BASE + i] === 0, "area for memory initializer should not have been touched before it's loaded");
+        assert(HEAPU8[Runtime.GLOBAL_BASE + i] === 0, "area for memory initializer should not have been touched before it's loaded");
       }
 #endif
-      HEAPU8.set(data, STATIC_BASE);
+      HEAPU8.set(data, Runtime.GLOBAL_BASE);
       removeRunDependency('memory initializer');
     }
-    var request = Module['memoryInitializerRequest'];
-    if (request) {
-      // a network request has already been created, just use that
-      if (request.response) {
-        setTimeout(function() {
-          applyMemoryInitializer(request.response);
-        }, 0); // it's already here; but, apply it asynchronously
-      } else {
-        request.addEventListener('load', function() { // wait for it
-          if (request.status !== 200 && request.status !== 0) {
-            console.warn('a problem seems to have happened with Module.memoryInitializerRequest, status: ' + request.status);
-          }
-          if (!request.response || typeof request.response !== 'object' || !request.response.byteLength) {
-            console.warn('a problem seems to have happened with Module.memoryInitializerRequest response (expected ArrayBuffer): ' + request.response);
-          }
-          applyMemoryInitializer(request.response);
-        });
-      }
-    } else {
-      // fetch it from the network ourselves
+    function doBrowserLoad() {
       Browser.asyncLoad(memoryInitializer, applyMemoryInitializer, function() {
         throw 'could not load memory initializer ' + memoryInitializer;
       });
     }
+    var request = Module['memoryInitializerRequest'];
+    if (request) {
+      // a network request has already been created, just use that
+      function useRequest() {
+        if (request.status !== 200 && request.status !== 0) {
+          // If you see this warning, the issue may be that you are using locateFile or memoryInitializerPrefixURL, and defining them in JS. That
+          // means that the HTML file doesn't know about them, and when it tries to create the mem init request early, does it to the wrong place.
+          // Look in your browser's devtools network console to see what's going on.
+          console.warn('a problem seems to have happened with Module.memoryInitializerRequest, status: ' + request.status + ', retrying ' + memoryInitializer);
+          doBrowserLoad();
+          return;
+        }
+        applyMemoryInitializer(request.response);
+      }
+      if (request.response) {
+        setTimeout(useRequest, 0); // it's already here; but, apply it asynchronously
+      } else {
+        request.addEventListener('load', useRequest); // wait for it
+      }
+    } else {
+      // fetch it from the network ourselves
+      doBrowserLoad();
+    }
   }
 }
+#endif
+#endif
 
 function ExitStatus(status) {
   this.name = "ExitStatus";
@@ -94,7 +129,9 @@ Module['callMain'] = Module.callMain = function callMain(args) {
   argv.push(0);
   argv = allocate(argv, 'i32', ALLOC_NORMAL);
 
-  initialStackTop = STACKTOP;
+#if EMTERPRETIFY_ASYNC
+  var initialEmtStackTop = asm.emtStackSave();
+#endif
 
   try {
 #if BENCHMARK
@@ -118,6 +155,10 @@ Module['callMain'] = Module.callMain = function callMain(args) {
     } else if (e == 'SimulateInfiniteLoop') {
       // running an evented main loop, don't immediately exit
       Module['noExitRuntime'] = true;
+#if EMTERPRETIFY_ASYNC
+      // an infinite loop keeps the C stack around, but the emterpreter stack must be unwound - we do not want to restore the call stack at infinite loop
+      asm.emtStackRestore(initialEmtStackTop);
+#endif
       return;
     } else {
       if (e && typeof e === 'object' && e.stack) Module.printErr('exception thrown: ' + [e, e.stack]);
@@ -157,9 +198,11 @@ function run(args) {
 
     preMain();
 
+#if ASSERTIONS
     if (ENVIRONMENT_IS_WEB && preloadStartTime !== null) {
       Module.printErr('pre-main prep time: ' + (Date.now() - preloadStartTime) + ' ms');
     }
+#endif
 
     if (Module['onRuntimeInitialized']) Module['onRuntimeInitialized']();
 
@@ -299,55 +342,63 @@ run();
 
 #if BUILD_AS_WORKER
 
-var messageBuffer = null;
-
-function messageResender() {
-  if (runtimeInitialized) {
-    assert(messageBuffer && messageBuffer.length > 0);
-    messageBuffer.forEach(function(message) {
-      onmessage(message);
-    });
-    messageBuffer = null;
-  } else {
-    setTimeout(messageResender, 100);
-  }
-}
-
-var buffer = 0, bufferSize = 0;
 var workerResponded = false, workerCallbackId = -1;
 
-onmessage = function onmessage(msg) {
-  // if main has not yet been called (mem init file, other async things), buffer messages
-  if (!runtimeInitialized) {
-    if (!messageBuffer) {
-      messageBuffer = [];
-      setTimeout(messageResender, 100);
+(function() {
+  var messageBuffer = null, buffer = 0, bufferSize = 0;
+
+  function flushMessages() {
+    if (!messageBuffer) return;
+    if (runtimeInitialized) {
+      var temp = messageBuffer;
+      messageBuffer = null;
+      temp.forEach(function(message) {
+        onmessage(message);
+      });
     }
-    messageBuffer.push(msg);
-    return;
   }
 
-  var func = Module['_' + msg.data['funcName']];
-  if (!func) throw 'invalid worker function to call: ' + msg.data['funcName'];
-  var data = msg.data['data'];
-  if (data) {
-    if (!data.byteLength) data = new Uint8Array(data);
-    if (!buffer || bufferSize < data.length) {
-      if (buffer) _free(buffer);
-      bufferSize = data.length;
-      buffer = _malloc(data.length);
+  function messageResender() {
+    flushMessages();
+    if (messageBuffer) {
+      setTimeout(messageResender, 100); // still more to do
     }
-    HEAPU8.set(data, buffer);
   }
 
-  workerResponded = false;
-  workerCallbackId = msg.data['callbackId'];
-  if (data) {
-    func(buffer, data.length);
-  } else {
-    func(0, 0);
+  onmessage = function onmessage(msg) {
+    // if main has not yet been called (mem init file, other async things), buffer messages
+    if (!runtimeInitialized) {
+      if (!messageBuffer) {
+        messageBuffer = [];
+        setTimeout(messageResender, 100);
+      }
+      messageBuffer.push(msg);
+      return;
+    }
+    flushMessages();
+
+    var func = Module['_' + msg.data['funcName']];
+    if (!func) throw 'invalid worker function to call: ' + msg.data['funcName'];
+    var data = msg.data['data'];
+    if (data) {
+      if (!data.byteLength) data = new Uint8Array(data);
+      if (!buffer || bufferSize < data.length) {
+        if (buffer) _free(buffer);
+        bufferSize = data.length;
+        buffer = _malloc(data.length);
+      }
+      HEAPU8.set(data, buffer);
+    }
+
+    workerResponded = false;
+    workerCallbackId = msg.data['callbackId'];
+    if (data) {
+      func(buffer, data.length);
+    } else {
+      func(0, 0);
+    }
   }
-}
+})();
 
 #endif
 

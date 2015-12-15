@@ -4,8 +4,11 @@
 //==============================================================================
 // Optimizer tool. This is meant to be run after the emscripten compiler has
 // finished generating code. These optimizations are done on the generated
-// code to further improve it. Some of the modifications also work in
-// conjunction with closure compiler.
+// code to further improve it.
+//
+// Be aware that this is *not* a general JS optimizer. It assumes that the
+// input is valid asm.js and makes strong assumptions based on this. It may do
+// anything from crashing to optimizing incorrectly if the input is not valid!
 //
 // TODO: Optimize traverse to modify a node we want to replace, in-place,
 //       instead of returning it to the previous call frame where we check?
@@ -245,6 +248,11 @@ function traverseGenerated(ast, pre, post) {
   });
 }
 
+function deStat(node) {
+  if (node[0] === 'stat') return node[1];
+  return node;
+}
+
 function emptyNode() { // XXX do we need to create new nodes here? can't we reuse?
   return ['toplevel', []]
 }
@@ -422,6 +430,13 @@ function dumpSrc(ast) {
 function overwrite(x, y) {
   for (var i = 0; i < y.length; i++) x[i] = y[i];
   x.length = y.length;
+}
+
+var STACK_ALIGN = 16;
+
+function stackAlign(x) {
+  if (x % STACK_ALIGN) x += STACK_ALIGN - (x % STACK_ALIGN);
+  return x;
 }
 
 // Closure compiler, when inlining, will insert assignments to
@@ -1070,26 +1085,30 @@ function localCSE(ast) {
   });
 }
 
+function safeLabelSettingInternal(func, asmData) {
+  if ('label' in asmData.vars) {
+    var stats = getStatements(func);
+    var seenVar = false;
+    for (var i = 0; i < stats.length; i++) {
+      var curr = stats[i];
+      if (curr[0] === 'stat') curr = curr[1];
+      if (curr[0] === 'var') {
+        seenVar = true;
+      } else if (seenVar && curr[0] !== 'var') {
+        // first location after the vars
+        stats.splice(i, 0, ['stat', ['assign', true, ['name', 'label'], ['num', 0]]]);
+        break;
+      }
+    }
+  }
+}
+
 function safeLabelSetting(ast) {
   // Add an assign to label, if it exists, so that even after we minify/registerize variable names, we can tell if any vars use the asm init value of 0 - none will, so it's easy to tell
   assert(asm);
   traverseGeneratedFunctions(ast, function(func) {
     var asmData = normalizeAsm(func);
-    if ('label' in asmData.vars) {
-      var stats = getStatements(func);
-      var seenVar = false;
-      for (var i = 0; i < stats.length; i++) {
-        var curr = stats[i];
-        if (curr[0] === 'stat') curr = curr[1];
-        if (curr[0] === 'var') {
-          seenVar = true;
-        } else if (seenVar && curr[0] !== 'var') {
-          // first location after the vars
-          stats.splice(i, 0, ['stat', ['assign', true, ['name', 'label'], ['num', 0]]]);
-          break;
-        }
-      }
-    }
+    safeLabelSettingInternal(func, asmData);
     denormalizeAsm(func, asmData);
   });
 }
@@ -1740,16 +1759,22 @@ var ASM_INT = 0;
 var ASM_DOUBLE = 1;
 var ASM_FLOAT = 2;
 var ASM_FLOAT32X4 = 3;
-var ASM_INT32X4 = 4;
-var ASM_NONE = 5;
+var ASM_FLOAT64X2 = 4;
+var ASM_INT8X16 = 5;
+var ASM_INT16X8 = 6;
+var ASM_INT32X4 = 7;
+var ASM_NONE = 8;
 
 var ASM_SIG = {
   0: 'i',
   1: 'd',
   2: 'f',
   3: 'F',
-  4: 'I',
-  5: 'v'
+  4: 'D',
+  5: 'B',
+  6: 'S',
+  7: 'I',
+  8: 'v'
 };
 
 var ASM_FLOAT_ZERO = null; // TODO: share the entire node?
@@ -1773,10 +1798,16 @@ function detectType(node, asmInfo, inVarDef) {
       if (node[1][0] === 'name') {
         switch (node[1][1]) {
           case 'Math_fround':          return ASM_FLOAT;
-          case 'SIMD_float32x4':
-          case 'SIMD_float32x4_check': return ASM_FLOAT32X4;
-          case 'SIMD_int32x4':
-          case 'SIMD_int32x4_check':   return ASM_INT32X4;
+          case 'SIMD_Float32x4':
+          case 'SIMD_Float32x4_check': return ASM_FLOAT32X4;
+          case 'SIMD_Float64x2':
+          case 'SIMD_Float64x2_check': return ASM_FLOAT64X2;
+          case 'SIMD_Int8x16':
+          case 'SIMD_Int8x16_check':   return ASM_INT8X16;
+          case 'SIMD_Int16x8':
+          case 'SIMD_Int16x8_check':   return ASM_INT16X8;
+          case 'SIMD_Int32x4':
+          case 'SIMD_Int32x4_check':   return ASM_INT32X4;
           default: break;
         }
       }
@@ -1838,8 +1869,11 @@ function makeAsmCoercion(node, type) {
     case ASM_INT: return ['binary', '|', node, ['num', 0]];
     case ASM_DOUBLE: return ['unary-prefix', '+', node];
     case ASM_FLOAT: return ['call', ['name', 'Math_fround'], [node]];
-    case ASM_FLOAT32X4: return ['call', ['name', 'SIMD_float32x4_check'], [node]];
-    case ASM_INT32X4: return ['call', ['name', 'SIMD_int32x4_check'], [node]];
+    case ASM_FLOAT32X4: return ['call', ['name', 'SIMD_Float32x4_check'], [node]];
+    case ASM_FLOAT64X2: return ['call', ['name', 'SIMD_Float64x2_check'], [node]];
+    case ASM_INT8X16: return ['call', ['name', 'SIMD_Int8x16_check'], [node]];
+    case ASM_INT16X8: return ['call', ['name', 'SIMD_Int16x8_check'], [node]];
+    case ASM_INT32X4: return ['call', ['name', 'SIMD_Int32x4_check'], [node]];
     case ASM_NONE:
     default: return node; // non-validating code, emit nothing XXX this is dangerous, we should only allow this when we know we are not validating
   }
@@ -1863,10 +1897,19 @@ function makeAsmVarDef(v, type) {
       }
     }
     case ASM_FLOAT32X4: {
-      return [v, ['call', ['name', 'SIMD_float32x4'], [['num', 0], ['num', 0], ['num', 0], ['num', 0]]]];
+      return [v, ['call', ['name', 'SIMD_Float32x4'], [['num', 0], ['num', 0], ['num', 0], ['num', 0]]]];
+    }
+    case ASM_FLOAT64X2: {
+      return [v, ['call', ['name', 'SIMD_Float64x2'], [['num', 0], ['num', 0]]]];
+    }
+    case ASM_INT8X16: {
+      return [v, ['call', ['name', 'SIMD_Int8x16'], [['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0]]]];
+    }
+    case ASM_INT16X8: {
+      return [v, ['call', ['name', 'SIMD_Int16x8'], [['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0], ['num', 0]]]];
     }
     case ASM_INT32X4: {
-      return [v, ['call', ['name', 'SIMD_int32x4'], [['num', 0], ['num', 0], ['num', 0], ['num', 0]]]];
+      return [v, ['call', ['name', 'SIMD_Int32x4'], [['num', 0], ['num', 0], ['num', 0], ['num', 0]]]];
     }
     default: throw 'wha? ' + JSON.stringify([v, type]) + new Error().stack;
   }
@@ -2233,6 +2276,9 @@ function registerize(ast) {
           case ASM_DOUBLE:    ret = 'd'; break;
           case ASM_FLOAT:     ret = 'f'; break;
           case ASM_FLOAT32X4: ret = 'F4'; break;
+          case ASM_FLOAT64X2: ret = 'F2'; break;
+          case ASM_INT8X16:   ret = 'I16'; break;
+          case ASM_INT16X8:   ret = 'I8'; break;
           case ASM_INT32X4:   ret = 'I4'; break;
           case ASM_NONE:      ret = 'Z'; break;
           default: assert(false, 'type ' + type + ' doesn\'t have a name yet');
@@ -2350,7 +2396,7 @@ function registerize(ast) {
     // we just use a fresh register to make sure we avoid this, but it could be
     // optimized to check for safe registers (free, and not used in this loop level).
     var varRegs = {}; // maps variables to the register they will use all their life
-    var freeRegsClasses = asm ? [[], [], [], [], [], []] : []; // two classes for asm, one otherwise XXX - hardcoded length
+    var freeRegsClasses = asm ? [[], [], [], [], [], [], [], [], []] : []; // two classes for asm, one otherwise XXX - hardcoded length
     var nextReg = 1;
     var fullNames = {};
     var loopRegs = {}; // for each loop nesting level, the list of bound variables
@@ -2513,8 +2559,8 @@ function registerizeHarder(ast) {
     // Utilities for allocating register variables.
     // We need distinct register pools for each type of variable.
 
-    var allRegsByType = [{}, {}, {}, {}, {}, {}]; // XXX - hardcoded length
-    var regPrefixByType = ['i', 'd', 'f', 'F4', 'I4', 'n'];
+    var allRegsByType = [{}, {}, {}, {}, {}, {}, {}, {}, {}]; // XXX - hardcoded length
+    var regPrefixByType = ['i', 'd', 'f', 'F4', 'F2', 'I16', 'I8', 'I4', 'n'];
     var nextReg = 1;
 
     function createReg(forName) {
@@ -3586,6 +3632,7 @@ function registerizeHarder(ast) {
 var ELIMINATION_SAFE_NODES = set('var', 'assign', 'call', 'if', 'toplevel', 'do', 'return', 'label', 'switch', 'binary', 'unary-prefix'); // do is checked carefully, however
 var IGNORABLE_ELIMINATOR_SCAN_NODES = set('num', 'toplevel', 'string', 'break', 'continue', 'dot'); // dot can only be STRING_TABLE.*
 var ABORTING_ELIMINATOR_SCAN_NODES = set('new', 'object', 'function', 'defun', 'for', 'while', 'array', 'throw'); // we could handle some of these, TODO, but nontrivial (e.g. for while, the condition is hit multiple times after the body)
+var HEAP_NAMES = set('HEAP8', 'HEAP16', 'HEAP32', 'HEAPU8', 'HEAPU16', 'HEAPU32', 'HEAPF32', 'HEAPF64');
 
 function isTempDoublePtrAccess(node) { // these are used in bitcasts; they are not really affecting memory, and should cause no invalidation
   assert(node[0] === 'sub');
@@ -3940,7 +3987,8 @@ function eliminate(ast, memSafe) {
             var name = node[1];
             if (name in tracked) {
               doEliminate(name, node);
-            } else if (!(name in locals) && !callsInvalidated) {
+            } else if (!(name in locals) && !callsInvalidated && (memSafe || !(name in HEAP_NAMES))) { // ignore HEAP8 etc when not memory safe, these are ok to
+                                                                                                       // access, e.g. SIMD_Int32x4_load(HEAP8, ...)
               invalidateCalls();
               callsInvalidated = true;
             }
@@ -4023,7 +4071,9 @@ function eliminate(ast, memSafe) {
             for (var j = 0; j < stats.length; j++) {
               traverseInOrder(stats[j]);
             }
-            // We cannot track from one switch case into another, undo all new trackings TODO: general framework here, use in if-else as well
+            // We cannot track from one switch case into another if there are external dependencies, undo all new trackings
+            // Otherwise we can track, e.g. a var used in a case before assignment in another case is UB in asm.js, so no need for the assignment
+            // TODO: general framework here, use in if-else as well
             for (var t in tracked) {
               if (!(t in originalTracked)) {
                 var info = tracked[t];
@@ -4401,6 +4451,10 @@ function minifyGlobals(ast) {
         ensureMinifiedNames(next);
         vars[i][0] = minified[name] = minifiedNames[next++];
       }
+    } else if (type === 'defun') {
+      var name = node[1];
+      ensureMinifiedNames(next);
+      node[1] = minified[name] = minifiedNames[next++];
     }
   });
   // add all globals in function chunks, i.e. not here but passed to us
@@ -4777,6 +4831,17 @@ function aggressiveVariableElimination(ast) {
 }
 
 function outline(ast) {
+  // Move from 'label' to another name. This will avoid optimizations for label later, but we modify control flow so much here, we just give up on them
+  function deLabel(func, asmData) {
+    if (!('label' in asmData.vars)) return;
+    safeLabelSettingInternal(func, asmData);
+    assert(!('fakeLabel' in asmData.vars));
+    asmData.vars.fakeLabel = ASM_INT;
+    delete asmData.vars.label;
+    traverse(func, function(node, type) {
+      if (type === 'name' && node[1] === 'label') node[1] = 'fakeLabel';
+    });
+  }
   // Try to flatten out code as much as possible, to make outlining more feasible.
   function flatten(func, asmData) {
     var minSize = extraInfo.sizeToOutline/4;
@@ -4925,7 +4990,8 @@ function outline(ast) {
     }
     asmData.stackPos = {};
     var stackSize = getStackBumpSize(func);
-    if (stackSize % 8 === 0) stackSize += 8 - (stackSize % 8);
+    assert(stackSize % STACK_ALIGN === 0, 'bad stack! ' + stackSize);
+    stackSize += STACK_ALIGN;
     for (var i = 0; i < stack.length; i++) {
       asmData.stackPos[stack[i]] = stackSize + i*8;
     }
@@ -4937,7 +5003,7 @@ function outline(ast) {
     asmData.maxAttemptedOutlinings = Infinity;
     if (extraInfo.sizeToOutline < 100) asmData.maxAttemptedOutlinings = Math.min(50, asmData.maxAttemptedOutlinings); // tiny sizes, be careful of too many attempts
     asmData.intendedPieces = Math.ceil(size/extraInfo.sizeToOutline);
-    asmData.totalStackSize = stackSize + (stack.length + 2*asmData.maxOutlinings)*8;
+    asmData.totalStackSize = stackAlign(stackSize + (stack.length + 2*asmData.maxOutlinings)*8);
     asmData.controlStackPos = function(i) { return stackSize + (stack.length + i)*8 };
     asmData.controlDataStackPos = function(i) { return stackSize + (stack.length + i)*8 + 4 };
     asmData.splitCounter = 0;
@@ -5444,6 +5510,7 @@ function outline(ast) {
       if (size >= extraInfo.sizeToOutline && maxTotalFunctions > 0) {
         maxTotalFunctions--;
         aggressiveVariableEliminationInternal(func, asmData);
+        deLabel(func, asmData);
         flatten(func, asmData);
         analyzeFunction(func, asmData);
         calculateThreshold(func, asmData);
@@ -5541,75 +5608,192 @@ function outline(ast) {
   });
 }
 
-function safeHeap(ast) {
-  function fixPtr(ptr, heap) {
-    switch (heap) {
-      case 'HEAP8':   case 'HEAPU8': break;
-      case 'HEAP16':  case 'HEAPU16': {
-        if (ptr[0] === 'binary') {
-          assert(ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 1);
-          ptr = ptr[2]; // skip the shift
-        } else {
-          ptr = ['binary', '*', ptr, ['num', 2]]; // was unshifted, convert to absolute address
-        }
-        break;
+function fixPtr(ptr, heap) {
+  switch (heap) {
+    case 'HEAP8':   case 'HEAPU8': break;
+    case 'HEAP16':  case 'HEAPU16': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 1) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 2]]; // was unshifted, convert to absolute address
       }
-      case 'HEAP32':  case 'HEAPU32': {
-        if (ptr[0] === 'binary') {
-          assert(ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 2);
-          ptr = ptr[2]; // skip the shift
-        } else {
-          ptr = ['binary', '*', ptr, ['num', 4]]; // was unshifted, convert to absolute address
-        }
-        break;
-      }
-      case 'HEAPF32': {
-        if (ptr[0] === 'binary') {
-          assert(ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 2);
-          ptr = ptr[2]; // skip the shift
-        } else {
-          ptr = ['binary', '*', ptr, ['num', 4]]; // was unshifted, convert to absolute address
-        }
-        break;
-      }
-      case 'HEAPF64': {
-        if (ptr[0] === 'binary') {
-          assert(ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 3);
-          ptr = ptr[2]; // skip the shift
-        } else {
-          ptr = ['binary', '*', ptr, ['num', 8]]; // was unshifted, convert to absolute address
-        }
-        break;
-      }
-      default: throw 'bad heap ' + heap;
+      break;
     }
-    ptr = ['binary', '|', ptr, ['num', 0]];
-    return ptr;
+    case 'HEAP32':  case 'HEAPU32': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 2) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 4]]; // was unshifted, convert to absolute address
+      }
+      break;
+    }
+    case 'HEAPF32': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 2) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 4]]; // was unshifted, convert to absolute address
+      }
+      break;
+    }
+    case 'HEAPF64': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 3) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 8]]; // was unshifted, convert to absolute address
+      }
+      break;
+    }
+    default: {
+      return ptr; // unchanged
+    }
   }
-  traverseGenerated(ast, function(node, type) {
+  ptr = ['binary', '|', ptr, ['num', 0]];
+  return ptr;
+}
+
+function safeHeap(ast) {
+  var SAFE_HEAP_FUNCS = set('SAFE_HEAP_LOAD', 'SAFE_HEAP_LOAD_D', 'SAFE_HEAP_STORE', 'SAFE_HEAP_STORE_D', 'SAFE_FT_MASK');
+  traverseGeneratedFunctions(ast, function(func) {
+    if (func[1] in SAFE_HEAP_FUNCS) return null;
+    traverseGenerated(func, function(node, type) {
+      if (type === 'assign') {
+        if (node[1] === true && node[2][0] === 'sub') {
+          var heap = node[2][1][1];
+          var ptr = fixPtr(node[2][2], heap);
+          var value = node[3];
+          // SAFE_HEAP_STORE(ptr, value, bytes, isFloat) 
+          switch (heap) {
+            case 'HEAP8':   case 'HEAPU8': {
+              return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_INT), ['num', 1]]];
+            }
+            case 'HEAP16':  case 'HEAPU16': {
+              return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_INT), ['num', 2]]];
+            }
+            case 'HEAP32':  case 'HEAPU32': {
+              return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_INT), ['num', 4]]];
+            }
+            case 'HEAPF32': {
+              return ['call', ['name', 'SAFE_HEAP_STORE_D'], [ptr, makeAsmCoercion(value, ASM_DOUBLE), ['num', 4]]];
+            }
+            case 'HEAPF64': {
+              return ['call', ['name', 'SAFE_HEAP_STORE_D'], [ptr, makeAsmCoercion(value, ASM_DOUBLE), ['num', 8]]];
+            }
+            default: throw 'bad heap ' + heap;
+          }
+        }
+      } else if (type === 'sub') {
+        var target = node[1][1];
+        if (target[0] === 'H') {
+          // heap access
+          var heap = target;
+          var ptr = fixPtr(node[2], heap);
+          // SAFE_HEAP_LOAD(ptr, bytes, isFloat) 
+          switch (heap) {
+            case 'HEAP8': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 1], ['num', 0]]], ASM_INT);
+            }
+            case 'HEAPU8': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 1], ['num', 1]]], ASM_INT);
+            }
+            case 'HEAP16': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 2], ['num', 0]]], ASM_INT);
+            }
+            case 'HEAPU16': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 2], ['num', 1]]], ASM_INT);
+            }
+            case 'HEAP32': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 4], ['num', 0]]], ASM_INT);
+            }
+            case 'HEAPU32': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 4], ['num', 1]]], ASM_INT);
+            }
+            case 'HEAPF32': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD_D'], [ptr, ['num', 4]]], ASM_DOUBLE);
+            }
+            case 'HEAPF64': {
+              return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD_D'], [ptr, ['num', 8]]], ASM_DOUBLE);
+            }
+            default: throw 'bad heap ' + heap;
+          }
+        } else {
+          assert(target[0] == 'F');
+          // function table indexing mask
+          assert(node[2][0] === 'binary' && node[2][1] === '&');
+          node[2][2] = makeAsmCoercion(['call', ['name', 'SAFE_FT_MASK'], [makeAsmCoercion(node[2][2], ASM_INT), makeAsmCoercion(node[2][3], ASM_INT)]], ASM_INT);
+        }
+      }
+    });
+  });
+}
+
+function fixPtrSlim(ptr, heap, shell) {
+  switch (heap) {
+    case 'HEAP8':   case 'HEAPU8': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 0) {
+        ptr = ['binary', '|', ptr[2], ['num', 0]]; // smaller
+      }
+      break;
+    }
+    case 'HEAP16':  case 'HEAPU16': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 1) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 2]]; // was unshifted, convert to absolute address
+      }
+      break;
+    }
+    case 'HEAP32':  case 'HEAPU32': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 2) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 4]]; // was unshifted, convert to absolute address
+      }
+      break;
+    }
+    case 'HEAPF32': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 2) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 4]]; // was unshifted, convert to absolute address
+      }
+      break;
+    }
+    case 'HEAPF64': {
+      if (ptr[0] === 'binary' && ptr[1] === '>>' && ptr[3][0] === 'num' && ptr[3][1] === 3) {
+        ptr = ptr[2]; // skip the shift
+      } else {
+        ptr = ['binary', '*', ptr, ['num', 8]]; // was unshifted, convert to absolute address
+      }
+      break;
+    }
+    default: {
+      if (!shell) throw 'bad heap ' + heap;
+      return ptr; // unchanged
+    }
+  }
+  return ptr;
+}
+
+function splitMemory(ast, shell) {
+  traverse(ast, function(node, type) {
     if (type === 'assign') {
-      if (node[1] === true && node[2][0] === 'sub') {
+      if (node[2][0] === 'sub' && node[2][1][0] === 'name') {
         var heap = node[2][1][1];
-        var ptr = fixPtr(node[2][2], heap);
-        var value = node[3];
-        // SAFE_HEAP_STORE(ptr, value, bytes, isFloat) 
-        switch (heap) {
-          case 'HEAP8':   case 'HEAPU8': {
-            return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_INT), ['num', 1], ['num', 0]]];
+        if (parseHeap(heap)) {
+          if (node[1] !== true) assert(0, 'bad assign, split memory cannot handle ' + JSON.stringify(node) + '= to a HEAP');
+          var ptr = fixPtrSlim(node[2][2], heap, shell);
+          var value = node[3];
+          switch (heap) {
+            case 'HEAP8': return ['call', ['name', 'set8'], [ptr, value]];
+            case 'HEAP16': return ['call', ['name', 'set16'], [ptr, value]];
+            case 'HEAP32': return ['call', ['name', 'set32'], [ptr, value]];
+            case 'HEAPU8': return ['call', ['name', 'setU8'], [ptr, value]];
+            case 'HEAPU16': return ['call', ['name', 'setU16'], [ptr, value]];
+            case 'HEAPU32': return ['call', ['name', 'setU32'], [ptr, value]];
+            case 'HEAPF32': return ['call', ['name', 'setF32'], [ptr, value]];
+            case 'HEAPF64': return ['call', ['name', 'setF64'], [ptr, value]];
+            default: if (!shell) throw 'bad heap ' + heap;
           }
-          case 'HEAP16':  case 'HEAPU16': {
-            return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_INT), ['num', 2], ['num', 0]]];
-          }
-          case 'HEAP32':  case 'HEAPU32': {
-            return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_INT), ['num', 4], ['num', 0]]];
-          }
-          case 'HEAPF32': {
-            return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_DOUBLE), ['num', 4], ['num', 1]]];
-          }
-          case 'HEAPF64': {
-            return ['call', ['name', 'SAFE_HEAP_STORE'], [ptr, makeAsmCoercion(value, ASM_DOUBLE), ['num', 8], ['num', 1]]];
-          }
-          default: throw 'bad heap ' + heap;
         }
       }
     } else if (type === 'sub') {
@@ -5617,43 +5801,33 @@ function safeHeap(ast) {
       if (target[0] === 'H') {
         // heap access
         var heap = target;
-        var ptr = fixPtr(node[2], heap);
-        // SAFE_HEAP_LOAD(ptr, bytes, isFloat) 
+        var ptr = fixPtrSlim(node[2], heap, shell);
         switch (heap) {
-          case 'HEAP8': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 1], ['num', 0], ['num', 0]]], ASM_INT);
-          }
-          case 'HEAPU8': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 1], ['num', 0], ['num', 1]]], ASM_INT);
-          }
-          case 'HEAP16': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 2], ['num', 0], ['num', 0]]], ASM_INT);
-          }
-          case 'HEAPU16': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 2], ['num', 0], ['num', 1]]], ASM_INT);
-          }
-          case 'HEAP32': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 4], ['num', 0], ['num', 0]]], ASM_INT);
-          }
-          case 'HEAPU32': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 4], ['num', 0], ['num', 1]]], ASM_INT);
-          }
-          case 'HEAPF32': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 4], ['num', 1], ['num', 0]]], ASM_DOUBLE);
-          }
-          case 'HEAPF64': {
-            return makeAsmCoercion(['call', ['name', 'SAFE_HEAP_LOAD'], [ptr, ['num', 8], ['num', 1], ['num', 0]]], ASM_DOUBLE);
-          }
-          default: throw 'bad heap ' + heap;
+          case 'HEAP8': return ['call', ['name', 'get8'], [ptr]];
+          case 'HEAP16': return ['call', ['name', 'get16'], [ptr]];
+          case 'HEAP32': return ['call', ['name', 'get32'], [ptr]];
+          case 'HEAPU8': return ['call', ['name', 'getU8'], [ptr]];
+          case 'HEAPU16': return ['call', ['name', 'getU16'], [ptr]];
+          case 'HEAPU32': return ['call', ['name', 'getU32'], [ptr]];
+          case 'HEAPF32': return ['call', ['name', 'getF32'], [ptr]];
+          case 'HEAPF64': return ['call', ['name', 'getF64'], [ptr]];
+          default: if (!shell) throw 'bad heap ' + heap;
         }
-      } else {
-        assert(target[0] == 'F');
-        // function table indexing mask
-        assert(node[2][0] === 'binary' && node[2][1] === '&');
-        node[2][2] = makeAsmCoercion(['call', ['name', 'SAFE_FT_MASK'], [makeAsmCoercion(node[2][2], ASM_INT), makeAsmCoercion(node[2][3], ASM_INT)]], ASM_INT);
       }
     }
   });
+  var SPLIT_GETS = set('get8', 'get16', 'get32', 'getU8', 'getU16', 'getU32', 'getF32', 'getF64');
+  traverse(ast, function(node, type) {
+    if (type === 'binary' && node[1] === '|' && node[2][0] === 'call' && node[2][1][0] === 'name' && node[2][1][1] in SPLIT_GETS && node[3][0] === 'num' && node[3][1] === 0) {
+      return node[2];
+    } else if (type === 'unary-prefix' && node[1] === '+' && node[2][0] === 'call' && node[2][1][0] === 'name' && node[2][1][1] in SPLIT_GETS) {
+      return node[2];
+    }
+  });
+}
+
+function splitMemoryShell(ast) {
+  splitMemory(ast, true);
 }
 
 function optimizeFrounds(ast) {
@@ -5754,7 +5928,6 @@ function emterpretify(ast) {
   var ASYNC = extraInfo.ASYNC;
   var PROFILING = extraInfo.PROFILING;
   var ASSERTIONS = extraInfo.ASSERTIONS;
-  var yieldFuncs = set(extraInfo.yieldFuncs);
 
   var RELATIVE_BRANCHES = set('BR', 'BRT', 'BRF');
   var ABSOLUTE_BRANCHES = set('BRA', 'BRTA', 'BRFA');
@@ -5780,6 +5953,15 @@ function emterpretify(ast) {
   function flattenFloat64(value) {
     tempFloat64[0] = value;
     return Array.prototype.slice.call(tempUint8, 0, 8);
+  }
+
+  // functions which are ok to run while async, even if not emterpreted
+  var OK_TO_CALL_WHILE_ASYNC = set('stackSave', 'stackRestore', 'stackAlloc', 'setThrew', '_memset', '_memcpy', '_memmove', '_strlen', '_strncpy', '_strcpy', '_strcat');
+  function okToCallWhileAsync(name) {
+    // dynCall *can* be on the stack, they are just bridges; what matters is where they go
+    if (/^dynCall_/.test(name)) return true;
+    if (name in OK_TO_CALL_WHILE_ASYNC) return true;
+    return false;
   }
 
   function verifyCode(code, stat) {
@@ -7037,12 +7219,9 @@ function emterpretify(ast) {
 
     if (ignore) {
       // we are not emterpreting this function
-      if (ASYNC && ASSERTIONS && !/^dynCall_/.test(func[1]) && !(func[1] in yieldFuncs)) {
+      if (ASYNC && ASSERTIONS && !okToCallWhileAsync(func[1])) {
         // we need to be careful to never enter non-emterpreted code while doing an async save/restore,
         // which is what happens if non-emterpreted code is on the stack while we attempt to save.
-        // note that we special-case dynCall, which *can* be on the stack, they are just bridges; what
-        // matters is where they go
-
         // add asserts right after each call
         var stack = [];
         traverse(func, function(node, type) {
@@ -7251,10 +7430,6 @@ function emterpretify(ast) {
       });
       if (ASYNC) {
         argStats.push(['if', srcToExp('(asyncState|0) == 1'), srcToStat('asyncState = 3;')]); // we know we are during a sleep, mark the state
-        if (ASSERTIONS && !(func[1] in yieldFuncs)) {
-          argStats.push(['if', srcToExp('((asyncState|0) == 1) | ((asyncState|0) == 3)'), srcToStat('abort(-12) | 0')]); // if *not* a yield func, we should never get here (trampoline entry)
-                                                                                                                         // while sleeping (3, or 1 which has not yet been turned into a 3)
-        }
         argStats = [['if', srcToExp('(asyncState|0) != 2'), ['block', argStats]]]; // 2 means restore, so do not trample the stack
       }
       func[3] = func[3].concat(argStats);
@@ -7498,6 +7673,8 @@ var passes = {
   relocate: relocate,
   outline: outline,
   safeHeap: safeHeap,
+  splitMemory: splitMemory,
+  splitMemoryShell: splitMemoryShell,
   optimizeFrounds: optimizeFrounds,
   ensureLabelSet: ensureLabelSet,
   emterpretify: emterpretify,
