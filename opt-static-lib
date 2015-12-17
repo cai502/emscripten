@@ -1,7 +1,7 @@
-#!/bin/bash -exu -o pipefail
+#!/bin/bash -ex -o pipefail
 
 archive=$1
-entry_points=${2:""}
+entry_points=$2
 
 bc=`basename ${archive} .a`.bc
 files=`llvm-ar t ${archive}`
@@ -15,4 +15,4 @@ fi
 rm ${archive}
 llvm-ar rc ${archive} ${bc}
 rm ${files}
-rm ${bc}
+rm -f ${bc}
