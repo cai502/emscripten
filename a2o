@@ -9,6 +9,7 @@ from tools import shared
 
 args = [
     '-fblocks',
+    '-s', 'RESERVED_FUNCTION_POINTERS=5',
     '-s', 'DEMANGLE_SUPPORT=1',
     '-s', 'NATIVE_LIBDISPATCH=1',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',

@@ -8963,6 +8963,29 @@ LibraryManager.library = {
   __ubsan_handle_float_cast_overflow: function(id, post) {
     abort('Undefined behavior! ubsan_handle_float_cast_overflow: ' + [id, post]);
   },
+  
+  _objc_msgSend_uncached_impcache: function() {
+    throw "not implemented"
+  },
+  
+  _objc_msgForward: function() {
+    var margs = allocate(arguments.length*4, 'i8', ALLOC_STACK);
+    for(var i = 0; i < arguments.length; i++) {
+      {{{ makeSetValue('margs', 'i*4', 'arguments[i]', 'i32') }}};
+    }
+    var returnStorage = margs;
+    ____forwarding___(margs, returnStorage);
+  },
+  _objc_msgForward_stret: function() {
+    throw "not implemented"
+  },
+  
+  objc_msgSend: true,
+  objc_msgSendSuper: true,
+  objc_msgSendSuper2: true,
+  objc_msgSend_stret: true,
+  method_invoke: true,
+  method_invoke_stret: true,
 
   // misc definitions to avoid unnecessary unresolved symbols from fastcomp
   emscripten_prep_setjmp: true,
@@ -9006,4 +9029,3 @@ function autoAddDeps(object, name) {
     }
   }
 }
-

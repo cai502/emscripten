@@ -275,6 +275,11 @@ if (Module['preInit']) {
   }
 }
 
+Runtime.addFunction(function(){
+  // _objc_msgForward_impcache
+  return __objc_msgForward.apply(this, arguments);
+});
+
 // shouldRunNow refers to calling main(), not run().
 #if INVOKE_RUN
 var shouldRunNow = true;
