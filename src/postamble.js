@@ -275,10 +275,12 @@ if (Module['preInit']) {
   }
 }
 
+#if RESERVED_FUNCTION_POINTERS != 0
 Runtime.addFunction(function(){
   // _objc_msgForward_impcache
   return __objc_msgForward.apply(this, arguments);
 });
+#end
 
 // shouldRunNow refers to calling main(), not run().
 #if INVOKE_RUN
