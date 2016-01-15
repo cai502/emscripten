@@ -616,11 +616,19 @@ function ftCall_%s(%s) {%s
       (item, sig) = msgFunc.rsplit('_', 1)
       
       # check args
-      assert len(sig) >= 3
-      assert sig[1:3] == "ii"
-      args = ''.join([',a' + str(i) for i in range(3, len(sig))])
-      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(3, len(sig))])
-      coerced_args = ''.join([','+shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(3, len(sig))])
+      if item.find("stret") == -1:
+        assert len(sig) >= 3
+        assert sig[1:3] == "ii"
+        args_begin = 3
+      else:
+        # void objc_msgSend_stret(void *st_addr, id self, SEL op, ...);
+        assert len(sig) >= 4
+        assert sig[0:4] == "viii"
+        args_begin = 4
+      args = ''.join([',a' + str(i) for i in range(args_begin, len(sig))])
+      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(args_begin, len(sig))])
+      coerced_args = ''.join([','+shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(args_begin, len(sig))])
+
       if sig[0] == "v":
         null_return = ""
         func_prefix = ""
