@@ -97,6 +97,17 @@ var LibraryA2OFont = {
         var fontName = Pointer_stringify(font);
         var metrics = A2OFont.getTextMetrics(fontName, pointSize, text);
         return metrics.width;
+    },
+    a2o_suggestLineBreak: function(font, pointSize, str, start, width) {
+
+        var text = Pointer_stringify(str);
+        var fontName = Pointer_stringify(font);
+        for(var i = start; i < text.length; i++) { // TODO consider line break
+            var metrics = A2OFont.getTextMetrics(fontName, pointSize, text.substring(start, i));
+            if(text.charAt(i) == "\n") return i + 1 - start;
+            if(metrics.width > width) return i - start;
+        }
+        return text.length - start;
     }
 };
 
