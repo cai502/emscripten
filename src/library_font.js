@@ -102,8 +102,8 @@ var LibraryA2OFont = {
 
         var text = Pointer_stringify(str);
         var fontName = Pointer_stringify(font);
-        for(var i = start; i < text.length; i++) { // TODO consider line break
-            var metrics = A2OFont.getTextMetrics(fontName, pointSize, text.substring(start, i));
+        for(var i = start; i < text.length; i++) { // TODO consider word boundary
+            var metrics = A2OFont.getTextMetrics(fontName, pointSize, text.substring(start, i+1));
             if(text.charAt(i) == "\n") return i + 1 - start;
             if(metrics.width > width) return i - start;
         }
