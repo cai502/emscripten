@@ -1,4 +1,6 @@
-#!/bin/bash -ex -o pipefail
+#!/bin/bash -ex
+
+set -o pipefail
 
 archive=$1
 entry_points=$2
