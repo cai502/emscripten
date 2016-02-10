@@ -8,7 +8,7 @@ files=`llvm-ar t ${archive}`
 
 llvm-ar x ${archive}
 if [ -n "${entry_points}" ]; then
-  llvm-link -f ${files} | opt - -internalize -internalize-public-api-list=${entry_points} -globaldce -o ${bc}
+  llvm-link -f ${files} | opt - -internalize -internalize-public-api-file=${entry_points} -globaldce -o ${bc}
 else
   llvm-link -f ${files} -o ${bc}
 fi
