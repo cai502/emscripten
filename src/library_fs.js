@@ -1229,6 +1229,14 @@ mergeInto(LibraryManager.library, {
       FS.mkdir('/tmp');
       FS.mkdir('/home');
       FS.mkdir('/home/web_user');
+      if(ENVIRONMENT_IS_WEB) {
+        FS.mount(IDBFS, {}, '/home/web_user');
+        addRunDependency('synchomefs');
+        FS.syncfs(true, function (err) {
+          if (err) throw err;
+          removeRunDependency('synchomefs');
+        });
+      }
     },
     createDefaultDevices: function() {
       // create /dev
@@ -1838,4 +1846,3 @@ mergeInto(LibraryManager.library, {
     }
   }
 });
-
