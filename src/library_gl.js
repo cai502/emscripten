@@ -371,7 +371,8 @@ var LibraryGL = {
                 case 0x8CA6: // FRAMEBUFFER_BINDING
                 case 0x8CA7: // RENDERBUFFER_BINDING
                 case 0x8069: // TEXTURE_BINDING_2D
-                case 0x8514: { // TEXTURE_BINDING_CUBE_MAP
+                case 0x8514: // TEXTURE_BINDING_CUBE_MAP
+                case 0x85B5: { // VERTEX_ARRAY_BINDING_OES
                   ret = 0;
                   break;
                 }
@@ -396,11 +397,7 @@ var LibraryGL = {
                 }
               }
               return;
-            } else if (result instanceof WebGLBuffer ||
-                       result instanceof WebGLProgram ||
-                       result instanceof WebGLFramebuffer ||
-                       result instanceof WebGLRenderbuffer ||
-                       result instanceof WebGLTexture) {
+            } else if (result.name) {
               ret = result.name | 0;
             } else {
               GL.recordError(0x0500); // GL_INVALID_ENUM
@@ -800,10 +797,15 @@ var LibraryGL = {
 
       context.maxVertexAttribs = GLctx.getParameter(GLctx.MAX_VERTEX_ATTRIBS);
 #if FULL_ES2
-      context.clientBuffers = [];
-      for (var i = 0; i < context.maxVertexAttribs; i++) {
-        context.clientBuffers[i] = { enabled: false, clientside: false, size: 0, type: 0, normalized: 0, stride: 0, ptr: 0 };
+      context.clientBuffersPerVAO = {};
+      context.initClientBuffers = function initClientBuffers(id) {
+          context.clientBuffersPerVAO[id] = [];
+          for (var i = 0; i < context.maxVertexAttribs; i++) {
+            context.clientBuffersPerVAO[id][i] = { enabled: false, clientside: false, size: 0, type: 0, normalized: 0, stride: 0, ptr: 0 };
+          }
       }
+      context.initClientBuffers(0);
+      context.clientBuffers = context.clientBuffersPerVAO[0];
 
       GL.generateTempBuffers(false, context);
 #endif
@@ -2841,6 +2843,11 @@ var LibraryGL = {
       var id = GL.getNewId(GL.vaos);
       vao.name = id;
       GL.vaos[id] = vao;
+#if FULL_ES2
+      if(!GL.currentContext.clientBuffersPerVAO[id]) {
+        GL.currentContext.initClientBuffers(id);
+      }
+#endif
       {{{ makeSetValue('arrays', 'i*4', 'id', 'i32') }}};
     }
 #endif
@@ -2861,6 +2868,9 @@ var LibraryGL = {
       var id = {{{ makeGetValue('vaos', 'i*4', 'i32') }}};
       GL.currentContext.vaoExt.deleteVertexArrayOES(GL.vaos[id]);
       GL.vaos[id] = null;
+#if FULL_ES2
+      GL.currentContext.clientBuffersPerVAO[id] = null;
+#endif
     }
 #endif
   },
@@ -2878,6 +2888,13 @@ var LibraryGL = {
 #endif
 
     GL.currentContext.vaoExt.bindVertexArrayOES(GL.vaos[vao]);
+    
+    var ibo = GLctx.getParameter(GLctx.ELEMENT_ARRAY_BUFFER_BINDING);
+    GL.currElementArrayBuffer = ibo ? (ibo.name | 0) : 0;
+    
+#if FULL_ES2
+    GL.currentContext.clientBuffers = GL.currentContext.clientBuffersPerVAO[vao];
+#endif
 #endif
   },
 
@@ -6607,4 +6624,3 @@ keys(LibraryGL).forEach(function(x) {
 mergeInto(LibraryManager.library, LibraryGL);
 
 assert(!(FULL_ES2 && LEGACY_GL_EMULATION), 'cannot emulate both ES2 and legacy GL');
-
