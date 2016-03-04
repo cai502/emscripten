@@ -45,7 +45,7 @@ var LibraryIFrame = {
     
     iframe_loadUrl: function(id, url) {
         var iframe = IFrame.iframes[id];
-        iframe.srcdoc = null;
+        iframe.removeAttribute("srcdoc");
         iframe.src = Pointer_stringify(url);
     },
     
