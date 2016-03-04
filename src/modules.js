@@ -133,7 +133,8 @@ var LibraryManager = {
       'library_async.js',
       'library_nsnet.js',
       'library_vr.js',
-      'library_font.js'
+      'library_font.js',
+      'library_webview.js'
     ]).concat(additionalLibraries);
 
     if(NATIVE_LIBDISPATCH) {
