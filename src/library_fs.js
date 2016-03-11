@@ -952,6 +952,33 @@ mergeInto(LibraryManager.library, {
         timestamp: Math.max(atime, mtime)
       });
     },
+    open_trycatch: function(path, flags, node) {
+      try {
+        var lookup = FS.lookupPath(path, {
+          follow: !(flags & {{{ cDefine('O_NOFOLLOW') }}})
+        });
+        node = lookup.node;
+      } catch (e) {
+        // ignore
+      }
+      return node;
+    },
+    open_trycatch2: function(path, flags) {
+      try {
+        if (FS.trackingDelegate['onOpenFile']) {
+          var trackingFlags = 0;
+          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_WRONLY') }}}) {
+            trackingFlags |= FS.tracking.openFlags.READ;
+          }
+          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_RDONLY') }}}) {
+            trackingFlags |= FS.tracking.openFlags.WRITE;
+          }
+          FS.trackingDelegate['onOpenFile'](path, trackingFlags);
+        }
+      } catch(e) {
+        console.log("FS.trackingDelegate['onOpenFile']('"+path+"', flags) threw an exception: " + e.message);
+      }
+    },
     open: function(path, flags, mode, fd_start, fd_end) {
       if (path === "") {
         throw new FS.ErrnoError(ERRNO_CODES.ENOENT);
@@ -968,14 +995,7 @@ mergeInto(LibraryManager.library, {
         node = path;
       } else {
         path = PATH.normalize(path);
-        try {
-          var lookup = FS.lookupPath(path, {
-            follow: !(flags & {{{ cDefine('O_NOFOLLOW') }}})
-          });
-          node = lookup.node;
-        } catch (e) {
-          // ignore
-        }
+        node = FS.open_trycatch(path, flags, node);
       }
       // perhaps we need to create the node
       var created = false;
@@ -1037,20 +1057,7 @@ mergeInto(LibraryManager.library, {
           Module['printErr']('read file: ' + path);
         }
       }
-      try {
-        if (FS.trackingDelegate['onOpenFile']) {
-          var trackingFlags = 0;
-          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_WRONLY') }}}) {
-            trackingFlags |= FS.tracking.openFlags.READ;
-          }
-          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_RDONLY') }}}) {
-            trackingFlags |= FS.tracking.openFlags.WRITE;
-          }
-          FS.trackingDelegate['onOpenFile'](path, trackingFlags);
-        }
-      } catch(e) {
-        console.log("FS.trackingDelegate['onOpenFile']('"+path+"', flags) threw an exception: " + e.message);
-      }
+      FS.open_trycatch2(path, flags);
       return stream;
     },
     close: function(stream) {
