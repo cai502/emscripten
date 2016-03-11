@@ -44,7 +44,7 @@ mergeInto(LibraryManager.library, {
     //
     // paths
     //
-    lookupPath: function(path, opts) {
+    lookupPath: function(path, opts, ex) {
       path = PATH.resolve(FS.cwd(), path);
       opts = opts || {};
 
@@ -61,6 +61,7 @@ mergeInto(LibraryManager.library, {
       }
 
       if (opts.recurse_count > 8) {  // max recursive lookup of 8
+        if(ex) return;
         throw new FS.ErrnoError(ERRNO_CODES.ELOOP);
       }
 
@@ -80,7 +81,8 @@ mergeInto(LibraryManager.library, {
           break;
         }
 
-        current = FS.lookupNode(current, parts[i]);
+        current = FS.lookupNode(current, parts[i], ex);
+        if(ex && !current) return;
         current_path = PATH.join2(current_path, parts[i]);
 
         // jump to the mount's root node if this is a mountpoint
@@ -102,6 +104,7 @@ mergeInto(LibraryManager.library, {
             current = lookup.node;
 
             if (count++ > 40) {  // limit max consecutive symlinks to 40 (SYMLOOP_MAX).
+              if(ex) return;
               throw new FS.ErrnoError(ERRNO_CODES.ELOOP);
             }
           }
@@ -158,7 +161,7 @@ mergeInto(LibraryManager.library, {
         }
       }
     },
-    lookupNode: function(parent, name) {
+    lookupNode: function(parent, name, ex) {
       var err = FS.mayLookup(parent);
       if (err) {
         throw new FS.ErrnoError(err, parent);
@@ -177,7 +180,7 @@ mergeInto(LibraryManager.library, {
         }
       }
       // if we failed to find it in the cache, call into the VFS
-      return FS.lookup(parent, name);
+      return FS.lookup(parent, name, ex);
     },
     createNode: function(parent, name, mode, rdev) {
       if (!FS.FSNode) {
@@ -604,8 +607,8 @@ mergeInto(LibraryManager.library, {
       assert(idx !== -1);
       node.mount.mounts.splice(idx, 1);
     },
-    lookup: function(parent, name) {
-      return parent.node_ops.lookup(parent, name);
+    lookup: function(parent, name, ex) {
+      return parent.node_ops.lookup(parent, name, ex);
     },
     // generic function for all node creation
     mknod: function(path, mode, dev) {
@@ -956,9 +959,10 @@ mergeInto(LibraryManager.library, {
       try {
         var lookup = FS.lookupPath(path, {
           follow: !(flags & {{{ cDefine('O_NOFOLLOW') }}})
-        });
-        node = lookup.node;
+        }, true);
+        node = lookup && lookup.node;
       } catch (e) {
+        console.log("Ignored:", e);
         // ignore
       }
       return node;
