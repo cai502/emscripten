@@ -642,10 +642,9 @@ function ftCall_%s(%s) {%s
         func_prefix = "return +"
         func_postfix = ""
 
-#if OBJC_DEBUG
-      func_prefix = "try{ " + func_prefix
-      func_postfix = func_postfix + ";} catch(e) { Module['print']('error sel:'+Pointer_stringify(sel)); throw e;}"
-#endif
+      if settings['OBJC_DEBUG']:
+        func_prefix = "try{ " + func_prefix
+        func_postfix = func_postfix + ";} catch(e) { Module['print']('error sel:'+Pointer_stringify(sel)); throw e;}"
       
       if item == "_objc_msgSend":
         function_tables_impls.append('''
