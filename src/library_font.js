@@ -19,7 +19,7 @@ var LibraryA2OFont = {
             div.appendChild(span);
 
             document.body.appendChild(div);
-            var height = Math.ceil(span.offsetHeight);
+            var height = Math.ceil(span.offsetHeight)+1;
             var width = Math.ceil(span.offsetWidth);
             var ascent = base.offsetTop - span.offsetTop;
             var descent = height - ascent;
@@ -58,7 +58,7 @@ var LibraryA2OFont = {
         var canvas = document.createElement("canvas");
 
         var metrics = A2OFont.getTextMetrics(fontName, pointSize, text);
-        var rect = A2OFont.transformRect(a,b,c,d, 0, -metrics.ascent, metrics.width, metrics.height);
+        var rect = A2OFont.transformRect(a, b, c, d, 0, 0, metrics.width, metrics.height);
         var w = rect.size.width|0;
         var h = rect.size.height|0;
         canvas.width = w;
@@ -67,8 +67,9 @@ var LibraryA2OFont = {
         var ctx = canvas.getContext("2d");
         ctx.fillStyle = "rgb(255,255,255)";
         ctx.font = pointSize+"px '"+fontName+"'";
+        ctx.translate(-rect.origin.x, -rect.origin.y);
         ctx.transform(a, b, c, d, 0, 0);
-        ctx.fillText(text, rect.origin.x, rect.origin.y);
+        ctx.fillText(text, 0, metrics.ascent);
         var imageData = ctx.getImageData(0, 0, w, h);
         var data = imageData.data; // assume Uint8ClampedArray
         var dataLength = w*h;
@@ -76,10 +77,11 @@ var LibraryA2OFont = {
         for(var i = 0; i < dataLength; i++) {
             HEAPU8[ret + i] = data[i*4+3]; // canvas subpixel rendering is applied to alpha component
         }
+        var zero = A2OFont.transformPoint(a, b, c, d, 0, metrics.ascent);
         {{{ makeSetValue('width', 0, 'w', 'i32') }}};
         {{{ makeSetValue('height', 0, 'h', 'i32') }}};
-        {{{ makeSetValue('left', 0, '-rect.origin.x', 'i32') }}};
-        {{{ makeSetValue('top', 0, '-rect.origin.y', 'i32') }}};
+        {{{ makeSetValue('left', 0, 'zero.x-rect.origin.x', 'i32') }}};
+        {{{ makeSetValue('top', 0, 'zero.y-rect.origin.y', 'i32') }}};
         return ret;
     },
     a2o_getFontMetrics: function(font, pointSize, ascent, descent, capHeight, xHeight) {
