@@ -2,28 +2,40 @@ var LibraryA2OFont = {
     $A2OFont__deps: ["malloc"],
     $A2OFont__postset: "A2OFont.init();",
     $A2OFont: {
+        elements: {
+        },
         init: function() {
+            // elements for metrics
+            var baseline = document.createElement("div");
+            baseline.style.display = "inline-block";
+            baseline.style.width = "1px";
+            baseline.style.height = "0px";
+            baseline.style.verticalAlign = "baseline";
+            var textSpan = document.createElement("span");
+            var container = document.createElement("div");
+            container.appendChild(baseline);
+            container.appendChild(textSpan);
+            A2OFont.elements.textSpan = textSpan;
+            A2OFont.elements.baseline = baseline;
+            A2OFont.elements.container = container;
+            
+            // canvas for rendering
+            A2OFont.elements.canvas = document.createElement("canvas");
         },
         getTextMetrics: function(fontName, pointSize, text) {
-            var span = document.createElement("span");
-            span.innerHTML = text;
-            span.style.fontFamily = fontName;
-            span.style.fontSize = pointSize + "px";
-            var base = document.createElement("div");
-            base.style.display = "inline-block";
-            base.style.width = "1px";
-            base.style.height = "0px";
-            base.style.verticalAlign = "baseline";
-            var div = document.createElement("div");
-            div.appendChild(base);
-            div.appendChild(span);
+            var textSpan = A2OFont.elements.textSpan;
+            var baseline = A2OFont.elements.baseline;
+            var continer = A2OFont.elements.container;
+            textSpan.innerHTML = text;
+            textSpan.style.fontFamily = fontName;
+            textSpan.style.fontSize = pointSize + "px";
 
-            document.body.appendChild(div);
-            var height = Math.ceil(span.offsetHeight)+1;
-            var width = Math.ceil(span.offsetWidth);
-            var ascent = base.offsetTop - span.offsetTop;
+            document.body.appendChild(continer);
+            var height = Math.ceil(textSpan.offsetHeight)+1;
+            var width = Math.ceil(textSpan.offsetWidth);
+            var ascent = baseline.offsetTop - textSpan.offsetTop;
             var descent = height - ascent;
-            document.body.removeChild(div);
+            document.body.removeChild(continer);
             return {"height":height, "width":width, "ascent":ascent, "descent":descent};
         },
         transformPoint: function(a,b,c,d,x,y) {
@@ -55,7 +67,7 @@ var LibraryA2OFont = {
     a2o_renderFontToBitmapBuffer: function(font, pointSize, str, a, b, c, d, width, height, left, top) {
         var text = Pointer_stringify(str);
         var fontName = Pointer_stringify(font);
-        var canvas = document.createElement("canvas");
+        var canvas = A2OFont.elements.canvas;
 
         var metrics = A2OFont.getTextMetrics(fontName, pointSize, text);
         var rect = A2OFont.transformRect(a, b, c, d, 0, 0, metrics.width, metrics.height);
