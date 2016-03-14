@@ -201,7 +201,8 @@ mergeInto(LibraryManager.library, {
           MEMFS.resizeFileStorage(node, attr.size);
         }
       },
-      lookup: function(parent, name) {
+      lookup: function(parent, name, ex) {
+        if(ex) return;
         throw FS.genericErrors[ERRNO_CODES.ENOENT];
       },
       mknod: function(parent, name, mode, dev) {
