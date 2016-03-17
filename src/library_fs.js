@@ -39,7 +39,7 @@ mergeInto(LibraryManager.library, {
     //
     // paths
     //
-    lookupPath: function(path, opts) {
+    lookupPath: function(path, opts, ex) {
       path = PATH.resolve(FS.cwd(), path);
       opts = opts || {};
 
@@ -56,6 +56,7 @@ mergeInto(LibraryManager.library, {
       }
 
       if (opts.recurse_count > 8) {  // max recursive lookup of 8
+        if(ex) return;
         throw new FS.ErrnoError(ERRNO_CODES.ELOOP);
       }
 
@@ -75,7 +76,8 @@ mergeInto(LibraryManager.library, {
           break;
         }
 
-        current = FS.lookupNode(current, parts[i]);
+        current = FS.lookupNode(current, parts[i], ex);
+        if(ex && !current) return;
         current_path = PATH.join2(current_path, parts[i]);
 
         // jump to the mount's root node if this is a mountpoint
@@ -97,6 +99,7 @@ mergeInto(LibraryManager.library, {
             current = lookup.node;
 
             if (count++ > 40) {  // limit max consecutive symlinks to 40 (SYMLOOP_MAX).
+              if(ex) return;
               throw new FS.ErrnoError(ERRNO_CODES.ELOOP);
             }
           }
@@ -153,7 +156,7 @@ mergeInto(LibraryManager.library, {
         }
       }
     },
-    lookupNode: function(parent, name) {
+    lookupNode: function(parent, name, ex) {
       var err = FS.mayLookup(parent);
       if (err) {
         throw new FS.ErrnoError(err, parent);
@@ -172,7 +175,7 @@ mergeInto(LibraryManager.library, {
         }
       }
       // if we failed to find it in the cache, call into the VFS
-      return FS.lookup(parent, name);
+      return FS.lookup(parent, name, ex);
     },
     createNode: function(parent, name, mode, rdev) {
       if (!FS.FSNode) {
@@ -582,8 +585,8 @@ mergeInto(LibraryManager.library, {
       assert(idx !== -1);
       node.mount.mounts.splice(idx, 1);
     },
-    lookup: function(parent, name) {
-      return parent.node_ops.lookup(parent, name);
+    lookup: function(parent, name, ex) {
+      return parent.node_ops.lookup(parent, name, ex);
     },
     // generic function for all node creation
     mknod: function(path, mode, dev) {
@@ -930,6 +933,34 @@ mergeInto(LibraryManager.library, {
         timestamp: Math.max(atime, mtime)
       });
     },
+    open_trycatch: function(path, flags, node) {
+      try {
+        var lookup = FS.lookupPath(path, {
+          follow: !(flags & {{{ cDefine('O_NOFOLLOW') }}})
+        }, true);
+        node = lookup && lookup.node;
+      } catch (e) {
+        console.log("Ignored:", e);
+        // ignore
+      }
+      return node;
+    },
+    open_trycatch2: function(path, flags) {
+      try {
+        if (FS.trackingDelegate['onOpenFile']) {
+          var trackingFlags = 0;
+          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_WRONLY') }}}) {
+            trackingFlags |= FS.tracking.openFlags.READ;
+          }
+          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_RDONLY') }}}) {
+            trackingFlags |= FS.tracking.openFlags.WRITE;
+          }
+          FS.trackingDelegate['onOpenFile'](path, trackingFlags);
+        }
+      } catch(e) {
+        console.log("FS.trackingDelegate['onOpenFile']('"+path+"', flags) threw an exception: " + e.message);
+      }
+    },
     open: function(path, flags, mode, fd_start, fd_end) {
       if (path === "") {
         throw new FS.ErrnoError(ERRNO_CODES.ENOENT);
@@ -946,14 +977,7 @@ mergeInto(LibraryManager.library, {
         node = path;
       } else {
         path = PATH.normalize(path);
-        try {
-          var lookup = FS.lookupPath(path, {
-            follow: !(flags & {{{ cDefine('O_NOFOLLOW') }}})
-          });
-          node = lookup.node;
-        } catch (e) {
-          // ignore
-        }
+        node = FS.open_trycatch(path, flags, node);
       }
       // perhaps we need to create the node
       var created = false;
@@ -1019,20 +1043,7 @@ mergeInto(LibraryManager.library, {
           Module['printErr']('read file: ' + path);
         }
       }
-      try {
-        if (FS.trackingDelegate['onOpenFile']) {
-          var trackingFlags = 0;
-          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_WRONLY') }}}) {
-            trackingFlags |= FS.tracking.openFlags.READ;
-          }
-          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_RDONLY') }}}) {
-            trackingFlags |= FS.tracking.openFlags.WRITE;
-          }
-          FS.trackingDelegate['onOpenFile'](path, trackingFlags);
-        }
-      } catch(e) {
-        console.log("FS.trackingDelegate['onOpenFile']('"+path+"', flags) threw an exception: " + e.message);
-      }
+      FS.open_trycatch2(path, flags);
       return stream;
     },
     close: function(stream) {
@@ -1212,6 +1223,14 @@ mergeInto(LibraryManager.library, {
       FS.mkdir('/tmp');
       FS.mkdir('/home');
       FS.mkdir('/home/web_user');
+      if(ENVIRONMENT_IS_WEB) {
+        FS.mount(IDBFS, {}, '/home/web_user');
+        addRunDependency('synchomefs');
+        FS.syncfs(true, function (err) {
+          if (err) throw err;
+          removeRunDependency('synchomefs');
+        });
+      }
     },
     createDefaultDevices: function() {
       // create /dev
@@ -1857,4 +1876,3 @@ mergeInto(LibraryManager.library, {
     }
   }
 });
-

@@ -294,6 +294,216 @@ var LibraryGL = {
       return source;
     },
 
+    computeImageSize: function(width, height, sizePerPixel, alignment) {
+      function roundedToNextMultipleOf(x, y) {
+        return Math.floor((x + y - 1) / y) * y
+      }
+      var plainRowSize = width * sizePerPixel;
+      var alignedRowSize = roundedToNextMultipleOf(plainRowSize, alignment);
+      return (height <= 0) ? 0 :
+               ((height - 1) * alignedRowSize + plainRowSize);
+    },
+
+    get: function(name_, p, type) {
+      // Guard against user passing a null pointer.
+      // Note that GLES2 spec does not say anything about how passing a null pointer should be treated.
+      // Testing on desktop core GL 3, the application crashes on glGetIntegerv to a null pointer, but
+      // better to report an error instead of doing anything random.
+      if (!p) {
+#if GL_ASSERTIONS
+        Module.printErr('GL_INVALID_VALUE in glGet' + type + 'v(name=' + name_ + ': Function called with null out pointer!');
+#endif
+        GL.recordError(0x0501 /* GL_INVALID_VALUE */);
+        return;
+      }
+      var ret = undefined;
+      switch(name_) { // Handle a few trivial GLES values
+        case 0x8DFA: // GL_SHADER_COMPILER
+          ret = 1;
+          break;
+        case 0x8DF8: // GL_SHADER_BINARY_FORMATS
+          if (type !== 'Integer') {
+            GL.recordError(0x0500); // GL_INVALID_ENUM
+#if GL_ASSERTIONS
+            Module.printErr('GL_INVALID_ENUM in glGet' + type + 'v(GL_SHADER_BINARY_FORMATS): Invalid parameter type!');
+#endif
+          }
+          return; // Do not write anything to the out pointer, since no binary formats are supported.
+#if USE_WEBGL2
+        case 0x87FE: // GL_NUM_PROGRAM_BINARY_FORMATS
+#endif
+        case 0x8DF9: // GL_NUM_SHADER_BINARY_FORMATS
+          ret = 0;
+          break;
+        case 0x86A2: // GL_NUM_COMPRESSED_TEXTURE_FORMATS
+          // WebGL doesn't have GL_NUM_COMPRESSED_TEXTURE_FORMATS (it's obsolete since GL_COMPRESSED_TEXTURE_FORMATS returns a JS array that can be queried for length),
+          // so implement it ourselves to allow C++ GLES2 code get the length.
+          var formats = GLctx.getParameter(0x86A3 /*GL_COMPRESSED_TEXTURE_FORMATS*/);
+          ret = formats.length;
+          break;
+        case 0x8B9A: // GL_IMPLEMENTATION_COLOR_READ_TYPE
+          ret = 0x1401; // GL_UNSIGNED_BYTE
+          break;
+        case 0x8B9B: // GL_IMPLEMENTATION_COLOR_READ_FORMAT
+          ret = 0x1908; // GL_RGBA
+          break;
+      }
+
+      if (ret === undefined) {
+        var result = GLctx.getParameter(name_);
+        switch (typeof(result)) {
+          case "number":
+            ret = result;
+            break;
+          case "boolean":
+            ret = result ? 1 : 0;
+            break;
+          case "string":
+            GL.recordError(0x0500); // GL_INVALID_ENUM
+#if GL_ASSERTIONS
+            Module.printErr('GL_INVALID_ENUM in glGet' + type + 'v(' + name_ + ') on a name which returns a string!');
+#endif
+            return;
+          case "object":
+            if (result === null) {
+              // null is a valid result for some (e.g., which buffer is bound - perhaps nothing is bound), but otherwise
+              // can mean an invalid name_, which we need to report as an error
+              switch(name_) {
+                case 0x8894: // ARRAY_BUFFER_BINDING
+                case 0x8B8D: // CURRENT_PROGRAM
+                case 0x8895: // ELEMENT_ARRAY_BUFFER_BINDING
+                case 0x8CA6: // FRAMEBUFFER_BINDING
+                case 0x8CA7: // RENDERBUFFER_BINDING
+                case 0x8069: // TEXTURE_BINDING_2D
+                case 0x8514: // TEXTURE_BINDING_CUBE_MAP
+                case 0x85B5: { // VERTEX_ARRAY_BINDING_OES
+                  ret = 0;
+                  break;
+                }
+                default: {
+                  GL.recordError(0x0500); // GL_INVALID_ENUM
+#if GL_ASSERTIONS
+                  Module.printErr('GL_INVALID_ENUM in glGet' + type + 'v(' + name_ + ') and it returns null!');
+#endif
+                  return;
+                }
+              }
+            } else if (result instanceof Float32Array ||
+                       result instanceof Uint32Array ||
+                       result instanceof Int32Array ||
+                       result instanceof Array) {
+              for (var i = 0; i < result.length; ++i) {
+                switch (type) {
+                  case 'Integer': {{{ makeSetValue('p', 'i*4', 'result[i]',     'i32') }}};   break;
+                  case 'Float':   {{{ makeSetValue('p', 'i*4', 'result[i]',     'float') }}}; break;
+                  case 'Boolean': {{{ makeSetValue('p', 'i',   'result[i] ? 1 : 0', 'i8') }}};    break;
+                  default: throw 'internal glGet error, bad type: ' + type;
+                }
+              }
+              return;
+            } else if (result.name) {
+              ret = result.name | 0;
+            } else {
+              GL.recordError(0x0500); // GL_INVALID_ENUM
+#if GL_ASSERTIONS
+              Module.printErr('GL_INVALID_ENUM in glGet' + type + 'v: Unknown object returned from WebGL getParameter(' + name_ + ')!');
+#endif
+              return;
+            }
+            break;
+          default:
+            GL.recordError(0x0500); // GL_INVALID_ENUM
+#if GL_ASSERTIONS
+            Module.printErr('GL_INVALID_ENUM in glGetIntegerv: Native code calling glGet' + type + 'v(' + name_ + ') and it returns ' + result + ' of type ' + typeof(result) + '!');
+#endif
+            return;
+        }
+      }
+
+      switch (type) {
+        case 'Integer': {{{ makeSetValue('p', '0', 'ret', 'i32') }}};    break;
+        case 'Float':   {{{ makeSetValue('p', '0', 'ret', 'float') }}};  break;
+        case 'Boolean': {{{ makeSetValue('p', '0', 'ret ? 1 : 0', 'i8') }}}; break;
+        default: throw 'internal glGet error, bad type: ' + type;
+      }
+    },  
+
+    getTexPixelData: function(type, format, width, height, pixels, internalFormat) {
+      var sizePerPixel;
+      var numChannels;
+      switch(format) {
+        case 0x1906 /* GL_ALPHA */:
+        case 0x1909 /* GL_LUMINANCE */:
+        case 0x1902 /* GL_DEPTH_COMPONENT */:
+        case 0x1903 /* GL_RED */:
+          numChannels = 1;
+          break;
+        case 0x190A /* GL_LUMINANCE_ALPHA */:
+        case 0x8227 /* GL_RG */:
+          numChannels = 2;
+          break;
+        case 0x1907 /* GL_RGB */:
+          numChannels = 3;
+          break;
+        case 0x1908 /* GL_RGBA */:
+          numChannels = 4;
+          break;
+        default:
+          GL.recordError(0x0500); // GL_INVALID_ENUM
+#if GL_ASSERTIONS
+          Module.printErr('GL_INVALID_ENUM due to unknown format in getTexPixelData, type: ' + type + ', format: ' + format);
+#endif
+          return {
+            pixels: null,
+            internalFormat: 0x0
+          };
+      }
+      switch (type) {
+        case 0x1401 /* GL_UNSIGNED_BYTE */:
+          sizePerPixel = numChannels*1;
+          break;
+        case 0x1403 /* GL_UNSIGNED_SHORT */:
+        case 0x8D61 /* GL_HALF_FLOAT_OES */:
+          sizePerPixel = numChannels*2;
+          break;
+        case 0x1405 /* GL_UNSIGNED_INT */:
+        case 0x1406 /* GL_FLOAT */:
+          sizePerPixel = numChannels*4;
+          break;
+        case 0x84FA /* UNSIGNED_INT_24_8_WEBGL */:
+          sizePerPixel = 4;
+          break;
+        case 0x8363 /* GL_UNSIGNED_SHORT_5_6_5 */:
+        case 0x8033 /* GL_UNSIGNED_SHORT_4_4_4_4 */:
+        case 0x8034 /* GL_UNSIGNED_SHORT_5_5_5_1 */:
+          sizePerPixel = 2;
+          break;
+        default:
+          GL.recordError(0x0500); // GL_INVALID_ENUM
+#if GL_ASSERTIONS
+          Module.printErr('GL_INVALID_ENUM in glTex[Sub]Image/glReadPixels, type: ' + type + ', format: ' + format);
+#endif
+          return {
+            pixels: null,
+            internalFormat: 0x0
+          };
+      }
+      var bytes = GL.computeImageSize(width, height, sizePerPixel, GL.unpackAlignment);
+      if (type == 0x1401 /* GL_UNSIGNED_BYTE */) {
+        pixels = {{{ makeHEAPView('U8', 'pixels', 'pixels+bytes') }}};
+      } else if (type == 0x1406 /* GL_FLOAT */) {
+        pixels = {{{ makeHEAPView('F32', 'pixels', 'pixels+bytes') }}};
+      } else if (type == 0x1405 /* GL_UNSIGNED_INT */ || type == 0x84FA /* UNSIGNED_INT_24_8_WEBGL */) {
+        pixels = {{{ makeHEAPView('U32', 'pixels', 'pixels+bytes') }}};
+      } else {
+        pixels = {{{ makeHEAPView('U16', 'pixels', 'pixels+bytes') }}};
+      }
+      return {
+        pixels: pixels,
+        internalFormat: internalFormat
+      };
+    },
+
 #if GL_FFP_ONLY
     enabledClientAttribIndices: [],
     enableVertexAttribArray: function enableVertexAttribArray(index) {
@@ -573,10 +783,15 @@ var LibraryGL = {
 
       context.maxVertexAttribs = GLctx.getParameter(GLctx.MAX_VERTEX_ATTRIBS);
 #if FULL_ES2
-      context.clientBuffers = [];
-      for (var i = 0; i < context.maxVertexAttribs; i++) {
-        context.clientBuffers[i] = { enabled: false, clientside: false, size: 0, type: 0, normalized: 0, stride: 0, ptr: 0 };
+      context.clientBuffersPerVAO = {};
+      context.initClientBuffers = function initClientBuffers(id) {
+          context.clientBuffersPerVAO[id] = [];
+          for (var i = 0; i < context.maxVertexAttribs; i++) {
+            context.clientBuffersPerVAO[id][i] = { enabled: false, clientside: false, size: 0, type: 0, normalized: 0, stride: 0, ptr: 0 };
+          }
       }
+      context.initClientBuffers(0);
+      context.clientBuffers = context.clientBuffersPerVAO[0];
 
       GL.generateTempBuffers(false, context);
 #endif
@@ -1352,8 +1567,7 @@ var LibraryGL = {
     }
     GL.mappedBuffers[target] = null;
 
-    if (!(mapping.access & 0x10)) /* GL_MAP_FLUSH_EXPLICIT_BIT */
-      GLctx.bufferSubData(target, mapping.offset, HEAPU8.subarray(mapping.mem, mapping.mem+mapping.length));
+    GLctx.bufferSubData(target, mapping.offset, HEAPU8.subarray(mapping.mem, mapping.mem+mapping.length));
     _free(mapping.mem);
     return 1;
   },
@@ -3482,6 +3696,11 @@ var LibraryGL = {
       var id = GL.getNewId(GL.vaos);
       vao.name = id;
       GL.vaos[id] = vao;
+#if FULL_ES2
+      if(!GL.currentContext.clientBuffersPerVAO[id]) {
+        GL.currentContext.initClientBuffers(id);
+      }
+#endif
       {{{ makeSetValue('arrays', 'i*4', 'id', 'i32') }}};
     }
 #endif
@@ -3502,6 +3721,9 @@ var LibraryGL = {
       var id = {{{ makeGetValue('vaos', 'i*4', 'i32') }}};
       GLctx['deleteVertexArray'](GL.vaos[id]);
       GL.vaos[id] = null;
+#if FULL_ES2
+      GL.currentContext.clientBuffersPerVAO[id] = null;
+#endif
     }
 #endif
   },
@@ -3518,6 +3740,13 @@ var LibraryGL = {
     assert(GLctx['bindVertexArray'], 'Must have WebGL2 or OES_vertex_array_object to use vao');
 #endif
     GLctx['bindVertexArray'](GL.vaos[vao]);
+    
+    var ibo = GLctx.getParameter(GLctx.ELEMENT_ARRAY_BUFFER_BINDING);
+    GL.currElementArrayBuffer = ibo ? (ibo.name | 0) : 0;
+    
+#if FULL_ES2
+    GL.currentContext.clientBuffers = GL.currentContext.clientBuffersPerVAO[vao];
+#endif
 #endif
   },
 
@@ -7296,4 +7525,3 @@ keys(LibraryGL).forEach(function(x) {
 mergeInto(LibraryManager.library, LibraryGL);
 
 assert(!(FULL_ES2 && LEGACY_GL_EMULATION), 'cannot emulate both ES2 and legacy GL');
-

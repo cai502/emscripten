@@ -1,0 +1,20 @@
+#!/bin/bash -ex
+
+set -o pipefail
+
+archive=$1
+entry_points=$2
+
+bc=`basename ${archive} .a`.bc
+files=`llvm-ar t ${archive}`
+
+llvm-ar x ${archive}
+if [ -n "${entry_points}" ]; then
+  llvm-link -f ${files} | opt - -internalize -internalize-public-api-file=${entry_points} -globaldce -o ${bc}
+else
+  llvm-link -f ${files} -o ${bc}
+fi
+rm ${archive}
+llvm-ar rc ${archive} ${bc}
+rm ${files}
+rm -f ${bc}

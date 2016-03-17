@@ -9,6 +9,7 @@ from tools import shared
 
 args = [
     '-fblocks',
+    '-s', 'RESERVED_FUNCTION_POINTERS=5',
     '-s', 'DEMANGLE_SUPPORT=1',
     '-s', 'NATIVE_LIBDISPATCH=1',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
@@ -16,6 +17,7 @@ args = [
     '-s', 'USE_LIBPNG=1',
     '-s', 'FULL_ES2=1',
 #    '-s', 'LEGACY_GL_EMULATION=1',
+    '-s', 'ALIASING_FUNCTION_POINTERS=0',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
     '-framework', 'Foundation',
     '-framework', 'CoreFoundation',
@@ -26,7 +28,8 @@ args = [
 ]
 if 'USE_PTHREADS=1' in sys.argv:
     args.extend(['-lpthread_workqueue'])
-args.extend(['-lkqueue', '-ldispatch'])
+#args.extend(['-lkqueue', '-ldispatch'])
+args.extend(['-ldispatch'])
 args += sys.argv[1:]
 
 exit(subprocess.call([shared.PYTHON, shared.EMCC] + args))
