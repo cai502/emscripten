@@ -8,10 +8,14 @@ Presentations
 =============
 
 - Slides from CppCon 2014: 
- - `Emscripten & asm.js: C++'s role in the modern web <http://kripken.github.io/mloc_emscripten_talk/cppcon.html>`_ (`kripken <https://github.com/kripken>`_)
-  - `Video of talk <https://www.youtube.com/watch?v=JhMlWj4tCDo&list=UUMlGfpWw-RUdWX_JbLCukXg>`_
- - `Connecting C++ and JavaScript on the Web with Embind <http://chadaustin.me/2014/09/connecting-c-and-javascript-on-the-web-with-embind/>`_ (`chadaustin <https://github.com/chadaustin>`_)
-  - `Video of talk <https://www.youtube.com/watch?v=Dsgws5zJiwk&list=UUMlGfpWw-RUdWX_JbLCukXg>`_
+
+	- `Emscripten & asm.js: C++'s role in the modern web <http://kripken.github.io/mloc_emscripten_talk/cppcon.html>`_ (`kripken <https://github.com/kripken>`_)
+
+		- `Video of talk <https://www.youtube.com/watch?v=JhMlWj4tCDo&list=UUMlGfpWw-RUdWX_JbLCukXg>`_
+
+	- `Connecting C++ and JavaScript on the Web with Embind <http://chadaustin.me/2014/09/connecting-c-and-javascript-on-the-web-with-embind/>`_ (`chadaustin <https://github.com/chadaustin>`_)
+
+		- `Video of talk <https://www.youtube.com/watch?v=Dsgws5zJiwk&list=UUMlGfpWw-RUdWX_JbLCukXg>`_
 
 - Slides from GDC 2014: `Getting started with asm.js and Emscripten <http://people.mozilla.org/~lwagner/gdc-pres/gdc-2014.html#/>`_ (`kripken <https://github.com/kripken>`_, `lwagner <https://blog.mozilla.org/luke/>`_)
 - Slides from Strange Loop 2013: `Native speed on the web, JavaScript and asm.js <http://kripken.github.io/mloc_emscripten_talk/sloop.html#/>`_ (`kripken <https://github.com/kripken>`_)	
@@ -35,5 +39,6 @@ Papers
 Books
 =====
 
-- `HTML5 Game Development Insights <http://link.springer.com/book/10.1007/978-1-4302-6698-3>`_ — Book with a chapter on Emscripten
+- `WebGL Insights <https://www.crcpress.com/WebGL-Insights/Cozzi/9781498716079>`_: Desaulniers, N. (2015). **Chapter 5: Emscripten and WebGL**. In P. Cozzi, WebGL Insights (pp. 71-88). Boca Raton, Florida: A K Peters/CRC Press. Amazon CRC Press.
+- `HTML5 Game Development Insights <http://link.springer.com/book/10.1007/978-1-4302-6698-3>`_ — Book with a chapter on Emscripten (2014).
 

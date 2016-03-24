@@ -56,7 +56,7 @@ class sanity(RunnerCore):
       if command[0] == EMCC or (len(command) >= 2 and command[1] == EMCC):
         expected = 'no input files'
       else:
-        expected = "No tests found for ['blahblah']"
+        expected = "could not find the following tests: blahblah"
 
     output = self.do(command)
     self.assertContained(expected, output)
@@ -97,7 +97,10 @@ class sanity(RunnerCore):
       if platform.system() is not 'Windows':
         # os.chmod can't make files executable on Windows
         self.assertIdentical(temp_bin, re.search("^ *LLVM_ROOT *= (.*)$", output, re.M).group(1))
-        self.assertIdentical(os.path.join(temp_bin, 'node'), re.search("^ *NODE_JS *= (.*)$", output, re.M).group(1))
+        possible_nodes = [os.path.join(temp_bin, 'node')]
+        if os.path.exists('/usr/bin/nodejs'):
+          possible_nodes.append('/usr/bin/nodejs')
+        self.assertIdentical(possible_nodes, re.search("^ *NODE_JS *= (.*)$", output, re.M).group(1))
       self.assertContained('Please edit the file if any of those are incorrect', output)
       self.assertContained('This command will now exit. When you are done editing those paths, re-run it.', output)
       assert output.split()[-1].endswith('===='), 'We should have stopped: ' + output
@@ -130,7 +133,7 @@ class sanity(RunnerCore):
           self.assertContained('CRITICAL', output) # sanity check should fail
 
   def test_closure_compiler(self):
-    CLOSURE_FATAL = 'fatal: Closure compiler'
+    CLOSURE_FATAL = 'fatal: closure compiler'
     CLOSURE_WARNING = 'does not exist'
 
     # Sanity check should find closure
@@ -413,13 +416,6 @@ fi
         os.environ['EMCC_DEBUG'] ='1'
         self.working_dir = os.path.join(TEMP_DIR, 'emscripten_temp')
 
-        # Building a file that doesn't need cached stuff should not trigger cache generation
-        output = self.do([compiler, path_from_root('tests', 'hello_world.cpp')])
-        assert INCLUDING_MESSAGE.replace('X', 'libcextra') not in output
-        assert BUILDING_MESSAGE.replace('X', 'libcextra') not in output
-        self.assertContained('hello, world!', run_js('a.out.js'))
-        try_delete('a.out.js')
-
         basebc_name = os.path.join(TEMP_DIR, 'emscripten_temp', 'emcc-0-basebc.bc')
         dcebc_name = os.path.join(TEMP_DIR, 'emscripten_temp', 'emcc-1-linktime.bc')
         ll_names = [os.path.join(TEMP_DIR, 'emscripten_temp', 'emcc-X-ll.ll').replace('X', str(x)) for x in range(2,5)]
@@ -433,7 +429,7 @@ fi
             try_delete(dcebc_name) # we might need to check this file later
             for ll_name in ll_names: try_delete(ll_name)
             output = self.do([compiler, '-O' + str(i), '-s', '--llvm-lto', '0', path_from_root('tests', filename), '--save-bc', 'a.bc', '-s', 'DISABLE_EXCEPTION_CATCHING=0'])
-            #print output
+            #print '\n\n\n', output
             assert INCLUDING_MESSAGE.replace('X', libname) in output
             if libname == 'libc':
               assert INCLUDING_MESSAGE.replace('X', 'libcxx') not in output # we don't need libcxx in this code
@@ -444,11 +440,6 @@ fi
             assert os.path.exists(EMCC_CACHE)
             full_libname = libname + '.bc' if libname != 'libcxx' else libname + '.a'
             assert os.path.exists(os.path.join(EMCC_CACHE, full_libname))
-            if libname == 'libcxx':
-              print os.stat(os.path.join(EMCC_CACHE, full_libname)).st_size, os.stat(basebc_name).st_size, os.stat(dcebc_name).st_size
-              assert os.stat(os.path.join(EMCC_CACHE, full_libname)).st_size > 1000000, 'libc++ is big'
-              assert os.stat(basebc_name).st_size > 1000000, 'libc++ is indeed big'
-              assert os.stat(dcebc_name).st_size < os.stat(basebc_name).st_size*0.666, 'Dead code elimination must remove most of libc++'
       finally:
         del os.environ['EMCC_DEBUG']
 
@@ -538,7 +529,7 @@ fi
     # using ports
 
     RETRIEVING_MESSAGE = 'retrieving port'
-    BUILDING_MESSAGE = 'building port'
+    BUILDING_MESSAGE = 'generating port'
 
     from tools import system_libs
     PORTS_DIR = system_libs.Ports.get_dir()
@@ -635,7 +626,7 @@ fi
 
           try:
             # break it
-            f = path_from_root('tools', 'optimizer', 'optimizer.cpp')
+            f = path_from_root('tools', 'optimizer', 'optimizer-main.cpp')
             src = open(f).read()
             bad = src.replace('main', '!waka waka<')
             assert bad != src
@@ -684,6 +675,10 @@ fi
       ([PYTHON, 'embuilder.py'], ['Emscripten System Builder Tool', 'build libc', 'native_optimizer'], True, []),
       ([PYTHON, 'embuilder.py', 'build', 'waka'], 'ERROR', False, []),
       ([PYTHON, 'embuilder.py', 'build', 'libc'], ['building and verifying libc', 'success'], True, ['libc.bc']),
+      ([PYTHON, 'embuilder.py', 'build', 'libc-mt'], ['building and verifying libc-mt', 'success'], True, ['libc-mt.bc']),
+      ([PYTHON, 'embuilder.py', 'build', 'dlmalloc'], ['building and verifying dlmalloc', 'success'], True, ['dlmalloc.bc']),
+      ([PYTHON, 'embuilder.py', 'build', 'dlmalloc_threadsafe'], ['building and verifying dlmalloc_threadsafe', 'success'], True, ['dlmalloc_threadsafe.bc']),
+      ([PYTHON, 'embuilder.py', 'build', 'pthreads'], ['building and verifying pthreads', 'success'], True, ['pthreads.bc']),
       ([PYTHON, 'embuilder.py', 'build', 'libcxx'], ['success'], True, ['libcxx.a']),
       ([PYTHON, 'embuilder.py', 'build', 'libcxx_noexcept'], ['success'], True, ['libcxx_noexcept.a']),
       ([PYTHON, 'embuilder.py', 'build', 'libcxxabi'], ['success'], True, ['libcxxabi.bc']),
@@ -692,8 +687,13 @@ fi
       ([PYTHON, 'embuilder.py', 'build', 'native_optimizer'], ['success'], True, ['optimizer.exe']),
       ([PYTHON, 'embuilder.py', 'build', 'zlib'], ['building and verifying zlib', 'success'], True, [os.path.join('ports-builds', 'zlib', 'libz.a')]),
       ([PYTHON, 'embuilder.py', 'build', 'libpng'], ['building and verifying libpng', 'success'], True, [os.path.join('ports-builds', 'libpng', 'libpng.bc')]),
+      ([PYTHON, 'embuilder.py', 'build', 'bullet'], ['building and verifying bullet', 'success'], True, [os.path.join('ports-builds', 'bullet', 'libbullet.bc')]),
+      ([PYTHON, 'embuilder.py', 'build', 'vorbis'], ['building and verifying vorbis', 'success'], True, [os.path.join('ports-builds', 'vorbis', 'libvorbis.bc')]),
+      ([PYTHON, 'embuilder.py', 'build', 'ogg'], ['building and verifying ogg', 'success'], True, [os.path.join('ports-builds', 'ogg', 'libogg.bc')]),
       ([PYTHON, 'embuilder.py', 'build', 'sdl2'], ['success'], True, [os.path.join('ports-builds', 'sdl2', 'libsdl2.bc')]),
       ([PYTHON, 'embuilder.py', 'build', 'sdl2-image'], ['success'], True, [os.path.join('ports-builds', 'sdl2-image', 'libsdl2_image.bc')]),
+      ([PYTHON, 'embuilder.py', 'build', 'freetype'], ['building and verifying freetype', 'success'], True, [os.path.join('ports-builds', 'freetype', 'libfreetype.a')]),
+      ([PYTHON, 'embuilder.py', 'build', 'sdl2-ttf'], ['building and verifying sdl2-ttf', 'success'], True, [os.path.join('ports-builds', 'sdl2-ttf', 'libsdl2_ttf.bc')]),
     ]:
       print command
       Cache.erase()
@@ -757,4 +757,28 @@ fi
     finally:
       del os.environ['EM_IGNORE_SANITY']
 
+  def test_wacky_env(self):
+    restore()
+
+    def build():
+      return self.check_working([EMCC, 'tests/hello_world.c'], '')
+
+    def test():
+      self.assertContained('hello, world!', run_js('a.out.js'))
+
+    assert 'EMCC_FORCE_STDLIBS' not in os.environ
+
+    print 'normal build'
+    Cache.erase()
+    build()
+    test()
+
+    try:
+      print 'wacky env vars, these should not mess our bootstrapping of struct_info etc. up'
+      os.environ['EMCC_FORCE_STDLIBS'] = '1'
+      Cache.erase()
+      build()
+      test()
+    finally:
+      del os.environ['EMCC_FORCE_STDLIBS']
 

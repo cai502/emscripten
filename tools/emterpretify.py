@@ -25,9 +25,10 @@ SWAPPABLE = False
 FROUND = False
 ADVISE = False
 MEMORY_SAFE = False
+OUTPUT_FILE = None
 
 def handle_arg(arg):
-  global ZERO, ASYNC, ASSERTIONS, PROFILING, FROUND, ADVISE, MEMORY_SAFE
+  global ZERO, ASYNC, ASSERTIONS, PROFILING, FROUND, ADVISE, MEMORY_SAFE, OUTPUT_FILE
   if '=' in arg:
     l, r = arg.split('=')
     if l == 'ZERO': ZERO = int(r)
@@ -37,6 +38,7 @@ def handle_arg(arg):
     elif l == 'FROUND': FROUND = int(r)
     elif l == 'ADVISE': ADVISE = int(r)
     elif l == 'MEMORY_SAFE': MEMORY_SAFE = int(r)
+    elif l == 'FILE': OUTPUT_FILE = r[1:-1]
     return False
   return True
 
@@ -55,9 +57,8 @@ sys.argv = filter(handle_arg, sys.argv)
 
 # consts
 
-BLACKLIST = set(['_malloc', '_free', '_memcpy', '_memmove', '_memset', 'copyTempDouble', 'copyTempFloat', '_strlen', 'stackAlloc', 'setThrew', 'stackRestore', 'setTempRet0', 'getTempRet0', 'stackSave', 'runPostSets', '_emscripten_autodebug_double', '_emscripten_autodebug_float', '_emscripten_autodebug_i8', '_emscripten_autodebug_i16', '_emscripten_autodebug_i32', '_emscripten_autodebug_i64', '_strncpy', '_strcpy', '_strcat', '_saveSetjmp', '_testSetjmp', '_emscripten_replace_memory', '_bitshift64Shl', '_bitshift64Ashr', '_bitshift64Lshr', 'setAsyncState', 'emtStackSave'])
+BLACKLIST = set(['_malloc', '_free', '_memcpy', '_memmove', '_memset', 'copyTempDouble', 'copyTempFloat', '_strlen', 'stackAlloc', 'setThrew', 'stackRestore', 'setTempRet0', 'getTempRet0', 'stackSave', '_emscripten_autodebug_double', '_emscripten_autodebug_float', '_emscripten_autodebug_i8', '_emscripten_autodebug_i16', '_emscripten_autodebug_i32', '_emscripten_autodebug_i64', '_strncpy', '_strcpy', '_strcat', '_saveSetjmp', '_testSetjmp', '_emscripten_replace_memory', '_bitshift64Shl', '_bitshift64Ashr', '_bitshift64Lshr', 'setAsyncState', 'emtStackSave', 'emtStackRestore'])
 WHITELIST = []
-YIELDLIST = ['stackSave', 'stackRestore', 'stackAlloc', 'setThrew', '_memset'] # functions which are ok to run while doing a sleep_with_yield.
 
 SYNC_FUNCS = set(['_emscripten_sleep', '_emscripten_sleep_with_yield', '_emscripten_wget_data', '_emscripten_idb_load', '_emscripten_idb_store', '_emscripten_idb_delete'])
 
@@ -703,8 +704,6 @@ if __name__ == '__main__':
   infile = sys.argv[1]
   outfile = sys.argv[2]
 
-  original_yieldlist = YIELDLIST
-
   extra_blacklist = []
   if len(sys.argv) >= 4:
     temp = sys.argv[3]
@@ -723,13 +722,6 @@ if __name__ == '__main__':
       WHITELIST = json.loads(temp)
 
       if len(sys.argv) >= 6:
-        temp = sys.argv[5]
-        if temp[0] == '"':
-          # response file
-          assert temp[1] == '@'
-          temp = open(temp[2:-1]).read()
-        YIELDLIST = YIELDLIST + json.loads(temp)
-
         if len(sys.argv) >= 7:
           SWAPPABLE = int(sys.argv[6])
 
@@ -774,31 +766,7 @@ if __name__ == '__main__':
     print "Suggested list of functions to run in the emterpreter:"
     print "  -s EMTERPRETIFY_WHITELIST='" + str(sorted(list(advised))).replace("'", '"') + "'"
     print "(%d%% out of %d functions)" % (int((100.0*len(advised))/len(can_call)), len(can_call))
-    if len(YIELDLIST) > len(original_yieldlist):
-      # advise on the yield list as well. Anything a yield function can reach, likely needs to also be a yield function
-      YIELD_IGNORE = set(['abort'])
-      to_check = list(YIELDLIST)
-      advised = set([str(f) for f in YIELDLIST])
-      while len(to_check) > 0:
-        curr = to_check.pop()
-        if curr not in can_call: continue
-        for next in can_call[curr]:
-          if next not in advised:
-            advised.add(str(next))
-            to_check.append(next)
-      advised = [next for next in advised if not is_dyn_call(next) and not is_function_table(next) and not next in original_yieldlist and next not in SYNC_FUNCS and next not in YIELD_IGNORE and next[0] == '_']
-      print
-      print "Suggested list of yield functions for the emterpreter:"
-      print "  -s EMTERPRETIFY_YIELDLIST='" + str(sorted(list(advised))).replace("'", '"') + "'"
-      print "(%d%% out of %d functions)" % (int((100.0*len(advised))/len(can_call)), len(can_call))
     sys.exit(0)
-
-  BLACKLIST = set(list(BLACKLIST) + extra_blacklist)
-
-  if DEBUG or SWAPPABLE:
-    orig = infile + '.orig.js'
-    shared.logging.debug('saving original (non-emterpreted) code to ' + orig)
-    shutil.copyfile(infile, orig)
 
   # final global functions
 
@@ -809,15 +777,20 @@ if __name__ == '__main__':
   for func in extra_blacklist:
     assert func in asm.funcs, 'requested blacklist of %s but it does not exist' % func
 
-  ## debugging
-  #import hashlib
-  #def hash(s):
-  #  hash_object = hashlib.sha256(s)
-  #  return int(hash_object.hexdigest(), 16)
-  #if len(WHITELIST) == 0 and len(extra_blacklist) == 0:
-  #  WHITELIST = set([func for func in asm.funcs if func[0] == '_' and hash(func) % 3 == 1])
-  #  print >> sys.stderr, 'manual whitelist', len(WHITELIST), '/', len(asm.funcs)
-  ##
+  # blacklist all runPostSet* methods
+
+  for func in asm.funcs:
+    if func.startswith('runPostSet'):
+      extra_blacklist.append(func)
+
+  # finalize blacklist
+
+  BLACKLIST = set(list(BLACKLIST) + extra_blacklist)
+
+  if DEBUG or SWAPPABLE:
+    orig = infile + '.orig.js'
+    shared.logging.debug('saving original (non-emterpreted) code to ' + orig)
+    shutil.copyfile(infile, orig)
 
   if len(WHITELIST) > 0:
     # we are using a whitelist: fill the blacklist with everything not whitelisted
@@ -848,7 +821,7 @@ if __name__ == '__main__':
   external_emterpreted_funcs = filter(lambda func: func in tabled_funcs or func in exported_funcs or func in reachable_funcs, emterpreted_funcs)
 
   # process functions, generating bytecode
-  shared.Building.js_optimizer(infile, ['emterpretify'], extra_info={ 'emterpretedFuncs': list(emterpreted_funcs), 'externalEmterpretedFuncs': list(external_emterpreted_funcs), 'opcodes': OPCODES, 'ropcodes': ROPCODES, 'ASYNC': ASYNC, 'PROFILING': PROFILING, 'ASSERTIONS': ASSERTIONS, 'yieldFuncs': YIELDLIST }, output_filename=temp, just_concat=True)
+  shared.Building.js_optimizer(infile, ['emterpretify'], extra_info={ 'emterpretedFuncs': list(emterpreted_funcs), 'externalEmterpretedFuncs': list(external_emterpreted_funcs), 'opcodes': OPCODES, 'ropcodes': ROPCODES, 'ASYNC': ASYNC, 'PROFILING': PROFILING, 'ASSERTIONS': ASSERTIONS }, output_filename=temp, just_concat=True)
 
   # load the module and modify it
   asm = asm_module.AsmModule(temp)
@@ -878,6 +851,11 @@ if __name__ == '__main__':
     global global_var_id
     imp = asm.imports[target]
     ty = asm.get_import_type(imp)
+    if target == 'f0':
+      assert imp == 'Math_fround(0)'
+      # fake it
+      ty = 'd'
+      imp = '+0'
     assert ty in ['i', 'd'], target
     if code[j] == 'GETGLBI' and ty == 'd':
       # the js optimizer doesn't know all types, we must fix it up here
@@ -1036,32 +1014,66 @@ assert(eb %% 8 === 0);
 __ATPRERUN__.push(function() {
 ''' % len(all_code)]
 
-  CHUNK_SIZE = 10240
+  if OUTPUT_FILE:
+    bytecode_file = open(OUTPUT_FILE, 'wb')
+    n = len(all_code)
+    while n % 4 != 0:
+      n += 1
+    bytecode_file.write(''.join(map(chr, all_code)))
+    for i in range(len(all_code), n):
+      bytecode_file.write(chr(0))
+    for i in range(len(relocations)):
+      bytes = bytify(relocations[i])
+      for j in range(4):
+        bytecode_file.write(chr(bytes[j]))
+    bytecode_file.close()
 
-  i = 0
-  while i < len(all_code):
-    curr = all_code[i:i+CHUNK_SIZE]
-    js += ['''  HEAPU8.set([%s], eb + %d);
+    js += ['''
+  var bytecodeFile = Module['emterpreterFile'];
+  assert(bytecodeFile instanceof ArrayBuffer, 'bad emterpreter file');
+  var codeSize = %d;
+  HEAPU8.set(new Uint8Array(bytecodeFile).subarray(0, codeSize), eb);
+  assert(HEAPU8[eb] === %d);
+  assert(HEAPU8[eb+1] === %d);
+  assert(HEAPU8[eb+2] === %d);
+  assert(HEAPU8[eb+3] === %d);
+  var relocationsStart = (codeSize+3) >> 2;
+  var relocations = (new Uint32Array(bytecodeFile)).subarray(relocationsStart);
+  assert(relocations.length === %d);
+  if (relocations.length > 0) assert(relocations[0] === %d);
+''' % (len(all_code), all_code[0], all_code[1], all_code[2], all_code[3], len(relocations), relocations[0])]
+
+  else:
+    if len(all_code) > 1024*1024:
+      shared.logging.warning('warning: emterpreter bytecode is fairly large, %.2f MB. It is recommended to use  -s EMTERPRETIFY_FILE=..  so that it is saved as a binary file, instead of the default behavior which is to embed it as text (as text, it can cause very slow compile and startup times)' % (len(all_code) / (1024*1024.)))
+
+    CHUNK_SIZE = 10240
+
+    i = 0
+    while i < len(all_code):
+      curr = all_code[i:i+CHUNK_SIZE]
+      js += ['''  HEAPU8.set([%s], eb + %d);
 ''' % (','.join(map(str, curr)), i)]
-    i += CHUNK_SIZE
+      i += CHUNK_SIZE
 
-  js += ['''
+    js += ['''
   var relocations = [];
 ''']
 
-  i = 0
-  while i < len(relocations):
-    curr = relocations[i:i+CHUNK_SIZE]
-    js += ['''  relocations = relocations.concat([%s]);
+    i = 0
+    while i < len(relocations):
+      curr = relocations[i:i+CHUNK_SIZE]
+      js += ['''  relocations = relocations.concat([%s]);
 ''' % (','.join(map(str, curr)))]
-    i += CHUNK_SIZE
+      i += CHUNK_SIZE
 
+  # same loop to apply relocations for both OUTPUT_FILE and not
   js += ['''
   for (var i = 0; i < relocations.length; i++) {
     assert(relocations[i] %% 4 === 0);
     assert(relocations[i] >= 0 && relocations[i] < eb + %d); // in range
     assert(HEAPU32[eb + relocations[i] >> 2] + eb < (-1 >>> 0), [i, relocations[i]]); // no overflows
-    HEAPU32[eb + relocations[i] >> 2] += eb;
+    HEAPU32[eb + relocations[i] >> 2] = HEAPU32[eb + relocations[i] >> 2] + eb;
   }
 });
 ''' % len(all_code)]

@@ -15,9 +15,7 @@ def get_with_configure(ports, settings, shared):
 def get(ports, settings, shared):
   if settings.USE_ZLIB == 1:
     ports.fetch_project('zlib', 'https://github.com/emscripten-ports/zlib/archive/' + TAG + '.zip', 'zlib-' + TAG)
-    def create():
-      logging.warning('building port: zlib')
-     
+    def create():     
       ports.clear_project_build('zlib')
 
       source_path = os.path.join(ports.get_dir(), 'zlib', 'zlib-' + TAG)
@@ -35,8 +33,7 @@ def get(ports, settings, shared):
       for src in srcs:
         o = os.path.join(ports.get_build_dir(), 'zlib', src + '.o')
         shared.safe_ensure_dirs(os.path.dirname(o))
-        commands.append([shared.PYTHON, shared.EMCC, os.path.join(dest_path, src), '-O2', '-o', o, '-I' + dest_path,
-                         '-Wno-warn-absolute-paths', '-w',])
+        commands.append([shared.PYTHON, shared.EMCC, os.path.join(dest_path, src), '-O2', '-o', o, '-I' + dest_path,'-w',])
         o_s.append(o)
 
       ports.run_commands(commands)
@@ -45,7 +42,7 @@ def get(ports, settings, shared):
       Popen([shared.LLVM_AR, 'rc', final] + o_s).communicate()
       assert os.path.exists(final)
       return final
-    return [shared.Cache.get('zlib', create)]
+    return [shared.Cache.get('zlib', create, what='port')]
   else:
     return []
 
@@ -56,7 +53,7 @@ def process_args(ports, args, settings, shared):
   return args
 
 def show():
-  return 'zlib (zlib license)'
+  return 'zlib (USE_ZLIB=1; zlib license)'
 
 
 

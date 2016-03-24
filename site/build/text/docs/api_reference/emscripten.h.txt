@@ -41,8 +41,8 @@ Table of Contents
 Inline assembly/JavaScript
 ==========================
 
-Guide material for the following APIs can be found in *Calling
-JavaScript from C/C++*.
+Guide material for the following APIs can be found in Calling
+JavaScript from C/C++.
 
 
 Defines
@@ -66,7 +66,7 @@ EM_ASM(...)
        above.
 
      * Newlines (\n, \r etc.) are supported in the inline
-       Javascript. Note that any platform-specific issues with line
+       JavaScript. Note that any platform-specific issues with line
        endings in normal JavaScript also apply to inline JavaScript
        declared using "EM_ASM".
 
@@ -119,8 +119,8 @@ EM_ASM_DOUBLE_V(code)
 Calling JavaScript From C/C++
 =============================
 
-Guide material for the following APIs can be found in *Calling
-JavaScript from C/C++*.
+Guide material for the following APIs can be found in Calling
+JavaScript from C/C++.
 
 
 Function pointer types for callbacks
@@ -251,8 +251,8 @@ void emscripten_async_load_script(const char *script, em_callback_func onload,
 Browser Execution Environment
 =============================
 
-Guide material for the following APIs can be found in *Emscripten
-Runtime Environment*.
+Guide material for the following APIs can be found in Emscripten
+Runtime Environment.
 
 
 Functions
@@ -418,12 +418,12 @@ int emscripten_set_main_loop_timing(int mode, int value)
       * **mode** (*int*) --
 
         The timing mode to use. Allowed values are
-        EM_TIMING_SETTIMEOUT, EM_TIMING_RAF.
+        EM_TIMING_SETTIMEOUT, EM_TIMING_RAF and
+        EM_TIMING_SETIMMEDIATE.
 
         param int value:
            The timing value to activate for the main loop. This value
-           interpreted differently according to the
-           >>``<<mode``parameter:
+           interpreted differently according to the "mode" parameter:
 
            * If "mode" is EM_TIMING_SETTIMEOUT, then "value"
              specifies the number of milliseconds to wait between
@@ -444,6 +444,18 @@ int emscripten_set_main_loop_timing(int mode, int value)
              a rate of "60/n" for 60Hz displays, and "120/n" for 120Hz
              displays.
 
+           * If "mode" is EM_TIMING_SETIMMEDIATE, then updates are
+             performed using the "setImmediate" function, or if not
+             available, emulated via "postMessage". See *setImmediate
+             on MDN <https://developer.mozilla.org/en-
+             US/docs/Web/API/Window/setImmediate>* for more
+             information. Note that this mode is **strongly not
+             recommended** to be used when deploying Emscripten output
+             to the web, since it depends on an unstable web extension
+             that is in draft status, browsers other than IE do not
+             currently support it, and its implementation has been
+             considered controversial in review.
+
         rtype:
            int
 
@@ -453,8 +465,8 @@ int emscripten_set_main_loop_timing(int mode, int value)
            loop active before calling this function.
 
         Note: Browsers heavily optimize towards using
-          "requestAnimationFrame" for animation instead of
-          "setTimeout". Because of that, for best experience across
+          "requestAnimationFrame" for animation instead of the other
+          provided modes. Because of that, for best experience across
           browsers, calling this function with "mode=EM_TIMING_RAF"
           and "value=1" will yield best results. Using the JavaScript
           "setTimeout" function is known to cause stutter and
@@ -471,7 +483,7 @@ int emscripten_set_main_loop_timing(int mode, int value)
           US/docs/Web/API/WindowTimers.setTimeout#Inactive_tabs>* for
           more information.
 
-void emscripten_set_main_loop_timing(int *mode, int *value)
+void emscripten_get_main_loop_timing(int *mode, int *value)
 
       Returns the current main loop timing mode that is in effect. For
       interpretation of the values, see the documentation of the
@@ -481,13 +493,11 @@ void emscripten_set_main_loop_timing(int *mode, int *value)
       "emscripten_set_main_loop()".
 
    Parameters:
-      * ***mode** (*int*) --
+      * **mode** (*int**) -- If not null, the used timing mode is
+        returned here.
 
-        If not null, the used timing mode is returned here.
-
-      * ***value** (*int*) --
-
-        If not null, the used timing value is returned here.
+      * **value** (*int**) -- If not null, the used timing value is
+        returned here.
 
 void emscripten_set_main_loop_expected_blockers(int num)
 
@@ -1189,7 +1199,7 @@ EMSCRIPTEN_KEEPALIVE
    Forces LLVM to not dead-code-eliminate a function.
 
    This also exports the function, as if you added it to
-   *EXPORTED_FUNCTIONS*.
+   EXPORTED_FUNCTIONS.
 
    For example:
 
@@ -1276,7 +1286,7 @@ void emscripten_call_worker(worker_handle worker, const char *funcname, char 
 
       * **funcname** (*const char**) -- The name of the function in
         the worker. The function must be a C function (so no C++ name
-        mangling), and must be exported (*EXPORTED_FUNCTIONS*).
+        mangling), and must be exported (EXPORTED_FUNCTIONS).
 
       * **data** (*char**) -- The address of a block of memory to
         copy over.
@@ -1527,6 +1537,29 @@ char *emscripten_get_preloaded_image_data_from_FILE(FILE *file, int *w, int *
    Return type:
       char*
 
+int emscripten_print_double(double x, char *to, signed max)
+
+   Prints a double as a string, including a null terminator. This is
+   useful because JS engines have good support for printing out a
+   double in a way that takes the least possible size, but preserves
+   all the information in the double, i.e., it can then be parsed back
+   in a perfectly reversible manner (snprintf etc. do not do so,
+   sadly).
+
+   Parameters:
+      * **x** (*double*) -- The double.
+
+      * **to** (*char**) -- A pre-allocated buffer of sufficient
+        size, or NULL if no output is requested (useful to get the
+        necessary size).
+
+      * **max** (*signed*) -- The maximum number of characters to
+        write
+
+   Return type:
+      The number of necessary bytes, not including the null terminator
+      (actually written, if "to" is not NULL).
+
 
 Socket event registration
 =========================
@@ -1623,7 +1656,7 @@ void emscripten_set_socket_error_callback(void *userData, em_socket_error_callb
 
    Triggered by a "WebSocket" error.
 
-   See *Socket event registration* for more information.
+   See Socket event registration for more information.
 
    Parameters:
       * **userData** (*void**) -- Arbitrary user data to be passed
@@ -1638,7 +1671,7 @@ void emscripten_set_socket_open_callback(void *userData, em_socket_callback ca
 
    Triggered when the "WebSocket" has opened.
 
-   See *Socket event registration* for more information.
+   See Socket event registration for more information.
 
    Parameters:
       * **userData** (*void**) -- Arbitrary user data to be passed
@@ -1652,7 +1685,7 @@ void emscripten_set_socket_listen_callback(void *userData, em_socket_callback 
 
    Triggered when "listen" has been called (synthetic event).
 
-   See *Socket event registration* for more information.
+   See Socket event registration for more information.
 
    Parameters:
       * **userData** (*void**) -- Arbitrary user data to be passed
@@ -1666,7 +1699,7 @@ void emscripten_set_socket_connection_callback(void *userData, em_socket_callba
 
    Triggered when the connection has been established.
 
-   See *Socket event registration* for more information.
+   See Socket event registration for more information.
 
    Parameters:
       * **userData** (*void**) -- Arbitrary user data to be passed
@@ -1680,7 +1713,7 @@ void emscripten_set_socket_message_callback(void *userData, em_socket_callback�
 
    Triggered when data is available to be read from the socket.
 
-   See *Socket event registration* for more information.
+   See Socket event registration for more information.
 
    Parameters:
       * **userData** (*void**) -- Arbitrary user data to be passed
@@ -1694,7 +1727,7 @@ void emscripten_set_socket_close_callback(void *userData, em_socket_callback c
 
    Triggered when the "WebSocket" has closed.
 
-   See *Socket event registration* for more information.
+   See Socket event registration for more information.
 
    Parameters:
       * **userData** (*void**) -- Arbitrary user data to be passed
@@ -1722,7 +1755,7 @@ emscripten_align2_double
 emscripten_align1_double
 
    Unaligned types. These may be used to force LLVM to emit unaligned
-   loads/stores in places in your code where *SAFE_HEAP* found an
+   loads/stores in places in your code where SAFE_HEAP found an
    unaligned operation.
 
    For usage examples see tests/core/test_set_align.c.
@@ -1814,7 +1847,7 @@ void emscripten_idb_load(const char *db_name, const char *file_id, void** pbuffe
       * **perror** -- An out parameter that will be filled with a
         non- zero value if an error occurred.
 
-void emscripten_idb_store(const char *db_name, const char *file_id, void* ptr, int num, int *perror);
+void emscripten_idb_store(const char *db_name, const char *file_id, void* buffer, int num, int *perror);
 
    Synchronously stores data to IndexedDB.
 
@@ -1851,13 +1884,11 @@ void emscripten_idb_exists(const char *db_name, const char *file_id, int* pexist
 
       * **file_id** -- The name of the file to check
 
-      * **perror** -- An out parameter that will be filled with a
-        non- zero value if the file exists in that database.
+      * **pexists** -- An out parameter that will be filled with a
+        non-zero value if the file exists in that database.
 
       * **perror** -- An out parameter that will be filled with a
         non- zero value if an error occurred.
-
-void emscripten_idb_load(const char *db_name, const char *file_id, void** pbuffer, int* pnum, int *perror);
 
 
 Asyncify functions

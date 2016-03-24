@@ -1,17 +1,11 @@
 mergeInto(LibraryManager.library, {
-  $FS__deps: ['$ERRNO_CODES', '$ERRNO_MESSAGES', '__setErrNo', '$PATH', '$TTY', '$MEMFS', '$IDBFS', '$NODEFS', 'stdin', 'stdout', 'stderr', 'fflush'],
+  $FS__deps: ['$ERRNO_CODES', '$ERRNO_MESSAGES', '__setErrNo', '$PATH', '$TTY', '$MEMFS', '$IDBFS', '$NODEFS', '$WORKERFS', 'stdin', 'stdout', 'stderr'],
   $FS__postset: 'FS.staticInit();' +
                 '__ATINIT__.unshift(function() { if (!Module["noFSInit"] && !FS.init.initialized) FS.init() });' +
                 '__ATMAIN__.push(function() { FS.ignorePermissions = false });' +
                 '__ATEXIT__.push(function() { FS.quit() });' +
-                // export some names through closure
-                'Module["FS_createFolder"] = FS.createFolder;' +
-                'Module["FS_createPath"] = FS.createPath;' +
-                'Module["FS_createDataFile"] = FS.createDataFile;' +
-                'Module["FS_createPreloadedFile"] = FS.createPreloadedFile;' +
-                'Module["FS_createLazyFile"] = FS.createLazyFile;' +
-                'Module["FS_createLink"] = FS.createLink;' +
-                'Module["FS_createDevice"] = FS.createDevice;',
+                //Get module methods from settings
+                '{{{ EXPORTED_RUNTIME_METHODS.filter(function(func) { return func.substr(0, 3) === 'FS_' }).map(function(func){return 'Module["' + func + '"] = FS.' + func.substr(3) + ";"}).reduce(function(str, func){return str + func;}, '') }}}',
   $FS: {
     root: null,
     mounts: [],
@@ -35,6 +29,7 @@ mergeInto(LibraryManager.library, {
     },
     ErrnoError: null, // set during init
     genericErrors: {},
+    filesystems: null,
 
     handleFSError: function(e) {
       if (!(e instanceof FS.ErrnoError)) throw e + ' : ' + stackTrace();
@@ -44,7 +39,7 @@ mergeInto(LibraryManager.library, {
     //
     // paths
     //
-    lookupPath: function(path, opts) {
+    lookupPath: function(path, opts, ex) {
       path = PATH.resolve(FS.cwd(), path);
       opts = opts || {};
 
@@ -61,6 +56,7 @@ mergeInto(LibraryManager.library, {
       }
 
       if (opts.recurse_count > 8) {  // max recursive lookup of 8
+        if(ex) return;
         throw new FS.ErrnoError(ERRNO_CODES.ELOOP);
       }
 
@@ -80,7 +76,8 @@ mergeInto(LibraryManager.library, {
           break;
         }
 
-        current = FS.lookupNode(current, parts[i]);
+        current = FS.lookupNode(current, parts[i], ex);
+        if(ex && !current) return;
         current_path = PATH.join2(current_path, parts[i]);
 
         // jump to the mount's root node if this is a mountpoint
@@ -102,6 +99,7 @@ mergeInto(LibraryManager.library, {
             current = lookup.node;
 
             if (count++ > 40) {  // limit max consecutive symlinks to 40 (SYMLOOP_MAX).
+              if(ex) return;
               throw new FS.ErrnoError(ERRNO_CODES.ELOOP);
             }
           }
@@ -158,7 +156,7 @@ mergeInto(LibraryManager.library, {
         }
       }
     },
-    lookupNode: function(parent, name) {
+    lookupNode: function(parent, name, ex) {
       var err = FS.mayLookup(parent);
       if (err) {
         throw new FS.ErrnoError(err, parent);
@@ -177,7 +175,7 @@ mergeInto(LibraryManager.library, {
         }
       }
       // if we failed to find it in the cache, call into the VFS
-      return FS.lookup(parent, name);
+      return FS.lookup(parent, name, ex);
     },
     createNode: function(parent, name, mode, rdev) {
       if (!FS.FSNode) {
@@ -289,8 +287,7 @@ mergeInto(LibraryManager.library, {
     },
     // convert O_* bitmask to a string for nodePermissions
     flagsToPermissionString: function(flag) {
-      var accmode = flag & {{{ cDefine('O_ACCMODE') }}};
-      var perms = ['r', 'w', 'rw'][accmode];
+      var perms = ['r', 'w', 'rw'][flag & 3];
       if ((flag & {{{ cDefine('O_TRUNC') }}})) {
         perms += 'w';
       }
@@ -418,22 +415,6 @@ mergeInto(LibraryManager.library, {
     },
     closeStream: function(fd) {
       FS.streams[fd] = null;
-    },
-
-    //
-    // file pointers
-    //
-    // instead of maintaining a separate mapping from FILE* to file descriptors,
-    // we employ a simple trick: the pointer to a stream is its fd plus 1.  This
-    // means that all valid streams have a valid non-zero pointer while allowing
-    // the fs for stdin to be the standard value of zero.
-    //
-    //
-    getStreamFromPtr: function(ptr) {
-      return FS.streams[ptr - 1];
-    },
-    getPtrForStream: function(stream) {
-      return stream ? stream.fd + 1 : 0;
     },
 
     //
@@ -604,8 +585,8 @@ mergeInto(LibraryManager.library, {
       assert(idx !== -1);
       node.mount.mounts.splice(idx, 1);
     },
-    lookup: function(parent, name) {
-      return parent.node_ops.lookup(parent, name);
+    lookup: function(parent, name, ex) {
+      return parent.node_ops.lookup(parent, name, ex);
     },
     // generic function for all node creation
     mknod: function(path, mode, dev) {
@@ -838,7 +819,7 @@ mergeInto(LibraryManager.library, {
       if (!link.node_ops.readlink) {
         throw new FS.ErrnoError(ERRNO_CODES.EINVAL);
       }
-      return PATH.resolve(FS.getPath(lookup.node.parent), link.node_ops.readlink(link));
+      return PATH.resolve(FS.getPath(link.parent), link.node_ops.readlink(link));
     },
     stat: function(path, dontFollow) {
       var lookup = FS.lookupPath(path, { follow: !dontFollow });
@@ -952,6 +933,34 @@ mergeInto(LibraryManager.library, {
         timestamp: Math.max(atime, mtime)
       });
     },
+    open_trycatch: function(path, flags, node) {
+      try {
+        var lookup = FS.lookupPath(path, {
+          follow: !(flags & {{{ cDefine('O_NOFOLLOW') }}})
+        }, true);
+        node = lookup && lookup.node;
+      } catch (e) {
+        console.log("Ignored:", e);
+        // ignore
+      }
+      return node;
+    },
+    open_trycatch2: function(path, flags) {
+      try {
+        if (FS.trackingDelegate['onOpenFile']) {
+          var trackingFlags = 0;
+          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_WRONLY') }}}) {
+            trackingFlags |= FS.tracking.openFlags.READ;
+          }
+          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_RDONLY') }}}) {
+            trackingFlags |= FS.tracking.openFlags.WRITE;
+          }
+          FS.trackingDelegate['onOpenFile'](path, trackingFlags);
+        }
+      } catch(e) {
+        console.log("FS.trackingDelegate['onOpenFile']('"+path+"', flags) threw an exception: " + e.message);
+      }
+    },
     open: function(path, flags, mode, fd_start, fd_end) {
       if (path === "") {
         throw new FS.ErrnoError(ERRNO_CODES.ENOENT);
@@ -968,14 +977,7 @@ mergeInto(LibraryManager.library, {
         node = path;
       } else {
         path = PATH.normalize(path);
-        try {
-          var lookup = FS.lookupPath(path, {
-            follow: !(flags & {{{ cDefine('O_NOFOLLOW') }}})
-          });
-          node = lookup.node;
-        } catch (e) {
-          // ignore
-        }
+        node = FS.open_trycatch(path, flags, node);
       }
       // perhaps we need to create the node
       var created = false;
@@ -997,6 +999,10 @@ mergeInto(LibraryManager.library, {
       // can't truncate a device
       if (FS.isChrdev(node.mode)) {
         flags &= ~{{{ cDefine('O_TRUNC') }}};
+      }
+      // if asked only for a directory, then this must be one
+      if ((flags & {{{ cDefine('O_DIRECTORY') }}}) && !FS.isDir(node.mode)) {
+        throw new FS.ErrnoError(ERRNO_CODES.ENOTDIR);
       }
       // check permissions, if this is not a file we just created now (it is ok to
       // create and write to a file with read-only permissions; it is read-only
@@ -1037,23 +1043,11 @@ mergeInto(LibraryManager.library, {
           Module['printErr']('read file: ' + path);
         }
       }
-      try {
-        if (FS.trackingDelegate['onOpenFile']) {
-          var trackingFlags = 0;
-          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_WRONLY') }}}) {
-            trackingFlags |= FS.tracking.openFlags.READ;
-          }
-          if ((flags & {{{ cDefine('O_ACCMODE') }}}) !== {{{ cDefine('O_RDONLY') }}}) {
-            trackingFlags |= FS.tracking.openFlags.WRITE;
-          }
-          FS.trackingDelegate['onOpenFile'](path, trackingFlags);
-        }
-      } catch(e) {
-        console.log("FS.trackingDelegate['onOpenFile']('"+path+"', flags) threw an exception: " + e.message);
-      }
+      FS.open_trycatch2(path, flags);
       return stream;
     },
     close: function(stream) {
+      if (stream.getdents) stream.getdents = null; // free readdir state
       try {
         if (stream.stream_ops.close) {
           stream.stream_ops.close(stream);
@@ -1274,6 +1268,32 @@ mergeInto(LibraryManager.library, {
       FS.mkdir('/dev/shm');
       FS.mkdir('/dev/shm/tmp');
     },
+    createSpecialDirectories: function() {
+      // create /proc/self/fd which allows /proc/self/fd/6 => readlink gives the name of the stream for fd 6 (see test_unistd_ttyname)
+      FS.mkdir('/proc');
+      FS.mkdir('/proc/self');
+      FS.mkdir('/proc/self/fd');
+      FS.mount({
+        mount: function() {
+          var node = FS.createNode('/proc/self', 'fd', {{{ cDefine('S_IFDIR') }}} | 0777, {{{ cDefine('S_IXUGO') }}});
+          node.node_ops = {
+            lookup: function(parent, name) {
+              var fd = +name;
+              var stream = FS.getStream(fd);
+              if (!stream) throw new FS.ErrnoError(ERRNO_CODES.EBADF);
+              var ret = {
+                parent: null,
+                mount: { mountpoint: 'fake' },
+                node_ops: { readlink: function() { return stream.path } }
+              };
+              ret.parent = ret; // make it look like a simple root node
+              return ret;
+            }
+          };
+          return node;
+        }
+      }, {}, '/proc/self/fd');
+    },
     createStandardStreams: function() {
       // TODO deprecate the old functionality of a single
       // input / output callback and that utilizes FS.createDevice
@@ -1301,20 +1321,18 @@ mergeInto(LibraryManager.library, {
 
       // open default streams for the stdin, stdout and stderr devices
       var stdin = FS.open('/dev/stdin', 'r');
-      {{{ makeSetValue(makeGlobalUse('_stdin'), 0, 'FS.getPtrForStream(stdin)', 'void*') }}};
       assert(stdin.fd === 0, 'invalid handle for stdin (' + stdin.fd + ')');
 
       var stdout = FS.open('/dev/stdout', 'w');
-      {{{ makeSetValue(makeGlobalUse('_stdout'), 0, 'FS.getPtrForStream(stdout)', 'void*') }}};
       assert(stdout.fd === 1, 'invalid handle for stdout (' + stdout.fd + ')');
 
       var stderr = FS.open('/dev/stderr', 'w');
-      {{{ makeSetValue(makeGlobalUse('_stderr'), 0, 'FS.getPtrForStream(stderr)', 'void*') }}};
       assert(stderr.fd === 2, 'invalid handle for stderr (' + stderr.fd + ')');
     },
     ensureErrnoError: function() {
       if (FS.ErrnoError) return;
       FS.ErrnoError = function ErrnoError(errno, node) {
+        //Module.printErr(stackTrace()); // useful for debugging
         this.node = node;
         this.setErrno = function(errno) {
           this.errno = errno;
@@ -1348,6 +1366,14 @@ mergeInto(LibraryManager.library, {
 
       FS.createDefaultDirectories();
       FS.createDefaultDevices();
+      FS.createSpecialDirectories();
+
+      FS.filesystems = {
+        'MEMFS': MEMFS,
+        'IDBFS': IDBFS,
+        'NODEFS': NODEFS,
+        'WORKERFS': WORKERFS,
+      };
     },
     init: function(input, output, error) {
       assert(!FS.init.initialized, 'FS.init was previously called. If you want to initialize later with custom parameters, remove any earlier calls (note that one is automatically added to the generated code)');
@@ -1364,6 +1390,10 @@ mergeInto(LibraryManager.library, {
     },
     quit: function() {
       FS.init.initialized = false;
+      // force-flush all streams, so we get musl std streams printed out
+      var fflush = Module['_fflush'];
+      if (fflush) fflush(0);
+      // close all of our streams
       for (var i = 0; i < FS.streams.length; i++) {
         var stream = FS.streams[i];
         if (!stream) {

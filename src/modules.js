@@ -98,7 +98,8 @@ var LibraryManager = {
 
     var libraries = [
       'library.js',
-      'library_formatString.js'
+      'library_formatString.js',
+      'library_syscall.js'
     ];
     if (!NO_FILESYSTEM) {
       libraries = libraries.concat([
@@ -108,7 +109,9 @@ var LibraryManager = {
         'library_memfs.js',
         'library_nodefs.js',
         'library_sockfs.js',
-        'library_tty.js'
+        'library_workerfs.js',
+        'library_tty.js',
+        'library_lz4.js',
       ]);
     }
     if (!NO_BROWSER) {
@@ -122,7 +125,6 @@ var LibraryManager = {
       'library_glut.js',
       'library_xlib.js',
       'library_egl.js',
-      'library_jansson.js',
       'library_openal.js',
       'library_glfw.js',
       'library_uuid.js',
@@ -133,7 +135,8 @@ var LibraryManager = {
       'library_async.js',
       'library_nsnet.js',
       'library_vr.js',
-      'library_font.js'
+      'library_font.js',
+      'library_webview.js'
     ]).concat(additionalLibraries);
 
     if(NATIVE_LIBDISPATCH) {
@@ -232,6 +235,17 @@ var LibraryManager = {
 function cDefine(key) {
 	if (key in C_DEFINES) return C_DEFINES[key];
 	throw 'XXX missing C define ' + key + '!';
+}
+
+var EXPORTED_RUNTIME_METHODS_SET = null;
+
+function maybeExport(name) {
+  if (!EXPORTED_RUNTIME_METHODS_SET) EXPORTED_RUNTIME_METHODS_SET = set(EXPORTED_RUNTIME_METHODS.concat(EXTRA_EXPORTED_RUNTIME_METHODS));
+  if (name in EXPORTED_RUNTIME_METHODS_SET) {
+    return 'Module["' + name + '"] = ' + name + ';';
+  } else {
+    return '';
+  }
 }
 
 var PassManager = {

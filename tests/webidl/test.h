@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 // Part 1
 
@@ -54,6 +55,7 @@ class StringUser {
   int i;
 public:
   StringUser(char *string="NO", int integer=99) : s(strdup(string)), i(integer) {}
+  ~StringUser() { free(s); }
   void Print(int anotherInteger, char *anotherString) {
     printf("|%s|%d|%s|%d|\n", s, i, anotherString, anotherInteger);
   }
@@ -117,7 +119,7 @@ class TypeTestClass {
   unsigned short int ReturnUnsignedShortMethod() { return (2<<15)-1; }
   void AcceptUnsignedShortMethod(unsigned short x) { printf("unsigned short int: %u\n", x); }
 
-  unsigned long ReturnUnsignedLongMethod() { return (2<<31)-1; }
+  unsigned long ReturnUnsignedLongMethod() { return 0xffffffff; }
   void AcceptUnsignedLongMethod(unsigned long x) { printf("unsigned long int: %u\n", x); }
 };
 
