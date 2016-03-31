@@ -76,10 +76,10 @@ var LibraryTracing = {
           console.log('TRACE WORKER ERROR:');
           console.log(e);
         }, false);
-        EmscriptenTrace.worker.postMessage({ 'cmd': 'configure',
+        EmscriptenTrace.worker.postMessage(JSON.stringify({ 'cmd': 'configure',
                                              'data_version': EmscriptenTrace.DATA_VERSION,
                                              'session_id': session_id,
-                                             'url': collector_url });
+                                             'url': collector_url }));
         EmscriptenTrace.configured = true;
         EmscriptenTrace.collectorEnabled = true;
         EmscriptenTrace.postEnabled = true;
@@ -102,10 +102,15 @@ var LibraryTracing = {
       }
     },
 
+    queue: [],
+
     post: function(entry) {
       if (EmscriptenTrace.postEnabled && EmscriptenTrace.collectorEnabled) {
-        EmscriptenTrace.worker.postMessage({ 'cmd': 'post',
-                                             'entry': entry });
+        EmscriptenTrace.queue.push(entry);
+        if(EmscriptenTrace.queue.length > 1000) {
+            EmscriptenTrace.worker.postMessage(JSON.stringify({ 'cmd': 'post', 'entries': EmscriptenTrace.queue}));
+            EmscriptenTrace.queue = [];
+        }
       } else if (EmscriptenTrace.postEnabled && EmscriptenTrace.testingEnabled) {
         Module.print('Tracing ' + entry);
       }
