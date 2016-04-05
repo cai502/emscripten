@@ -1554,8 +1554,8 @@ var LibraryGL = {
     return mem;
   },
 
-  glUnMapBufferOES__sig: 'ii',
-  glUnMapBufferOES__deps: ['$emscriptenWebGLGetBufferBinding', '$emscriptenWebGLValidateMapBufferTarget'],
+  glUnmapBufferOES__sig: 'ii',
+  glUnmapBufferOES__deps: ['$emscriptenWebGLGetBufferBinding', '$emscriptenWebGLValidateMapBufferTarget'],
   glUnmapBufferOES: function(target) {
     if (!emscriptenWebGLValidateMapBufferTarget(target)) {
       GL.recordError(0x0500/*GL_INVALID_ENUM*/);
