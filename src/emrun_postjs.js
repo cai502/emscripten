@@ -44,7 +44,11 @@ if (typeof window === "object" && (typeof ENVIRONMENT_IS_PTHREAD === 'undefined'
       post('^pageload^');
     }
   }
-  window.addEventListener('load', emrun_register_handlers);
+  if(document.readyState === "complete") {
+    emrun_register_handlers();  
+  } else {
+    window.addEventListener('load', emrun_register_handlers);
+  }
 }
 
 // POSTs the given binary data represented as a (typed) array data back to the emrun-based web server.
