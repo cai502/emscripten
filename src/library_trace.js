@@ -220,7 +220,7 @@ var LibraryTracing = {
   emscripten_trace_record_allocation: function(address, size) {
     if (typeof Module['onMalloc'] === 'function') Module['onMalloc'](address, size);
     if (EmscriptenTrace.postEnabled) {
-      var now = EmscriptenTrace.now();
+      var now = EmscriptenTrace.now() | 0;
       EmscriptenTrace.post([EmscriptenTrace.EVENT_ALLOCATE,
                             now, address, size]);
     }
@@ -229,7 +229,7 @@ var LibraryTracing = {
   emscripten_trace_record_reallocation: function(old_address, new_address, size) {
     if (typeof Module['onRealloc'] === 'function') Module['onRealloc'](old_address, new_address, size);
     if (EmscriptenTrace.postEnabled) {
-      var now = EmscriptenTrace.now();
+      var now = EmscriptenTrace.now() | 0;
       EmscriptenTrace.post([EmscriptenTrace.EVENT_REALLOCATE,
                             now, old_address, new_address, size]);
     }
@@ -238,7 +238,7 @@ var LibraryTracing = {
   emscripten_trace_record_free: function(address) {
     if (typeof Module['onFree'] === 'function') Module['onFree'](address);
     if (EmscriptenTrace.postEnabled) {
-      var now = EmscriptenTrace.now();
+      var now = EmscriptenTrace.now() | 0;
       EmscriptenTrace.post([EmscriptenTrace.EVENT_FREE,
                             now, address]);
     }
