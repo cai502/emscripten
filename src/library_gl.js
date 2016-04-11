@@ -1567,13 +1567,12 @@ var LibraryGL = {
     var mapping = GL.mappedBuffers[buffer];
     if (!mapping) {
       GL.recordError(0x0502 /* GL_INVALID_OPERATION */);
-      Module.printError('buffer was never mapped in glUnmapBuffer');
+      Module.printErr('buffer was never mapped in glUnmapBuffer');
       return 0;
     }
     GL.mappedBuffers[buffer] = null;
 
-    if (!(mapping.access & 0x10)) /* GL_MAP_FLUSH_EXPLICIT_BIT */
-      GLctx.bufferSubData(target, mapping.offset, HEAPU8.subarray(mapping.mem, mapping.mem+mapping.length));
+    GLctx.bufferSubData(target, mapping.offset, HEAPU8.subarray(mapping.mem, mapping.mem+mapping.length));
     _free(mapping.mem);
     return 1;
   },
