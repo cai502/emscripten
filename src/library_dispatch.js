@@ -219,8 +219,12 @@ var LibraryDispatch = {
         sourceCancel: function(sp) {
             var source = DISPATCH.getSource(sp);
             if(source.canceled) return;
-
-            clearTimeout(source.timeoutId);
+            if((source.mask >> 10) & DISPATCH.tickEventsMax) {
+                var priority = (source.mask >> 10) & DISPATCH.tickEventsMax;
+                delete DISPATCH.tickEvents[priority-1];
+            } else {
+                clearTimeout(source.timeoutId);
+            }
 
 
             var cancel = source.cancel;
