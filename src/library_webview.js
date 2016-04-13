@@ -29,7 +29,9 @@ var LibraryIFrame = {
     iframe_detach: function(id) {
         var iframe = IFrame.iframes[id];
         var parent = Module["canvas"].parentElement;
-        parent.removeChild(iframe);
+        if(parent.contains(iframe)) {
+            parent.removeChild(iframe);
+        }
     },
     
     iframe_setFrame: function(id, left, top, width, height) {
