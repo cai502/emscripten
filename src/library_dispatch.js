@@ -169,7 +169,7 @@ var LibraryDispatch = {
 	                var group = DISPATCH.groupList[task.groupId];
 	                DISPATCH._groupLeave(group);
 	            }
-            } while(Date.now() - begin < 100);
+            } while(Date.now() - begin < 1000);
         },
         sourceCreate: function(type, handle, mask, qp) {
             var sourceId = DISPATCH.sourceIdNext++;
