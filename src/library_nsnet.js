@@ -24,6 +24,12 @@ var NSNetwork = {
             _dispatch_async_f(queue, ctx, func);
         }
     },
+    _xhr_set_onerror: function(id, queue, ctx, func) {
+        var xhr = NSNetwork.xhrs[id];
+        xhr.onerror = function(e) {
+            _dispatch_async_f(queue, ctx, func);
+        }
+    },
     _xhr_set_request_header: function(id, key, value) {
         var xhr = NSNetwork.xhrs[id];
         var key = Pointer_stringify(key);
