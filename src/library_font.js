@@ -26,8 +26,11 @@ var LibraryA2OFont = {
             var textSpan = A2OFont.elements.textSpan;
             var baseline = A2OFont.elements.baseline;
             var continer = A2OFont.elements.container;
+            var fontAttr = A2OFont.fontNameToCssFontAttribute(fontName);
             textSpan.innerHTML = text;
-            textSpan.style.fontFamily = fontName;
+            textSpan.style.fontStyle = fontAttr[0];
+            textSpan.style.fontWeight = fontAttr[1];
+            textSpan.style.fontFamily = fontAttr[2];
             textSpan.style.fontSize = pointSize + "px";
 
             document.body.appendChild(continer);
@@ -37,6 +40,16 @@ var LibraryA2OFont = {
             var descent = height - ascent;
             document.body.removeChild(continer);
             return {"height":height, "width":width, "ascent":ascent, "descent":descent};
+        },
+        fontNameToCssFontAttribute: function(fontName) {
+            // 0: style, 1: wight, 2: family
+            if(fontName == "Arial") {
+                return ["normal", "normal", "Arial"];
+            } else if(fontName == "ArialBold") {
+                return ["normal", "bold", "Arial"];
+            } else {
+                return ["normal", "normal", "fontName"];
+            }
         },
         transformPoint: function(a,b,c,d,x,y) {
             return {"x":a*x+c*y, "y":b*x+d*y};
@@ -78,7 +91,8 @@ var LibraryA2OFont = {
 
         var ctx = canvas.getContext("2d");
         ctx.fillStyle = "rgb(255,255,255)";
-        ctx.font = pointSize+"px '"+fontName+"'";
+        var fontAttr = A2OFont.fontNameToCssFontAttribute(fontName);
+        ctx.font = fontAttr[0] + " normal " + fontAttr[1] + " "+pointSize+"px '"+fontAttr[2]+"'";
         ctx.translate(-rect.origin.x, -rect.origin.y);
         ctx.transform(a, b, c, d, 0, 0);
         ctx.fillText(text, 0, metrics.ascent);
