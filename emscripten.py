@@ -648,7 +648,7 @@ function ftCall_%s(%s) {%s
         basic_funcs.append('ftCall_%s' % sig)
     
     for msgFunc in metadata['objCMessageFuncs']:
-      function_tables.append(msgFunc)
+      #function_tables.append(msgFunc)
       
       (item, sig) = msgFunc.rsplit('_', 1)
       
