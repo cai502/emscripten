@@ -61,6 +61,8 @@ var LibraryGL = {
     stringiCache: {},
 #endif
 
+    parameterCache: {},
+
     packAlignment: 4,   // default alignment is 4 bytes
     unpackAlignment: 4, // default alignment is 4 bytes
 
@@ -1010,6 +1012,8 @@ var LibraryGL = {
         break;
 #endif
     }
+
+    ret = GL.parameterCache[name_];
 
     if (ret === undefined) {
       var result = GLctx.getParameter(name_);
@@ -2426,6 +2430,9 @@ var LibraryGL = {
 #if GL_ASSERTIONS
     GL.validateGLObjectID(GL.renderbuffers, renderbuffer, 'glBindRenderbuffer', 'renderbuffer');
 #endif
+    
+    GL.parameterCache[0x8CA7] = renderbuffer;
+    
     GLctx.bindRenderbuffer(target, renderbuffer ? GL.renderbuffers[renderbuffer] : null);
   },
 
@@ -3553,6 +3560,8 @@ var LibraryGL = {
 #if GL_ASSERTIONS
     GL.validateGLObjectID(GL.programs, program, 'glUseProgram', 'program');
 #endif
+    GL.parameterCache[0x8B8D] = program; // GL_CURRENT_PROGRAM
+    
     GLctx.useProgram(program ? GL.programs[program] : null);
   },
 
@@ -3611,6 +3620,9 @@ var LibraryGL = {
 #if GL_ASSERTIONS
     GL.validateGLObjectID(GL.framebuffers, framebuffer, 'glBindFramebuffer', 'framebuffer');
 #endif
+    
+    GL.parameterCache[0x8CA6] = framebuffer;
+    
     GLctx.bindFramebuffer(target, framebuffer ? GL.framebuffers[framebuffer] : null);
   },
 
@@ -7372,6 +7384,29 @@ var LibraryGL = {
 
     GLctx['drawBuffers'](bufArray);
   },
+  
+  glBlendFunc: function(sfactor, dfactor) {
+    GL.parameterCache[0x80C9] = sfactor;
+    GL.parameterCache[0x80C8] = dfactor;
+    GL.parameterCache[0x80CB] = sfactor;
+    GL.parameterCache[0x80CA] = dfactor;
+    
+    GLctx.blendFunc(sfactor, dfactor);
+  },
+  
+  glBlendFuncSeparate: function(srgb, drgb, salpha, dalpha) {
+    GL.parameterCache[0x80C9] = srgb;
+    GL.parameterCache[0x80C8] = drgb;
+    GL.parameterCache[0x80CB] = salpha;
+    GL.parameterCache[0x80CA] = dalpha;
+    
+    GLctx.blendFuncSeparate(srgb, drgb, salpha, dalpha);
+  },
+  
+  glCullFace: function(mode) {
+    GL.parameterCache[0x0B45] = mode;
+    GLctx.cullFace(mode);
+  },
 
   // OpenGL ES 2.0 draw buffer extensions compatibility
 
@@ -7391,9 +7426,6 @@ var LibraryGL = {
   glVertexAttrib2f__sig: 'viii',
   glVertexAttrib3f__sig: 'viiii',
   glVertexAttrib4f__sig: 'viiiii',
-  glCullFace__sig: 'vi',
-  glBlendFunc__sig: 'vii',
-  glBlendFuncSeparate__sig: 'viiii',
   glBlendColor__sig: 'vffff',
   glPolygonOffset__sig: 'vii',
   glColorMask__sig: 'viiii',
@@ -7435,10 +7467,10 @@ var LibraryGL = {
 
 // Simple pass-through functions. Starred ones have return values. [X] ones have X in the C name but not in the JS name
 var glFuncs = [[0, 'finish flush'],
- [1, 'clearDepth clearDepth[f] depthFunc enable disable frontFace cullFace clear lineWidth clearStencil depthMask stencilMask checkFramebufferStatus* generateMipmap activeTexture blendEquation isEnabled*'],
- [2, 'blendFunc blendEquationSeparate depthRange depthRange[f] stencilMaskSeparate hint polygonOffset vertexAttrib1f sampleCoverage'],
+ [1, 'clearDepth clearDepth[f] depthFunc enable disable frontFace clear lineWidth clearStencil depthMask stencilMask checkFramebufferStatus* generateMipmap activeTexture blendEquation isEnabled*'],
+ [2, 'blendEquationSeparate depthRange depthRange[f] stencilMaskSeparate hint polygonOffset vertexAttrib1f sampleCoverage'],
  [3, 'texParameteri texParameterf vertexAttrib2f stencilFunc stencilOp'],
- [4, 'viewport clearColor scissor vertexAttrib3f colorMask renderbufferStorage blendFuncSeparate blendColor stencilFuncSeparate stencilOpSeparate'],
+ [4, 'viewport clearColor scissor vertexAttrib3f colorMask renderbufferStorage blendColor stencilFuncSeparate stencilOpSeparate'],
  [5, 'vertexAttrib4f'],
  [6, ''],
  [7, ''],
