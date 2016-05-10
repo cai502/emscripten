@@ -423,7 +423,7 @@ function _emscripten_asm_const_%d(%s) {
             Counter.pre.append(wrapper)
             return name if not newline else (name + '\n')
           if settings['ASSERTIONS'] <= 1:
-            return ""
+            return bad if not newline else (bad + '\n')
           else:
             specific_bad, specific_bad_func = make_bad(j)
             Counter.pre.append(specific_bad_func)
@@ -441,13 +441,13 @@ function _emscripten_asm_const_%d(%s) {
             if sig[0] == 'f': code = '+' + code
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
-          Counter.pre.append(make_func(clean_item + '__wrapper', code, params, coercions))
-          return str(j) + ":" + clean_item + '__wrapper'
-        return str(j) + ":" + item if not newline else (str(j)+":"+item + '\n')
+          Counter.pre.append(make_func(item + '__wrapper', code, params, coercions))
+          return item + '__wrapper'
+        return item if not newline else (item + '\n')
       if settings['ASSERTIONS'] >= 2:
         debug_tables[sig] = body
-      body = ','.join([x for x in map(fix_item, body) if x != ""])
-      return ('\n'.join(Counter.pre), ''.join([raw[:start], "{", body, "};"]))
+      body = ','.join(map(fix_item, body))
+      return ('\n'.join(Counter.pre), ''.join([raw[:start+1], body, raw[end:]]))
 
     infos = [make_table(sig, raw) for sig, raw in last_forwarded_json['Functions']['tables'].iteritems()]
     Counter.pre = []
@@ -1461,4 +1461,3 @@ WARNING: You should normally never use this! Use emcc instead.
 
 if __name__ == '__main__':
   _main()
-
