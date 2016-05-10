@@ -300,7 +300,7 @@ function _emscripten_asm_const_%d(%s) {
 
     # objc
     pre += "var EMSCRIPTEN_OBJC_METADATA = {\n"
-    pre += ',\n'.join(['"%s": %s' % (k, v) for k, v in metadata['objc'].iteritems()])
+    pre += ',\n'.join(['"%s": %s' % (k.encode("utf-8"), v) for k, v in metadata['objc'].iteritems()])
     pre += "\n};\n"
 
     #if DEBUG: outfile.write('// pre\n')
