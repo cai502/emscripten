@@ -16,20 +16,18 @@ args = [
     '-s', 'USE_ZLIB=1',
     '-s', 'USE_LIBPNG=1',
     '-s', 'FULL_ES2=1',
-#    '-s', 'LEGACY_GL_EMULATION=1',
     '-s', 'ALIASING_FUNCTION_POINTERS=0',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
-    '-framework', 'Foundation',
-    '-framework', 'CoreFoundation',
-    '-framework', 'CFNetwork',
-    '-lbsd',
-    '-lobjc4',
-    '-lBlocksRuntime',
 ]
-if 'USE_PTHREADS=1' in sys.argv:
-    args.extend(['-lpthread_workqueue'])
-#args.extend(['-lkqueue', '-ldispatch'])
-args.extend(['-ldispatch'])
+
+if not "SIDE_MODULE=1" in sys.argv:
+    args += [
+        '-lbsd',
+        '-lobjc4',
+        '-lBlocksRuntime',
+        '-ldispatch'
+    ]
+
 args += sys.argv[1:]
 
 exit(subprocess.call([shared.PYTHON, shared.EMCC] + args))
