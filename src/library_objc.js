@@ -6,6 +6,68 @@ var LibraryObjC = {
         }
     },
     
+    _getObjc2SelectorRefCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_selrefs"].length;
+    },
+    _getObjc2MessageRefCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_msgrefs"].length;
+	},
+    _getObjc2ClassRefCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_classrefs"].length;
+	},
+    _getObjc2SuperRefCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_superrefs"].length;
+	},
+    _getObjc2ClassCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_classlist"].length;
+	},
+    _getObjc2NonlazyClassCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_nlclslist"].length;
+	},
+    _getObjc2CategoryCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_catlist"].length;
+	},
+    _getObjc2NonlazyCategoryCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_nlcatlist"].length;
+	},
+    _getObjc2ProtocolCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_protolist"].length;
+	},
+    _getObjc2ProtocolRefCount: function() {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_protorefs"].length;
+	},
+    
+    _getObjc2SelectorRef: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_selrefs"][idx];
+	},
+    _getObjc2MessageRef: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_msgrefs"][idx];
+	},
+    _getObjc2ClassRef: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_classrefs"][idx];
+	},
+    _getObjc2SuperRef: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_superrefs"][idx];
+	},
+    _getObjc2Class: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_classlist"][idx];
+	},
+    _getObjc2NonlazyClass: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_nlclslist"][idx];
+	},
+    _getObjc2Category: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_catlist"][idx];
+	},
+    _getObjc2NonlazyCategory: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_nlcatlist"][idx];
+	},
+    _getObjc2Protocol: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_protolist"][idx];
+	},
+    _getObjc2ProtocolRef: function(idx) {
+        return EMSCRIPTEN_OBJC_METADATA["__objc_protorefs"][idx];
+	},
+    
     _objc_msgSend_uncached_impcache: function() {
       throw "not implemented"
     },
