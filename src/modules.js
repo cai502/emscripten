@@ -136,7 +136,8 @@ var LibraryManager = {
       'library_nsnet.js',
       'library_vr.js',
       'library_font.js',
-      'library_webview.js'
+      'library_webview.js',
+      'library_objc.js'
     ]).concat(additionalLibraries);
 
     if(NATIVE_LIBDISPATCH) {
