@@ -303,6 +303,33 @@ function _emscripten_asm_const_%d(%s) {
     pre += ',\n'.join(['"%s": %s' % (k.encode("utf-8"), v) for k, v in metadata['objc'].iteritems()])
     pre += "\n};\n"
 
+
+    if settings['SIDE_MODULE']:
+      pre += '''
+for (var key in EMSCRIPTEN_OBJC_METADATA) {
+    var addr = EMSCRIPTEN_OBJC_METADATA[key];
+    for(var i = 0; i < addr.length; i++) {
+        parentModule['objcMetaData'][key].push(%saddr[i]);
+    }
+}
+''' % 'gb + ' if settings['RELOCATABLE'] else ''
+    elif  settings['MAIN_MODULE']:
+      pre += '''
+Module['objcMetaData'] = {};
+for (var key in EMSCRIPTEN_OBJC_METADATA) {
+    var addr = EMSCRIPTEN_OBJC_METADATA[key];
+    
+    Module['objcMetaData'][key] = [];
+    for(var i = 0; i < addr.length; i++) {
+        Module['objcMetaData'][key].push(%saddr[i]);
+    }
+}
+''' % 'Runtime.GLOBAL_BASE + ' if settings['RELOCATABLE'] else ''
+    else:
+      pre += '''
+Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
+'''
+
     #if DEBUG: outfile.write('// pre\n')
     outfile.write(pre)
     pre = None
@@ -922,7 +949,7 @@ return real_''' + s + '''.apply(null, arguments);
       receiving += '''
 var NAMED_GLOBALS = { %s };
 for (var named in NAMED_GLOBALS) {
-  Module['_' + named] = gb + NAMED_GLOBALS[named];
+  Module[named] = gb + NAMED_GLOBALS[named];
 }
 Module['NAMED_GLOBALS'] = NAMED_GLOBALS;
 ''' % ', '.join('"' + k + '": ' + str(v) for k, v in metadata['namedGlobals'].iteritems())
