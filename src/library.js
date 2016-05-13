@@ -3796,7 +3796,7 @@ LibraryManager.library = {
   mach_absolute_time__deps: ["emscripten_get_now"],
   mach_absolute_time: function() {
       var r = _emscripten_get_now();
-      asm["setTempRet0"]((r / 4294967296.0) >>> 0);
+      {{{ makeSetTempRet0('(r / 4294967296.0) >>> 0') }}};
       return r >>> 0;
   },
 
