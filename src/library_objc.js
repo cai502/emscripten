@@ -10,6 +10,9 @@ var LibraryObjC = {
                 });
                 {{{ makeSetValue('Module["__objc_msgForward_impcache"]', 0, 'addr', 'i32') }}};
             });
+            __ATINIT__.push(function(){
+                __objc_load_images();
+            });
         }
     },
     
