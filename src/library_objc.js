@@ -3,6 +3,13 @@ var LibraryObjC = {
     $ObjC__postset: "ObjC.init();",
     $ObjC: {
         init: function() {
+            addOnPreRun(function(){
+                var addr = Runtime.addFunction(function(){
+                  // _objc_msgForward_impcache
+                  return __objc_msgForward.apply(this, arguments);
+                });
+                {{{ makeSetValue('Module["__objc_msgForward_impcache"]', 0, 'addr', 'i32') }}};
+            });
         }
     },
     
