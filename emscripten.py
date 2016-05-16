@@ -300,8 +300,35 @@ function _emscripten_asm_const_%d(%s) {
 
     # objc
     pre += "var EMSCRIPTEN_OBJC_METADATA = {\n"
-    pre += ',\n'.join(['"%s": %s' % (k, v) for k, v in metadata['objc'].iteritems()])
+    pre += ',\n'.join(['"%s": %s' % (k.encode("utf-8"), v) for k, v in metadata['objc'].iteritems()])
     pre += "\n};\n"
+
+
+    if settings['SIDE_MODULE']:
+      pre += '''
+for (var key in EMSCRIPTEN_OBJC_METADATA) {
+    var addr = EMSCRIPTEN_OBJC_METADATA[key];
+    for(var i = 0; i < addr.length; i++) {
+        parentModule['objcMetaData'][key].push(%saddr[i]);
+    }
+}
+''' % 'gb + ' if settings['RELOCATABLE'] else ''
+    elif  settings['MAIN_MODULE']:
+      pre += '''
+Module['objcMetaData'] = {};
+for (var key in EMSCRIPTEN_OBJC_METADATA) {
+    var addr = EMSCRIPTEN_OBJC_METADATA[key];
+    
+    Module['objcMetaData'][key] = [];
+    for(var i = 0; i < addr.length; i++) {
+        Module['objcMetaData'][key].push(%saddr[i]);
+    }
+}
+''' % 'Runtime.GLOBAL_BASE + ' if settings['RELOCATABLE'] else ''
+    else:
+      pre += '''
+Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
+'''
 
     #if DEBUG: outfile.write('// pre\n')
     outfile.write(pre)
@@ -423,7 +450,7 @@ function _emscripten_asm_const_%d(%s) {
             Counter.pre.append(wrapper)
             return name if not newline else (name + '\n')
           if settings['ASSERTIONS'] <= 1:
-            return ""
+            return bad if not newline else (bad + '\n')
           else:
             specific_bad, specific_bad_func = make_bad(j)
             Counter.pre.append(specific_bad_func)
@@ -441,13 +468,13 @@ function _emscripten_asm_const_%d(%s) {
             if sig[0] == 'f': code = '+' + code
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
-          Counter.pre.append(make_func(clean_item + '__wrapper', code, params, coercions))
-          return str(j) + ":" + clean_item + '__wrapper'
-        return str(j) + ":" + item if not newline else (str(j)+":"+item + '\n')
+          Counter.pre.append(make_func(item + '__wrapper', code, params, coercions))
+          return item + '__wrapper'
+        return item if not newline else (item + '\n')
       if settings['ASSERTIONS'] >= 2:
         debug_tables[sig] = body
-      body = ','.join([x for x in map(fix_item, body) if x != ""])
-      return ('\n'.join(Counter.pre), ''.join([raw[:start], "{", body, "};"]))
+      body = ','.join(map(fix_item, body))
+      return ('\n'.join(Counter.pre), ''.join([raw[:start+1], body, raw[end:]]))
 
     infos = [make_table(sig, raw) for sig, raw in last_forwarded_json['Functions']['tables'].iteritems()]
     Counter.pre = []
@@ -646,6 +673,19 @@ function ftCall_%s(%s) {%s
 }
 ''' % (sig, ', '.join(full_args), prelude, table_access, ', '.join(args))
         basic_funcs.append('ftCall_%s' % sig)
+        
+        if settings.get('RELOCATABLE'):
+          params = ','.join(['ptr'] + ['p%d' % p for p in range(len(sig)-1)])
+          coerced_params = ','.join([shared.JS.make_coercion('ptr', 'i', settings)] + [shared.JS.make_coercion('p%d', unfloat(sig[p+1]), settings) % p for p in range(len(sig)-1)])
+          coercions = ';'.join(['ptr = ptr | 0'] + ['p%d = %s' % (p, shared.JS.make_coercion('p%d' % p, unfloat(sig[p+1]), settings)) for p in range(len(sig)-1)]) + ';'
+          mini_coerced_params = ','.join([shared.JS.make_coercion('p%d', sig[p+1], settings) % p for p in range(len(sig)-1)])
+          maybe_return = '' if sig[0] == 'v' else 'return'
+          final_return = maybe_return + ' ' + shared.JS.make_coercion('ftCall_' + sig + '(' + coerced_params + ')', unfloat(sig[0]), settings) + ';'
+          if settings['EMULATED_FUNCTION_POINTERS'] == 1:
+            body = final_return
+          else:
+            body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
+          funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
     
     for msgFunc in metadata['objCMessageFuncs']:
       #function_tables.append(msgFunc)
@@ -681,7 +721,7 @@ function ftCall_%s(%s) {%s
 
       if settings['OBJC_DEBUG']:
         func_prefix = "try{ " + func_prefix
-        func_postfix = func_postfix + ";} catch(e) { Module['print']('error sel:'+Pointer_stringify(sel)); throw e;}"
+        func_postfix = func_postfix + ";} catch(e) { Module.print('error sel:'+Pointer_stringify(sel)); throw e;}"
       
       if item == "_objc_msgSend":
         function_tables_impls.append('''
@@ -789,21 +829,7 @@ function ftCall_%s(%s) {%s
     %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
 ''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
-
-
-        if settings.get('RELOCATABLE'):
-          params = ','.join(['ptr'] + ['p%d' % p for p in range(len(sig)-1)])
-          coerced_params = ','.join([shared.JS.make_coercion('ptr', 'i', settings)] + [shared.JS.make_coercion('p%d', unfloat(sig[p+1]), settings) % p for p in range(len(sig)-1)])
-          coercions = ';'.join(['ptr = ptr | 0'] + ['p%d = %s' % (p, shared.JS.make_coercion('p%d' % p, unfloat(sig[p+1]), settings)) for p in range(len(sig)-1)]) + ';'
-          mini_coerced_params = ','.join([shared.JS.make_coercion('p%d', sig[p+1], settings) % p for p in range(len(sig)-1)])
-          maybe_return = '' if sig[0] == 'v' else 'return'
-          final_return = maybe_return + ' ' + shared.JS.make_coercion('ftCall_' + sig + '(' + coerced_params + ')', unfloat(sig[0]), settings) + ';'
-          if settings['EMULATED_FUNCTION_POINTERS'] == 1:
-            body = final_return
-          else:
-            body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
-          funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
-
+    
     def quote(prop):
       if settings['USE_CLOSURE_COMPILER'] == 2:
         return "'" + prop + "'"
@@ -923,7 +949,7 @@ return real_''' + s + '''.apply(null, arguments);
       receiving += '''
 var NAMED_GLOBALS = { %s };
 for (var named in NAMED_GLOBALS) {
-  Module['_' + named] = gb + NAMED_GLOBALS[named];
+  Module[named] = gb + NAMED_GLOBALS[named];
 }
 Module['NAMED_GLOBALS'] = NAMED_GLOBALS;
 ''' % ', '.join('"' + k + '": ' + str(v) for k, v in metadata['namedGlobals'].iteritems())
@@ -1461,4 +1487,3 @@ WARNING: You should normally never use this! Use emcc instead.
 
 if __name__ == '__main__':
   _main()
-

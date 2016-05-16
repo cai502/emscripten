@@ -5,6 +5,8 @@ var LibraryA2OFont = {
         elements: {
         },
         init: function() {
+            if(typeof document === "undefined") return;
+             
             // elements for metrics
             var baseline = document.createElement("div");
             baseline.style.display = "inline-block";
