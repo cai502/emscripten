@@ -622,6 +622,8 @@ function jsCall_%s_%s(%s) {
           table_access = 'parentModule["' + table_access + '"]' # side module tables were merged into the parent, we need to access the global one
         prelude = '''
   if (x < 0 || x >= %s.length) { Module.printErr("Function table mask error (out of range)"); %s ; abort(x) }''' % (table_access, get_function_pointer_error(sig))
+        prelude += '''
+  if (!%s[x]) { Module.printErr("Function not found"); abort(x) }''' % table_access
         asm_setup += '''
 function ftCall_%s(%s) {%s
   return %s[x](%s);
