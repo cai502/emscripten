@@ -17,6 +17,7 @@ var LibraryObjC = {
     },
     
     __objc_msgForward_impcache: 'allocate(4, "i32*", ALLOC_STATIC)',
+    _objc_msgForward_impcache: 'allocate(4, "i32*", ALLOC_STATIC)',
     
     _getObjc2SelectorRefCount: function() {
         return Module['objcMetaData']["__objc_selrefs"].length;
