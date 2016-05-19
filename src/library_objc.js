@@ -1,5 +1,5 @@
 var LibraryObjC = {
-    $ObjC__deps: ["malloc"],
+    $ObjC__deps: ["malloc", "_objc_msgForward_impcache"],
     $ObjC__postset: "ObjC.init();",
     $ObjC: {
         init: function() {
@@ -8,13 +8,15 @@ var LibraryObjC = {
                   // _objc_msgForward_impcache
                   return __objc_msgForward.apply(this, arguments);
                 });
-                {{{ makeSetValue('Module["__objc_msgForward_impcache"]', 0, 'addr', 'i32') }}};
+                {{{ makeSetValue('__objc_msgForward_impcache', 0, 'addr', 'i32') }}};
             });
             __ATINIT__.push(function(){
                 __objc_load_images();
             });
         }
     },
+    
+    __objc_msgForward_impcache: 'allocate(4, "i32*", ALLOC_STATIC)',
     
     _getObjc2SelectorRefCount: function() {
         return Module['objcMetaData']["__objc_selrefs"].length;
@@ -92,6 +94,7 @@ var LibraryObjC = {
       ____forwarding___(margs, returnStorage);
     },
     
+    _objc_msgForward_stret__deps: ["___forwarding___"],
     _objc_msgForward_stret: function() {
       throw "not implemented";
     },
