@@ -85,3 +85,17 @@ var NSNetwork = {
 
 autoAddDeps(NSNetwork, '$NSNetwork');
 mergeInto(LibraryManager.library, NSNetwork);
+
+DEFAULT_LIBRARY_FUNCS_TO_INCLUDE.splice(-1,0,
+"_xhr_create",
+"_xhr_open",
+"_xhr_set_onload",
+"_xhr_set_onerror",
+"_xhr_set_request_header",
+"_xhr_send",
+"_xhr_get_ready_state",
+"_xhr_get_status",
+"_xhr_get_status_text",
+"_xhr_get_response_text",
+"_xhr_get_all_response_headers"
+);
