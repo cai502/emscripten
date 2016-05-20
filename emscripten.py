@@ -260,6 +260,11 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
     for key in all_implemented:
       if key in all_exported_functions or export_all or (export_bindings and key.startswith('_emscripten_bind')):
         exported_implemented_functions.add(key)
+    for func in all_exported_functions:
+      if func in metadata['aliases']:
+        alias_func = metadata['aliases'][func]
+        if alias_func in all_implemented:
+          exported_implemented_functions.add(alias_func)
     implemented_functions = set(metadata['implementedFunctions'])
     if settings['ASSERTIONS'] and settings.get('ORIGINAL_EXPORTED_FUNCTIONS'):
       original_exports = settings['ORIGINAL_EXPORTED_FUNCTIONS']

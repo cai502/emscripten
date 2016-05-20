@@ -227,7 +227,7 @@ function JSify(data, functionsOnly) {
         EXPORTED_FUNCTIONS[finalName] = 1;
         Functions.libraryFunctions[finalName] = 2;
       }
-      if ((EXPORT_ALL || (finalName in EXPORTED_FUNCTIONS)) && !noExport) {
+      if ((EXPORT_ALL || MAIN_MODULE==2 || (finalName in EXPORTED_FUNCTIONS)) && !noExport) {
         contentText += '\nModule["' + finalName + '"] = ' + finalName + ';';
       }
       return depsText + contentText;
@@ -480,4 +480,3 @@ function JSify(data, functionsOnly) {
   dprint('framework', 'Big picture: Finishing JSifier, main pass=' + mainPass);
   //B.stop('jsifier');
 }
-
