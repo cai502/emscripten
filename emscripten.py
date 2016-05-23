@@ -174,6 +174,8 @@ def emscript(infile, settings, outfile, libraries=[], compiler_engine=None,
         map(lambda x: x[1:], metadata['implementedFunctions'])
       )
     ) + map(lambda x: x[1:], metadata['externs'])
+    if settings['MAIN_MODULE'] == 2:
+      settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'] += [x[1:] for x in settings['EXPORTED_FUNCTIONS'] if x.find('.') == -1]
     if metadata['simd']:
       settings['SIMD'] = 1
     if metadata['cantValidate'] and settings['ASM_JS'] != 2:
