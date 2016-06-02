@@ -14,7 +14,6 @@ args = [
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
     '-s', 'USE_ZLIB=1',
     '-s', 'USE_LIBPNG=1',
-    '-s', 'FULL_ES2=1',
     '-s', 'ALIASING_FUNCTION_POINTERS=0',
     '-s', 'EMULATED_FUNCTION_POINTERS=1',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
