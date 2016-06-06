@@ -7408,6 +7408,14 @@ var LibraryGL = {
     GLctx.cullFace(mode);
   },
 
+  _legacyGLEmulationEnabled: function() {
+#if LEGACY_GL_EMULATION
+    return 1;
+#else
+    return 0;
+#endif
+  },
+
   // OpenGL ES 2.0 draw buffer extensions compatibility
 
   glDrawBuffersEXT: 'glDrawBuffers',
