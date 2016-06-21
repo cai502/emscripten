@@ -4623,13 +4623,17 @@ var LibraryGL = {
       var GL_SRC_ALPHA           = 0x0302;
       var GL_ONE_MINUS_SRC_ALPHA = 0x0303;
 
-      var GL_RGB  = 0x1907;
-      var GL_RGBA = 0x1908;
+      var GL_ALPHA           = 0x1906;
+      var GL_RGB             = 0x1907;
+      var GL_RGBA            = 0x1908;
+      var GL_LUMINANCE       = 0x1909;
+      var GL_LUMINANCE_ALPHA = 0x190A;
 
       // Our defs:
       var TEXENVJIT_NAMESPACE_PREFIX = "tej_";
       // Not actually constant, as they can be changed between JIT passes:
       var TEX_UNIT_UNIFORM_PREFIX = "uTexUnit";
+      var TEX_COEFF_UNIFORM_PREFIX = "uTexCoeff";
       var TEX_COORD_VARYING_PREFIX = "vTexCoord";
       var PRIM_COLOR_VARYING = "vPrimColor";
       var TEX_MATRIX_UNIFORM_PREFIX = "uTexMatrix";
@@ -4958,16 +4962,27 @@ var LibraryGL = {
             /* RGBA:
              * Cv = CpCs
              * Av = ApAs
+             * RGB:
+             * Cv = CpCs
+             * Av = Ap
+             * A:
+             * Cv = Cp
+             * Av = ApAs
              */
-            var line = [
-              "vec4 " + passOutputVar,
-              " = ",
-                passInputVar,
-                " * ",
-                genTexUnitSampleExpr(texUnitID),
-              ";",
+            var prefix = TEXENVJIT_NAMESPACE_PREFIX + 'env' + texUnitID + "_";
+            var texVar = prefix + "tex";
+            var colorVar = prefix + "color";
+            var alphaVar = prefix + "alpha";
+
+            var coeff = TEX_COEFF_UNIFORM_PREFIX + texUnitID;
+            var coeffColor = coeff + ".x";
+            var coeffAlpha = coeff + ".y";
+            return [
+              "vec4 " + texVar + " = " + genTexUnitSampleExpr(texUnitID) + ";",
+              "vec3 " + colorVar + " = " + passInputVar + ".rgb * mix(vec3(1.0,1.0,1.0), " + texVar + ".rgb, " + coeffColor + ");",
+              "float " + alphaVar + " = " + passInputVar + ".a * mix(1.0, " + texVar + ".a, " + coeffAlpha + ");",
+              "vec4 " + passOutputVar + " = vec4(" + colorVar + ", " + alphaVar + ");",
             ];
-            return [line.join("")];
           }
           case GL_DECAL: {
             /* RGBA:
@@ -5174,8 +5189,9 @@ var LibraryGL = {
           }
         },
 
-        setGLSLVars: function(uTexUnitPrefix, vTexCoordPrefix, vPrimColor, uTexMatrixPrefix) {
+        setGLSLVars: function(uTexUnitPrefix, uTexCoeffPrefix, vTexCoordPrefix, vPrimColor, uTexMatrixPrefix) {
           TEX_UNIT_UNIFORM_PREFIX   = uTexUnitPrefix;
+          TEX_COEFF_UNIFORM_PREFIX   = uTexCoeffPrefix;
           TEX_COORD_VARYING_PREFIX  = vTexCoordPrefix;
           PRIM_COLOR_VARYING        = vPrimColor;
           TEX_MATRIX_UNIFORM_PREFIX = uTexMatrixPrefix;
@@ -5564,6 +5580,35 @@ var LibraryGL = {
               {{{ makeSetValue('param', '12', 'env.envColor[3]', 'float') }}};
               return;
           }
+        },
+
+        hook_texImage2D: function(target, level, internalFormat, width, height, border, format, type, pixels) {
+          if (target != GL_TEXTURE_2D)
+            return;
+
+          if (GLImmediate.currentTexture[s_activeTexture] == 0)
+            return;
+
+          var env = getCurTexUnit().env;
+          switch(internalFormat) {
+            case GL_LUMINANCE:
+            case GL_LUMINANCE_ALPHA:
+            case GL_ALPHA:
+            case GL_RGB:
+            case GL_RGBA:
+              GLImmediate.textureInternalFormatList[GLImmediate.currentTexture[s_activeTexture]] = internalFormat;
+              break;
+            default:
+              Module.printErr('WARNING: Unsupported `internalFormat` in call to `glTexImage2D`.');
+          }
+          return;
+        },
+
+        hook_bindTexture: function(target, texture) {
+          if (target != GL_TEXTURE_2D)
+            return;
+
+          GLImmediate.currentTexture[s_activeTexture] = texture;
         }
       };
     },
@@ -5610,6 +5655,7 @@ var LibraryGL = {
     clientColor: null,
     usedTexUnitList: [],
     fixedFunctionProgram: null,
+    textureInternalFormatList: [],
 
     setClientAttribute: function setClientAttribute(name, size, type, stride, pointer) {
       var attrib = GLImmediate.clientAttributes[name];
@@ -5748,6 +5794,7 @@ var LibraryGL = {
         init: function init() {
           // For fixed-function shader generation.
           var uTexUnitPrefix = 'u_texUnit';
+          var uTexCoeffPrefix = 'u_texCoeff';
           var aTexCoordPrefix = 'a_texCoord';
           var vTexCoordPrefix = 'v_texCoord';
           var vPrimColor = 'v_color';
@@ -5785,7 +5832,7 @@ var LibraryGL = {
               }
             }
 
-            GLImmediate.TexEnvJIT.setGLSLVars(uTexUnitPrefix, vTexCoordPrefix, vPrimColor, uTexMatrixPrefix);
+            GLImmediate.TexEnvJIT.setGLSLVars(uTexUnitPrefix, uTexCoeffPrefix, vTexCoordPrefix, vPrimColor, uTexMatrixPrefix);
             var fsTexEnvPass = GLImmediate.TexEnvJIT.genAllPassLines('gl_FragColor', 2);
 
             var texUnitAttribList = '';
@@ -5798,6 +5845,7 @@ var LibraryGL = {
               texUnitAttribList += 'attribute vec4 ' + aTexCoordPrefix + texUnit + ';\n';
               texUnitVaryingList += 'varying vec4 ' + vTexCoordPrefix + texUnit + ';\n';
               texUnitUniformList += 'uniform sampler2D ' + uTexUnitPrefix + texUnit + ';\n';
+              texUnitUniformList += 'uniform vec2 ' + uTexCoeffPrefix + texUnit + ';\n';
               vsTexCoordInits += '  ' + vTexCoordPrefix + texUnit + ' = ' + aTexCoordPrefix + texUnit + ';\n';
 
               if (GLImmediate.useTextureMatrix) {
@@ -5831,6 +5879,7 @@ var LibraryGL = {
             ].join('\n').replace(/\n\n+/g, '\n');
 
             this.vertexShader = GLctx.createShader(GLctx.VERTEX_SHADER);
+            Module.print(vsSource);
             GLctx.shaderSource(this.vertexShader, vsSource);
             GLctx.compileShader(this.vertexShader);
 
@@ -5872,6 +5921,7 @@ var LibraryGL = {
             ].join("\n").replace(/\n\n+/g, '\n');
 
             this.fragmentShader = GLctx.createShader(GLctx.FRAGMENT_SHADER);
+Module.print(fsSource);
             GLctx.shaderSource(this.fragmentShader, fsSource);
             GLctx.compileShader(this.fragmentShader);
 
@@ -5933,8 +5983,10 @@ var LibraryGL = {
           }
 
           this.textureMatrixLocations = [];
+          this.textureCoeffLocations = [];
           for (var i = 0; i < GLImmediate.MAX_TEXTURES; i++) {
             this.textureMatrixLocations[i] = GLctx.getUniformLocation(this.program, 'u_textureMatrix' + i);
+            this.textureCoeffLocations[i] = GLctx.getUniformLocation(this.program, 'u_texCoeff' + i);
           }
           this.normalLocation = GLctx.getAttribLocation(this.program, 'a_normal');
 
@@ -6059,6 +6111,23 @@ var LibraryGL = {
                 }
               }
 #else
+              var unifCoeffLoc = this.textureCoeffLocations[i];
+              if(unifCoeffLoc) {
+                var internalFormat = GLImmediate.textureInternalFormatList[GLImmediate.currentTexture[i]];
+                switch(internalFormat) {
+                case 0x1906 /* GL_ALPHA */:
+                    GLctx.uniform2f(unifCoeffLoc, 0.0, 1.0);
+                    break;
+                case 0x1907 /* GL_RGB */:
+                case 0x1909 /* GL_LUMINANCE */:
+                    GLctx.uniform2f(unifCoeffLoc, 1.0, 0.0);
+                    break;
+                default:
+                    GLctx.uniform2f(unifCoeffLoc, 1.0, 1.0);
+                    break;
+                }
+              }
+
               var attribLoc = this.texCoordLocations[i];
               if (attribLoc === undefined || attribLoc < 0) continue;
               var texAttr = clientAttributes[GLImmediate.TEXTURE0+i];
@@ -6263,6 +6332,20 @@ var LibraryGL = {
       };
       {{{ updateExport('glGetTexEnvfv') }}}
 
+      var glTexImage2D = _glTexImage2D;
+      _glTexImage2D = _emscripten_glTexImage2D = function _glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels) {
+        GLImmediate.TexEnvJIT.hook_texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
+        glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
+      };
+      {{{ updateExport('glTexImage2D') }}}
+
+      var glBindTexture = _glBindTexture;
+      _glBindTexture = _emscripten_glBindTexture = function _glBindTexture(target, texture) {
+        GLImmediate.TexEnvJIT.hook_bindTexture(target, texture);
+        glBindTexture(target, texture);
+      };
+      {{{ updateExport('glBindTexture') }}}
+
       var glGetIntegerv = _glGetIntegerv;
       _glGetIntegerv = _emscripten_glGetIntegerv = function _glGetIntegerv(pname, params) {
         switch (pname) {
@@ -6329,6 +6412,8 @@ var LibraryGL = {
       GL.generateTempBuffers(true, GL.currentContext);
 
       GLImmediate.clientColor = new Float32Array([1, 1, 1, 1]);
+
+      GLImmediate.currentTexture = [];
     },
 
     // Prepares and analyzes client attributes.
