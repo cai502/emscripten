@@ -5879,7 +5879,6 @@ var LibraryGL = {
             ].join('\n').replace(/\n\n+/g, '\n');
 
             this.vertexShader = GLctx.createShader(GLctx.VERTEX_SHADER);
-            Module.print(vsSource);
             GLctx.shaderSource(this.vertexShader, vsSource);
             GLctx.compileShader(this.vertexShader);
 
@@ -5921,7 +5920,6 @@ var LibraryGL = {
             ].join("\n").replace(/\n\n+/g, '\n');
 
             this.fragmentShader = GLctx.createShader(GLctx.FRAGMENT_SHADER);
-Module.print(fsSource);
             GLctx.shaderSource(this.fragmentShader, fsSource);
             GLctx.compileShader(this.fragmentShader);
 
