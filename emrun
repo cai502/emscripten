@@ -1027,6 +1027,9 @@ def main():
   parser.add_option('--android', dest='android', action='store_true', default=False,
     help='Launches the page in a browser of an Android device connected to an USB on the local system. (via adb)')
 
+  parser.add_option('--ifname', dest='ifname', default='',
+    help='Specifies interface name for android')
+
   parser.add_option('--system_info', dest='system_info', action='store_true',
     help='Prints information about the current system at startup.')
 
@@ -1042,7 +1045,7 @@ def main():
   parser.add_option('--profile', dest='profile', default='',
     help='Specifies browser profile. (supports firefox only)')
 
-  opts_with_param = ['--browser', '--timeout_returncode', '--timeout', '--silence_timeout', '--log_stderr', '--log_stdout', '--port', '--serve_root']
+  opts_with_param = ['--browser', '--timeout_returncode', '--timeout', '--silence_timeout', '--log_stderr', '--log_stdout', '--port', '--serve_root', '--ifname']
 
   cmdlineparams = []
   # Split the startup arguments to two parts, delimited by the first (unbound) positional argument.
@@ -1104,7 +1107,26 @@ def main():
     url += '?' + '&'.join(cmdlineparams)
   server_root = 'localhost'
   if options.android:
-    server_root = socket.gethostbyname(socket.gethostname())
+    try:
+      from netifaces import interfaces, ifaddresses, AF_INET
+    except ImportError:
+      raise ImportError('Package netifaces is needed. Try `easy_install netifaces`.')
+
+    def get_interface_address(ifname, idx=0):
+      ifaddr = ifaddresses(ifname)
+      if AF_INET in ifaddr and idx < len(ifaddr[AF_INET]):
+        return ifaddr[AF_INET][idx]['addr']
+      else:
+        None
+
+    if options.ifname:
+      server_root = get_interface_address(options.ifname)
+    else:
+      for ifname in interfaces():
+        addr = get_interface_address(ifname)
+        if addr and not addr.startswith('127.'):
+          server_root = addr
+          break
   url = 'http://' + server_root + ':' + str(options.port)+'/'+url
   
   os.chdir(serve_dir)
