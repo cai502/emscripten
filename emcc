@@ -417,6 +417,7 @@ try:
   no_heap_copy = False
   use_preload_plugins = False
   proxy_to_worker = False
+  js_xhr_loading = True
   default_object_extension = '.o'
   valid_abspaths = []
   frameworks = []
@@ -1725,10 +1726,14 @@ try:
 
     script_src = None # if set, we have a script to load with a src attribute
     script_inline = None # if set, we have the contents of a script to write inline in a script
+    js_xhr_scripts = []
+    js_xhr_resources = {}
 
     def un_src(): # use this if you want to modify the script and need it to be inline
-      global script_src, script_inline
+      global script_src, script_inline, js_xhr_scripts
       if script_src is None: return
+      if js_xhr_loading:
+        js_xhr_scripts.append(script_src)
       script_inline = '''
         var script = document.createElement('script');
         script.src = "%s";
@@ -1739,6 +1744,7 @@ try:
     asm_mods = []
 
     if proxy_to_worker:
+      assert js_xhr_loading == False, 'Currlently not supported both js-xhr-loading and proxy-to-worker'
       child_js = shared.Settings.PROXY_TO_WORKER_FILENAME or target_basename
       script_inline = '''
   if ((',' + window.location.search.substr(1) + ',').indexOf(',noProxy,') < 0) {
@@ -1765,6 +1771,9 @@ try:
 
     if shared.Settings.EMTERPRETIFY_FILE:
       # We need to load the emterpreter file before anything else, it has to be synchronously ready
+      if js_xhr_loading:
+        assert False, 'currently not supported empterpriter with js-xhr-loading'
+        js_xhr_resources['emterpreter_file'] = shared.Settings.EMTERPRETIFY_FILE
       un_src()
       script_inline = '''
         var xhr = new XMLHttpRequest();
@@ -1779,6 +1788,8 @@ try:
 
     if memory_init_file:
       # start to load the memory init file in the HTML, in parallel with the JS
+      if js_xhr_loading:
+        js_xhr_resources['memory_init_file'] = os.path.basename(memfile)
       un_src()
       script_inline = ('''
         (function() {
@@ -1812,7 +1823,10 @@ try:
     };
     document.body.appendChild(script);
 ''' % (os.path.basename(asm_target), script_inline)
+        if js_xhr_loading:
+          js_xhr_scripts.insert(0, os.path.basename(asm_target))
       else:
+        assert js_xhr_loading == False, 'currently not supported asm_mods with js-xhr-loading'
         # may need to modify the asm code, load it as text, modify, and load asynchronously
         script_inline = '''
     var codeXHR = new XMLHttpRequest();
@@ -1840,10 +1854,60 @@ try:
 
     html = open(target, 'w')
     assert (script_src or script_inline) and not (script_src and script_inline)
-    if script_src:
-      script_replacement = '<script async type="text/javascript" src="%s"></script>' % script_src
+    if js_xhr_loading:
+      script_replacement = '  <script>\n'
+      if js_xhr_resources['memory_init_file']:
+        script_replacement += '''
+    (function() {
+      var memoryInitializer = '%s';
+      if (typeof Module['locateFile'] === 'function') {
+        memoryInitializer = Module['locateFile'](memoryInitializer);
+      } else if (Module['memoryInitializerPrefixURL']) {
+        memoryInitializer = Module['memoryInitializerPrefixURL'] + memoryInitializer;
+      }
+      var xhr = Module['memoryInitializerRequest'] = new XMLHttpRequest();
+      xhr.open('GET', memoryInitializer, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.send(null);
+    })();''' % js_xhr_resources['memory_init_file'];
+      script_files = '[' + (',').join(["'" + x + "'" for x in js_xhr_scripts]) + ']'
+      script_replacement += '''
+    function js_xhr_loading() {
+      var script_files = %s;
+      var last_run_index = 0;
+      var loaded_scripts = [];
+      var run_script = function() {
+        while(loaded_scripts[last_run_index]) {
+          var script = document.createElement("script");
+          script.text = loaded_scripts[last_run_index];
+          document.body.appendChild(script);
+          console.log("added");
+          last_run_index++;
+        }
+      };
+      for(var i = 0; i < script_files.length; i++) {
+        (function(i) {
+          var file = script_files[i];
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', file, false);
+          xhr.onreadystatechange = function() {
+            if(xhr.readyState == 4) {
+              console.log('loaded', file, xhr.responseText.length);
+              loaded_scripts[i] = xhr.responseText;
+              run_script();
+            }
+          };
+          xhr.send();
+        })(i);
+      }
+    }
+    js_xhr_loading();
+  </script>''' % script_files
     else:
-      script_replacement = '<script>\n%s\n</script>' % script_inline
+      if script_src:
+        script_replacement = '<script async type="text/javascript" src="%s"></script>' % script_src
+      else:
+        script_replacement = '<script>\n%s\n</script>' % script_inline
     html.write(shell.replace('{{{ SCRIPT }}}', script_replacement))
     html.close()
   else:
