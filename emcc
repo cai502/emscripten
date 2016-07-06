@@ -418,6 +418,7 @@ try:
   use_preload_plugins = False
   proxy_to_worker = False
   js_xhr_loading = True
+  js_manual_loading = True
   default_object_extension = '.o'
   valid_abspaths = []
   frameworks = []
@@ -1871,8 +1872,13 @@ try:
       xhr.send(null);
     })();''' % js_xhr_resources['memory_init_file'];
       script_files = '[' + (',').join(["'" + x + "'" for x in js_xhr_scripts]) + ']'
+      if js_manual_loading:
+        script_replacement += '''
+    function js_xhr_loading() {'''
+      else:
+        script_replacement += '''
+    (function() {'''
       script_replacement += '''
-    function js_xhr_loading() {
       var script_files = %s;
       var last_run_index = 0;
       var loaded_scripts = [];
@@ -1881,7 +1887,6 @@ try:
           var script = document.createElement("script");
           script.text = loaded_scripts[last_run_index];
           document.body.appendChild(script);
-          console.log("added");
           last_run_index++;
         }
       };
@@ -1892,17 +1897,21 @@ try:
           xhr.open('GET', file, false);
           xhr.onreadystatechange = function() {
             if(xhr.readyState == 4) {
-              console.log('loaded', file, xhr.responseText.length);
               loaded_scripts[i] = xhr.responseText;
               run_script();
             }
           };
           xhr.send();
         })(i);
-      }
+      }''' % script_files
+      if js_manual_loading:
+        script_replacement += '''
     }
-    js_xhr_loading();
-  </script>''' % script_files
+    </script>'''
+      else:
+        script_replacement += '''
+    })();
+    </script>''';
     else:
       if script_src:
         script_replacement = '<script async type="text/javascript" src="%s"></script>' % script_src
