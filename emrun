@@ -402,7 +402,7 @@ class HTTPWebServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
       # If we detect that the page is not running with emrun enabled, print a warning message.
       if not emrun_not_enabled_nag_printed and page_last_served_time is not None:
         time_since_page_serve = now - page_last_served_time
-        if not have_received_messages and time_since_page_serve > 10:
+        if not have_received_messages and time_since_page_serve > 20:
           logi('The html page you are running is not emrun-capable. Stdout, stderr and exit(returncode) capture will not work. Recompile the application with the --emrun linker flag to enable this, or pass --no_emrun_detect to emrun to hide this check.')
           emrun_not_enabled_nag_printed = True
 
