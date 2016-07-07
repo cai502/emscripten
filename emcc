@@ -417,8 +417,8 @@ try:
   no_heap_copy = False
   use_preload_plugins = False
   proxy_to_worker = False
-  js_xhr_loading = True
-  js_manual_loading = True
+  js_xhr_loading = False
+  js_manual_loading = False
   default_object_extension = '.o'
   valid_abspaths = []
   frameworks = []
@@ -639,6 +639,12 @@ try:
       newargs[i+1] = ''
     elif newargs[i] == '--proxy-to-worker':
       proxy_to_worker = True
+      newargs[i] = ''
+    elif newargs[i] == '--js-xhr-loading':
+      js_xhr_loading = True
+      newargs[i] = ''
+    elif newargs[i] == '--js-manual-loading':
+      js_manual_loading = True
       newargs[i] = ''
     elif newargs[i] == '--valid-abspath':
       valid_abspaths.append(newargs[i+1])
