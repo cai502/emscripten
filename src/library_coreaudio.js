@@ -42,21 +42,41 @@ var LibraryCoreAudio = {
     audioBuffer_sampleRate: function(name) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
+        
+        if(!audioBuffer) {
+            Module.printErr("audioBuffer not found");
+            return 0.0;
+        }
         return audioBuffer.sampleRate;
     },
     audioBuffer_length: function(name) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
+        
+        if(!audioBuffer) {
+            Module.printErr("audioBuffer not found");
+            return 0;
+        }
         return audioBuffer.length;
     },
     audioBuffer_numberOfChannels: function(name) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
+        
+        if(!audioBuffer) {
+            Module.printErr("audioBuffer not found");
+            return 0;
+        }
         return audioBuffer.numberOfChannels;
     },
     audioBuffer_read: function(name, channels, bytes, data) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
+        
+        if(!audioBuffer) {
+            Module.printErr("audioBuffer not found");
+            return;
+        }
         
         var dat = [];
         for(var ch = 0; ch < channels; ch++)
@@ -83,10 +103,16 @@ var LibraryCoreAudio = {
     // audipPlayer* are used from AVAudioPlayer in AVFoundation
     audioPlayer_create: function(name) {
         var _name = Pointer_stringify(name);
-        var playerId = CoreAudio.playerIdCounter++;
+        var audioBuffer = CoreAudio.audioBuffers[_name];
         
+        if(!audioBuffer) {
+            Module.printErr("audioBuffer not found");
+            return 0;
+        }
+        
+        var playerId = CoreAudio.playerIdCounter++;
         CoreAudio.audioPlayers[playerId] = {
-            buffer: CoreAudio.audioBuffers[_name],
+            buffer: audioBuffer,
             volume: 1.0,
             numberOfLoops: 1,
             beginAt: 0.0,
