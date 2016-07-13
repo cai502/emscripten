@@ -137,7 +137,8 @@ var LibraryManager = {
       'library_vr.js',
       'library_font.js',
       'library_webview.js',
-      'library_objc.js'
+      'library_objc.js',
+      'library_coreaudio.js'
     ]).concat(additionalLibraries);
 
     if(NATIVE_LIBDISPATCH) {
