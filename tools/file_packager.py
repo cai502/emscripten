@@ -528,8 +528,29 @@ if has_preloaded:
           compressedData.data = byteArray;
           assert(typeof LZ4 === 'object', 'LZ4 not present - was your app build with  -s LZ4=1  ?');
           LZ4.loadPackage({ 'metadata': metadata, 'compressedData': compressedData });
+          %s
           Module['removeRunDependency']('datafile_%s');
-    ''' % (meta, data_target)
+    ''' % (meta, '''
+          var files = metadata.files;
+          for (i = 0; i < files.length; ++i) {
+            var fullname = files[i].filename;
+            var handled = false;
+            Module['preloadPlugins'].forEach(function(plugin) {
+              if (handled) return;
+              if (plugin['canHandle'](fullname)) {
+                var dep = getUniqueRunDependency('cp ' + fullname);
+                var byteArray = FS.readFile(fullname);
+                addRunDependency(dep);
+                plugin['handle'](byteArray, fullname, function() {
+                  removeRunDependency(dep);
+                }, function() {
+                  removeRunDependency(dep);
+                });
+                handled = true;
+              }
+            });
+          }
+    ''' if use_preload_plugins else '', data_target)
 
   package_uuid = uuid.uuid4();
   package_name = data_target
