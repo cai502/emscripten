@@ -20,7 +20,8 @@ var LibraryCoreAudio = {
                     return name.substr(-4) in { '.caf': 1, '.ogg': 1, '.wav': 1, '.mp3': 1 };
                 },
                 handle: function(byteArray, name, onload, onerror) {
-                    CoreAudio.context.decodeAudioData(Uint8Array.from(byteArray).buffer, function(decoded){
+                    var ui8Array = new Uint8Array(byteArray);
+                    CoreAudio.context.decodeAudioData(ui8Array.buffer, function(decoded){
                         CoreAudio.audioBuffers[name] = decoded;
                         if(onload) onload(byteArray);
                     },
