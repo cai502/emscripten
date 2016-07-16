@@ -135,7 +135,7 @@ var LibraryCoreAudio = {
         var beginAt = player.beginAt = CoreAudio.context.currentTime + delay;
         var offset = player.offset;
         if(player.numberOfLoops > 0) {
-            source.loop = true;
+            source.loop = false;
             var duration = player.buffer.duration;
             source.start(beginAt, offset, player.numberOfLoops*duration);
         } else {
