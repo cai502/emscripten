@@ -30,6 +30,17 @@ var LibraryCoreAudio = {
                     });
                 }
             });
+
+            // to avoid iOS's restriction, we need to play some sound on touch"END"
+            window.addEventListener('touchend', function unlock() {
+                window.removeEventListener('touchend', unlock);
+                var buffer = CoreAudio.context.createBuffer(1, 1, 22050);
+                var source = CoreAudio.context.createBufferSource();
+                source.buffer = buffer;
+                source.connect(CoreAudio.context.destination);
+                source.noteOn(0);
+            }, false);
+
         },
         
         calcPosition: function(now, begin, duration) {
