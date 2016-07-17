@@ -40,7 +40,10 @@ var NSNetwork = {
     _xhr_send: function(id, data) {
         var xhr = NSNetwork.xhrs[id];
         //var data = Pointer_stringify(data); // binary
-        xhr.send();
+        try {
+            xhr.send();
+        } catch(e) {
+        }
     },
     _xhr_get_ready_state: function(id) {
         var xhr = NSNetwork.xhrs[id];
