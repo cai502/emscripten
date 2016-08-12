@@ -176,6 +176,7 @@ uint16_t ntohs(uint16_t);
 
 #define IN_LOOPBACKNET 127
 
+#define IN_LINKLOCALNETNUM  (u_int32_t)0xA9FE0000 /* 169.254.0.0 */
 
 #define IP_TOS             1
 #define IP_TTL             2
