@@ -7172,6 +7172,7 @@ var LibraryGL = {
   glDeleteFramebuffersOES : 'glDeleteFramebuffers',
   glDeleteRenderbuffersOES : 'glDeleteRenderbuffers',
   glFramebufferTexture2DOES: 'glFramebufferTexture2D',
+  glBlendEquationOES: 'glBlendEquation',
 
 #else // LEGACY_GL_EMULATION
 
