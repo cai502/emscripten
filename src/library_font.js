@@ -88,6 +88,7 @@ var LibraryA2OFont = {
         var rect = A2OFont.transformRect(a, b, c, d, 0, 0, metrics.width, metrics.height);
         var w = rect.size.width|0;
         var h = rect.size.height|0;
+        if(w == 0 || h == 0) return 0;
         canvas.width = w;
         canvas.height = h;
 
