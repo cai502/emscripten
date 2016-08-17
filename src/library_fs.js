@@ -1223,6 +1223,11 @@ mergeInto(LibraryManager.library, {
       FS.mkdir('/tmp');
       FS.mkdir('/home');
       FS.mkdir('/home/web_user');
+      FS.mkdir('/home/web_user/Documents');
+      FS.mkdir('/home/web_user/Documents/Inbox');
+      FS.mkdir('/home/web_user/Library');
+      FS.mkdir('/home/web_user/Library/Cache');
+      FS.mkdir('/home/web_user/tmp');
       if(ENVIRONMENT_IS_WEB) {
         FS.mount(IDBFS, {}, '/home/web_user');
         addRunDependency('synchomefs');
