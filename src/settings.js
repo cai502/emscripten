@@ -233,6 +233,7 @@ var OPENAL_DEBUG = 0; // Print out debugging information from our OpenAL impleme
 var GL_ASSERTIONS = 0; // Adds extra checks for error situations in the GL library. Can impact performance.
 var GL_DEBUG = 0; // Print out all calls into WebGL. As with LIBRARY_DEBUG, you can set a runtime
                   // option, in this case GL.debug.
+var GL_TRACE = 0;
 var GL_TESTING = 0; // When enabled, sets preserveDrawingBuffer in the context, to allow tests to work (but adds overhead)
 var GL_MAX_TEMP_BUFFER_SIZE = 2097152; // How large GL emulation temp buffers are
 var GL_UNSAFE_OPTS = 1; // Enables some potentially-unsafe optimizations in GL emulation code

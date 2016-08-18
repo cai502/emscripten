@@ -7650,6 +7650,17 @@ keys(LibraryGL).forEach(function(x) {
   copyLibEntry(y, x);
 });
 
+#if GL_TRACE
+keys(LibraryGL).forEach(function(x) {
+  if (x.substr(-6) == '__deps' || x.substr(-9) == '__postset' || x.substr(-5) == '__sig' || x.substr(-5) == '__asm' || x.substr(0, 2) != 'gl') return;
+  var func = LibraryGL[x];
+  if(typeof func !== "function") return;
+  funcString = func.toString();
+  funcString = funcString.replace('{','{Module.printErr("GLTRACE: '+x+'");');
+  LibraryGL[x] = eval('(function() { return '+funcString+'})()');
+});
+#endif
+
 // Final merge
 mergeInto(LibraryManager.library, LibraryGL);
 
