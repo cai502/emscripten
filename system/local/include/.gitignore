@@ -9,3 +9,5 @@ cairo
 pixman-1
 openssl
 freetype2
+ogg
+vorbis
