@@ -1804,7 +1804,7 @@ class JS:
   try {
     %sModule["dynCall_%s"](%s);
   } catch(e) {
-    if (typeof e !== 'number' && e !== 'longjmp') throw e;
+    if (e.constructor !== Error && e !== 'longjmp') throw e;
     asm["setThrew"](1, 0);
   }
 }''' % ((' invoke_' + sig) if named else '', args, 'return ' if sig[0] != 'v' else '', sig, args)
