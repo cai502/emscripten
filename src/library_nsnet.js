@@ -37,11 +37,14 @@ var NSNetwork = {
         if(key == "User-Agent") return;
         xhr.setRequestHeader(key, value);
     },
-    _xhr_send: function(id, data) {
+    _xhr_send: function(id, data, length) {
         var xhr = NSNetwork.xhrs[id];
-        //var data = Pointer_stringify(data); // binary
         try {
-            xhr.send();
+            if(data && length) {
+                xhr.send(HEAP8.subarray(data, data+length));
+            } else {
+                xhr.send();
+            }
         } catch(e) {
         }
     },
