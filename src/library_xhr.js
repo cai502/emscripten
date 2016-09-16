@@ -1,16 +1,16 @@
-var NSNetwork = {
-    $NSNetwork__deps: ["dispatch_async_f"],
-    $NSNetwork: {
+var XHRWrapper = {
+    $XHRWrapper__deps: ["dispatch_async_f"],
+    $XHRWrapper: {
         nextId: 0,
         xhrs: {}
     },
     _xhr_create: function() {
         if(typeof XMLHttpRequest === "undefined" && ENVIRONMENT_IS_NODE) XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
-        var id = NSNetwork.nextId++;
-        NSNetwork.xhrs[id] = new XMLHttpRequest();
+        var id = XHRWrapper.nextId++;
+        XHRWrapper.xhrs[id] = new XMLHttpRequest();
     },
     _xhr_open: function(id, method, url, async, user, pass) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         var method = Pointer_stringify(method);
         var url = Pointer_stringify(url);
         var async = async != 0;
@@ -19,26 +19,26 @@ var NSNetwork = {
         xhr.open(method, url, async, user, pass);
     },
     _xhr_set_onload: function(id, queue, ctx, func) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         xhr.onload = function(e) {
             _dispatch_async_f(queue, ctx, func);
         }
     },
     _xhr_set_onerror: function(id, queue, ctx, func) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         xhr.onerror = function(e) {
             _dispatch_async_f(queue, ctx, func);
         }
     },
     _xhr_set_request_header: function(id, key, value) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         var key = Pointer_stringify(key);
         var value = Pointer_stringify(value);
         if(key == "User-Agent") return;
         xhr.setRequestHeader(key, value);
     },
     _xhr_send: function(id, data, length) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         try {
             if(data && length) {
                 xhr.send(HEAPU8.subarray(data, data+length));
@@ -50,15 +50,15 @@ var NSNetwork = {
         }
     },
     _xhr_get_ready_state: function(id) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         return xhr.readyState;
     },
     _xhr_get_status: function(id) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         return xhr.status;
     },
     _xhr_get_status_text: function(id, text) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         var statusText = xhr.statusText 
         var length = statusText.length;
         var buf = _malloc(length);
@@ -67,7 +67,7 @@ var NSNetwork = {
         return length;
     },
     _xhr_get_response_text: function(id, data) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         var responseText = xhr.responseText;
         var length = responseText.length;
         var buf = _malloc(length);
@@ -79,7 +79,7 @@ var NSNetwork = {
         return length;
     },
     _xhr_get_all_response_headers: function(id, data) {
-        var xhr = NSNetwork.xhrs[id];
+        var xhr = XHRWrapper.xhrs[id];
         var headers = xhr.getAllResponseHeaders();
         var length = headers.length+1;
         var buf = _malloc(length);
@@ -89,8 +89,8 @@ var NSNetwork = {
     }
 };
 
-autoAddDeps(NSNetwork, '$NSNetwork');
-mergeInto(LibraryManager.library, NSNetwork);
+autoAddDeps(XHRWrapper, '$XHRWrapper');
+mergeInto(LibraryManager.library, XHRWrapper);
 
 DEFAULT_LIBRARY_FUNCS_TO_INCLUDE.splice(-1,0,
 "_xhr_create",
