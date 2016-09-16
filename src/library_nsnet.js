@@ -41,11 +41,12 @@ var NSNetwork = {
         var xhr = NSNetwork.xhrs[id];
         try {
             if(data && length) {
-                xhr.send(HEAP8.subarray(data, data+length));
+                xhr.send(HEAPU8.subarray(data, data+length));
             } else {
                 xhr.send();
             }
         } catch(e) {
+            console.log(e);
         }
     },
     _xhr_get_ready_state: function(id) {
