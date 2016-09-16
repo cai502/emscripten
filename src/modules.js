@@ -133,7 +133,7 @@ var LibraryManager = {
       'library_signals.js',
       'library_idbstore.js',
       'library_async.js',
-      'library_nsnet.js',
+      'library_xhr.js',
       'library_vr.js',
       'library_font.js',
       'library_webview.js',
