@@ -60,7 +60,7 @@ var NSNetwork = {
     _xhr_get_status_text: function(id, text) {
         var xhr = NSNetwork.xhrs[id];
         var statusText = xhr.statusText 
-        var length = statusText.length+1;
+        var length = statusText.length;
         var buf = _malloc(length);
         writeAsciiToMemory(statusText, buf);
         {{{ makeSetValue('text', '0', 'buf', 'i32') }}}
@@ -69,13 +69,12 @@ var NSNetwork = {
     _xhr_get_response_text: function(id, data) {
         var xhr = NSNetwork.xhrs[id];
         var responseText = xhr.responseText;
-        var length = responseText.length+1;
+        var length = responseText.length;
         var buf = _malloc(length);
         for(var i = 0; i < length; i++) {
             var c = responseText.charCodeAt(i) & 0xff;
             {{{ makeSetValue('buf', 'i', 'c', 'i8') }}}
         }
-        {{{ makeSetValue('buf', 'i', '0', 'i8') }}}
         {{{ makeSetValue('data', '0', 'buf', 'i32') }}}
         return length;
     },
