@@ -4,6 +4,8 @@ extern void _xhr_clean(int xhr);
 extern void _xhr_set_onload(int xhr, dispatch_queue_t queue, void *ctx, void func(void*));
 extern void _xhr_set_onerror(int xhr, dispatch_queue_t queue, void *ctx, void func(void*));
 extern void _xhr_set_request_header(int xhr, const char *key, const char *value);
+extern void _xhr_set_with_credentials(int xhr, int with_credentials);
+extern void _xhr_set_timeout(int xhr, int timeout);
 extern void _xhr_send(int xhr, const char *data, int length);
 extern int _xhr_get_ready_state(int xhr);
 extern int _xhr_get_status(int xhr);

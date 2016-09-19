@@ -1,5 +1,5 @@
 var XHRWrapper = {
-    $XHRWrapper__deps: ["dispatch_async_f"],
+    $XHRWrapper__deps: ["dispatch_async_f","dispatch_sync_f"],
     $XHRWrapper: {
         nextId: 0,
         xhrs: {}
@@ -13,21 +13,33 @@ var XHRWrapper = {
         var xhr = XHRWrapper.xhrs[id];
         var method = Pointer_stringify(method);
         var url = Pointer_stringify(url);
-        var async = async != 0;
+        async = !!async;
         var user = user ? Pointer_stringify(user) : null;
         var pass = pass ? Pointer_stringify(pass) : null;
         xhr.open(method, url, async, user, pass);
+        xhr.async = async;
+    },
+    _xhr_clean: function(id) {
+        delete XHRWrapper.xhrs[id];
     },
     _xhr_set_onload: function(id, queue, ctx, func) {
         var xhr = XHRWrapper.xhrs[id];
         xhr.onload = function(e) {
-            _dispatch_async_f(queue, ctx, func);
+            if(xhr.async) {
+                _dispatch_async_f(queue, ctx, func);
+            } else {
+                _dispatch_sync_f(queue, ctx, func);
+            }
         }
     },
     _xhr_set_onerror: function(id, queue, ctx, func) {
         var xhr = XHRWrapper.xhrs[id];
         xhr.onerror = function(e) {
-            _dispatch_async_f(queue, ctx, func);
+            if(xhr.async) {
+                _dispatch_async_f(queue, ctx, func);
+            } else {
+                _dispatch_sync_f(queue, ctx, func);
+            }
         }
     },
     _xhr_set_request_header: function(id, key, value) {
@@ -36,6 +48,14 @@ var XHRWrapper = {
         var value = Pointer_stringify(value);
         if(key == "User-Agent") return;
         xhr.setRequestHeader(key, value);
+    },
+    _xhr_set_with_credentials: function(id, withCredentials) {
+        var xhr = XHRWrapper.xhrs[id];
+        xhr.withCredentials = !!withCredentials;
+    },
+    _xhr_set_timeout: function(id, timeout) {
+        var xhr = XHRWrapper.xhrs[id];
+        xhr.timeout = timeout;
     },
     _xhr_send: function(id, data, length) {
         var xhr = XHRWrapper.xhrs[id];
@@ -95,9 +115,12 @@ mergeInto(LibraryManager.library, XHRWrapper);
 DEFAULT_LIBRARY_FUNCS_TO_INCLUDE.splice(-1,0,
 "_xhr_create",
 "_xhr_open",
+"_xhr_clean",
 "_xhr_set_onload",
 "_xhr_set_onerror",
 "_xhr_set_request_header",
+"_xhr_set_with_credentials",
+"_xhr_set_timeout",
 "_xhr_send",
 "_xhr_get_ready_state",
 "_xhr_get_status",
