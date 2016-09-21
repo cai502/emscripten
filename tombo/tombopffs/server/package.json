@@ -1,0 +1,21 @@
+{
+  "name": "tombopffs-server",
+  "version": "0.0.1",
+  "description": "Tombo platform file system server",
+  "main": "server.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "mocha",
+    "start": "node server.js"
+  },
+  "author": "Tasuku SUENAGA",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^0.8.0"
+  },
+  "devDependencies": {
+    "mocha": "^2.4.5"
+  }
+}
