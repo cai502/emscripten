@@ -8,6 +8,7 @@ var XHRWrapper = {
         if(typeof XMLHttpRequest === "undefined" && ENVIRONMENT_IS_NODE) XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
         var id = XHRWrapper.nextId++;
         XHRWrapper.xhrs[id] = new XMLHttpRequest();
+        return id;
     },
     _xhr_open: function(id, method, url, async, user, pass) {
         var xhr = XHRWrapper.xhrs[id];
@@ -17,6 +18,7 @@ var XHRWrapper = {
         var user = user ? Pointer_stringify(user) : null;
         var pass = pass ? Pointer_stringify(pass) : null;
         xhr.open(method, url, async, user, pass);
+        xhr.overrideMimeType('text/plain; charset=x-user-defined');
         xhr.async = async;
     },
     _xhr_clean: function(id) {
