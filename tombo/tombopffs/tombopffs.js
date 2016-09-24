@@ -3,6 +3,7 @@
 module.exports = {
   $TOMBOPFFS__deps: ['$FS', '$MEMFS', '$PATH'],
   $TOMBOPFFS: {
+    debug: true,
     mount: function(mount) {
       // reuse all of the core MEMFS functionality
       return MEMFS.mount.apply(null, arguments);
@@ -50,6 +51,14 @@ module.exports = {
 
         entries[path] = { timestamp: stat.mtime };
       }
+
+      /*
+      if (TOMBOPFFS.debug) {
+        console.groupCollapsed('TOMBOPFFS.getMEMFSEntries()');
+        console.dir(entries);
+        console.groupEnd();
+      }
+      */
 
       return callback(null, { type: 'memfs', entries: entries });
     },
