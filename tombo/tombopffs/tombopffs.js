@@ -4,19 +4,22 @@ module.exports = {
   $TOMBOPFFS__deps: ['$FS', '$MEMFS', '$PATH'],
   $TOMBOPFFS: {
     debug: true,
+    remote_entries: {},
     mount: function(mount) {
       // reuse all of the core MEMFS functionality
       return MEMFS.mount.apply(null, arguments);
     },
     syncfs: function(mount, populate, callback) {
-      TOMBOPFFS.getMEMFSEntries(mount, function(err, local) {
+      TOMBOPFFS.getMEMFSEntries(mount, function(err, memfs) {
         if (err) return callback(err);
 
-        TOMBOPFFS.getRemoteEntries(mount, function(err, local) {
+        TOMBOPFFS.getRemoteEntries(mount, function(err, remote) {
           if (err) return callback(err);
 
-          // TODO: implement
-          callback(null);
+          var source = populate ? remote : memfs;
+          var destination = populate ? memfs : remote;
+
+          TOMBOPFFS.reconcile(source, destination, callback);
         });
       });
     },
@@ -63,8 +66,13 @@ module.exports = {
       return callback(null, { type: 'memfs', entries: entries });
     },
     getRemoteEntries: function(mount, callback) {
-      let entries = [];
-      return callback(null, { type: 'remote', entries: entries });
+      // NOTE: currently, this function only returns local variable,
+      //       but I made that async for near future.
+      return callback(null, { type: 'remote', entries: TOMBOPFFS.remote_entries });
+    },
+    reconcile: function(source, destination, callback) {
+      // TODO: implement
+      callback(null);
     }
   }
 };
