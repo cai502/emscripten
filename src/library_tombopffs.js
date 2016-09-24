@@ -124,7 +124,99 @@ var tombopffs =
 	      return callback(null, { type: 'remote', entries: TOMBOPFFS.remote_entries });
 	    },
 	    reconcile: function reconcile(source, destination, callback) {
-	      // TODO: implement
+	      var total_entries = 0;
+
+	      var replace_entries = [];
+	      Object.keys(source.entries).forEach(function (key) {
+	        var e1 = source.entries[key];
+	        var e2 = destination.entries[key];
+	        if (!e2 || e1.timestamp > e2.timestamp) {
+	          replace_entries.push(key);
+	          total_entries++;
+	        }
+	      });
+
+	      var delete_entries = [];
+	      Object.keys(destination.entries).forEach(function (key) {
+	        if (!source.entries[key]) {
+	          delete_entries.push(key);
+	          total_entries++;
+	        }
+	      });
+
+	      if (total_entries == 0) {
+	        return callback(null);
+	      }
+
+	      /*
+	      if (TOMBOPFFS.debug) {
+	        console.groupCollapsed('TOMBOPFFS.reconcile()');
+	        console.log('replace entries:');
+	        console.table(replace_entries);
+	        console.log('delete entries:');
+	        console.table(delete_entries);
+	        console.log('destination:');
+	        console.log(destination);
+	        console.groupEnd();
+	      }
+	      */
+
+	      // TODO: send entries
+
+	      var _iteratorNormalCompletion = true;
+	      var _didIteratorError = false;
+	      var _iteratorError = undefined;
+
+	      try {
+	        for (var _iterator = replace_entries[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+	          var key = _step.value;
+
+	          if (destination.entries.hasOwnProperty(key)) {
+	            destination.entries[key].timestamp = source.entries[key].timestamp;
+	          } else {
+	            destination.entries[key] = { timestamp: source.entries[key].timestamp };
+	          }
+	        }
+	      } catch (err) {
+	        _didIteratorError = true;
+	        _iteratorError = err;
+	      } finally {
+	        try {
+	          if (!_iteratorNormalCompletion && _iterator.return) {
+	            _iterator.return();
+	          }
+	        } finally {
+	          if (_didIteratorError) {
+	            throw _iteratorError;
+	          }
+	        }
+	      }
+
+	      var _iteratorNormalCompletion2 = true;
+	      var _didIteratorError2 = false;
+	      var _iteratorError2 = undefined;
+
+	      try {
+	        for (var _iterator2 = delete_entries[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+	          var _key = _step2.value;
+
+	          destination.entries.delete(_key);
+	        }
+	      } catch (err) {
+	        _didIteratorError2 = true;
+	        _iteratorError2 = err;
+	      } finally {
+	        try {
+	          if (!_iteratorNormalCompletion2 && _iterator2.return) {
+	            _iterator2.return();
+	          }
+	        } finally {
+	          if (_didIteratorError2) {
+	            throw _iteratorError2;
+	          }
+	        }
+	      }
+
 	      callback(null);
 	    }
 	  }

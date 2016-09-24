@@ -71,7 +71,57 @@ module.exports = {
       return callback(null, { type: 'remote', entries: TOMBOPFFS.remote_entries });
     },
     reconcile: function(source, destination, callback) {
-      // TODO: implement
+      let total_entries = 0;
+
+      let replace_entries = [];
+      Object.keys(source.entries).forEach(function (key) {
+        var e1 = source.entries[key];
+        var e2 = destination.entries[key];
+        if (!e2 || e1.timestamp > e2.timestamp) {
+          replace_entries.push(key);
+          total_entries++;
+        }
+      });
+
+      var delete_entries = [];
+      Object.keys(destination.entries).forEach(function (key) {
+        if (!source.entries[key]) {
+          delete_entries.push(key);
+          total_entries++;
+        }
+      });
+
+      if (total_entries == 0) {
+        return callback(null);
+      }
+
+      /*
+      if (TOMBOPFFS.debug) {
+        console.groupCollapsed('TOMBOPFFS.reconcile()');
+        console.log('replace entries:');
+        console.table(replace_entries);
+        console.log('delete entries:');
+        console.table(delete_entries);
+        console.log('destination:');
+        console.log(destination);
+        console.groupEnd();
+      }
+      */
+
+      // TODO: send entries
+
+      for (const key of replace_entries) {
+        if (destination.entries.hasOwnProperty(key)) {
+          destination.entries[key].timestamp = source.entries[key].timestamp;
+        } else {
+          destination.entries[key] = { timestamp: source.entries[key].timestamp };
+        }
+      }
+
+      for (const key of delete_entries) {
+        destination.entries.delete(key);
+      }
+
       callback(null);
     }
   }
