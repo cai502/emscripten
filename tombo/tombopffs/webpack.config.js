@@ -2,7 +2,7 @@ const webpack = require('webpack');
 const WrapperPlugin = require('wrapper-webpack-plugin');
 
 const isProduction = process.env.NODE_ENV === 'production';
-const outputFileName = `../src/library_tombopffs${isProduction ? '.min' : ''}.js`;
+const outputFileName = `../../src/library_tombopffs${isProduction ? '.min' : ''}.js`;
 
 const babel_plugins = [];
 const webpack_plugins = [
