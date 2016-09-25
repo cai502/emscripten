@@ -1,13 +1,37 @@
 'use strict';
 
+// TODO: Use dffptch to reduce difference
+//       https://github.com/paldepind/dffptch
+
+const TomboWebSocket = require('./tombo-web-socket');
+
 module.exports = {
   $TOMBOPFFS__deps: ['$FS', '$MEMFS', '$PATH'],
   $TOMBOPFFS: {
     debug: true,
     remote_entries: {},
+    websocket: null,
     mount: function(mount) {
       // reuse all of the core MEMFS functionality
       return MEMFS.mount.apply(null, arguments);
+    },
+    connectSocket: function(url) {
+      return new Promise((resolve, reject) => {
+        if (TOMBOPFFS.websocket) {
+          return resolve(TOMBOPFFS.websocket);
+        }
+        let websocket = new TomboWebSocket(url);
+        TOMBOPFFS.websocket = websocket;
+        websocket.on('message', (message) => {
+          console.log('MESSAGE: %s', message);
+        });
+        websocket.on('open', () => {
+          resolve(websocket);
+        });
+        websocket.on('error', (error) => {
+          console.log(error);
+        });
+      });
     },
     syncfs: function(mount, populate, callback) {
       TOMBOPFFS.getMEMFSEntries(mount, function(err, memfs) {
@@ -108,21 +132,27 @@ module.exports = {
       }
       */
 
-      // TODO: send entries
+      // TODO: set URL
+      TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then((socket) => {
+        // TODO: send entries
+        socket.send('"test"');
 
-      for (const key of replace_entries) {
-        if (destination.entries.hasOwnProperty(key)) {
-          destination.entries[key].timestamp = source.entries[key].timestamp;
-        } else {
-          destination.entries[key] = { timestamp: source.entries[key].timestamp };
+        for (const key of replace_entries) {
+          if (destination.entries.hasOwnProperty(key)) {
+            destination.entries[key].timestamp = source.entries[key].timestamp;
+          } else {
+            destination.entries[key] = { timestamp: source.entries[key].timestamp };
+          }
         }
-      }
 
-      for (const key of delete_entries) {
-        destination.entries.delete(key);
-      }
+        for (const key of delete_entries) {
+          destination.entries.delete(key);
+        }
 
-      callback(null);
+        callback(null);
+      }).catch((error) => {
+        callback(error);
+      });
     }
   }
 };

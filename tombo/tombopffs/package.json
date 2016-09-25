@@ -13,6 +13,7 @@
   "author": "Tasuku SUENAGA",
   "license": "MIT",
   "dependencies": {
+    "minivents": "^1.2.0"
   },
   "devDependencies": {
     "babel-core": "^6.7.6",

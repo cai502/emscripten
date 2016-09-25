@@ -50,18 +50,42 @@ var tombopffs =
 
 /***/ },
 /* 1 */
-/***/ function(module, exports) {
+/***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
+
+	// TODO: Use dffptch to reduce difference
+	//       https://github.com/paldepind/dffptch
+
+	var TomboWebSocket = __webpack_require__(2);
 
 	module.exports = {
 	  $TOMBOPFFS__deps: ['$FS', '$MEMFS', '$PATH'],
 	  $TOMBOPFFS: {
 	    debug: true,
 	    remote_entries: {},
+	    websocket: null,
 	    mount: function mount(_mount) {
 	      // reuse all of the core MEMFS functionality
 	      return MEMFS.mount.apply(null, arguments);
+	    },
+	    connectSocket: function connectSocket(url) {
+	      return new Promise(function (resolve, reject) {
+	        if (TOMBOPFFS.websocket) {
+	          return resolve(TOMBOPFFS.websocket);
+	        }
+	        var websocket = new TomboWebSocket(url);
+	        TOMBOPFFS.websocket = websocket;
+	        websocket.on('message', function (message) {
+	          console.log('MESSAGE: %s', message);
+	        });
+	        websocket.on('open', function () {
+	          resolve(websocket);
+	        });
+	        websocket.on('error', function (error) {
+	          console.log(error);
+	        });
+	      });
 	    },
 	    syncfs: function syncfs(mount, populate, callback) {
 	      TOMBOPFFS.getMEMFSEntries(mount, function (err, memfs) {
@@ -161,66 +185,180 @@ var tombopffs =
 	      }
 	      */
 
-	      // TODO: send entries
+	      // TODO: set URL
+	      TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then(function (socket) {
+	        // TODO: send entries
+	        socket.send('"test"');
 
-	      var _iteratorNormalCompletion = true;
-	      var _didIteratorError = false;
-	      var _iteratorError = undefined;
+	        var _iteratorNormalCompletion = true;
+	        var _didIteratorError = false;
+	        var _iteratorError = undefined;
 
-	      try {
-	        for (var _iterator = replace_entries[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-	          var key = _step.value;
-
-	          if (destination.entries.hasOwnProperty(key)) {
-	            destination.entries[key].timestamp = source.entries[key].timestamp;
-	          } else {
-	            destination.entries[key] = { timestamp: source.entries[key].timestamp };
-	          }
-	        }
-	      } catch (err) {
-	        _didIteratorError = true;
-	        _iteratorError = err;
-	      } finally {
 	        try {
-	          if (!_iteratorNormalCompletion && _iterator.return) {
-	            _iterator.return();
+	          for (var _iterator = replace_entries[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+	            var key = _step.value;
+
+	            if (destination.entries.hasOwnProperty(key)) {
+	              destination.entries[key].timestamp = source.entries[key].timestamp;
+	            } else {
+	              destination.entries[key] = { timestamp: source.entries[key].timestamp };
+	            }
 	          }
+	        } catch (err) {
+	          _didIteratorError = true;
+	          _iteratorError = err;
 	        } finally {
-	          if (_didIteratorError) {
-	            throw _iteratorError;
+	          try {
+	            if (!_iteratorNormalCompletion && _iterator.return) {
+	              _iterator.return();
+	            }
+	          } finally {
+	            if (_didIteratorError) {
+	              throw _iteratorError;
+	            }
 	          }
 	        }
-	      }
 
-	      var _iteratorNormalCompletion2 = true;
-	      var _didIteratorError2 = false;
-	      var _iteratorError2 = undefined;
+	        var _iteratorNormalCompletion2 = true;
+	        var _didIteratorError2 = false;
+	        var _iteratorError2 = undefined;
 
-	      try {
-	        for (var _iterator2 = delete_entries[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-	          var _key = _step2.value;
-
-	          destination.entries.delete(_key);
-	        }
-	      } catch (err) {
-	        _didIteratorError2 = true;
-	        _iteratorError2 = err;
-	      } finally {
 	        try {
-	          if (!_iteratorNormalCompletion2 && _iterator2.return) {
-	            _iterator2.return();
+	          for (var _iterator2 = delete_entries[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+	            var _key = _step2.value;
+
+	            destination.entries.delete(_key);
 	          }
+	        } catch (err) {
+	          _didIteratorError2 = true;
+	          _iteratorError2 = err;
 	        } finally {
-	          if (_didIteratorError2) {
-	            throw _iteratorError2;
+	          try {
+	            if (!_iteratorNormalCompletion2 && _iterator2.return) {
+	              _iterator2.return();
+	            }
+	          } finally {
+	            if (_didIteratorError2) {
+	              throw _iteratorError2;
+	            }
 	          }
 	        }
-	      }
 
-	      callback(null);
+	        callback(null);
+	      }).catch(function (error) {
+	        callback(error);
+	      });
 	    }
 	  }
 	};
+
+/***/ },
+/* 2 */
+/***/ function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	var Events = __webpack_require__(3);
+
+	var TomboWebSocket = function () {
+	  function TomboWebSocket(url, protocol) {
+	    var _this = this;
+
+	    _classCallCheck(this, TomboWebSocket);
+
+	    Events(this);
+	    var ws = this.ws = new WebSocket(url, protocol);
+	    ws.onopen = function () {
+	      console.groupCollapsed('TomboWebSocket.onopen:');
+	      console.log('url');
+	      console.log(url);
+	      console.log('protocol');
+	      console.log(protocol);
+	      console.groupEnd();
+	      _this.emit('open');
+	    };
+	    ws.onerror = function (error) {
+	      console.groupCollapsed('TomboWebSocket.onerror:');
+	      console.log(error);
+	      console.groupEnd();
+	      _this.emit('error', error);
+	    };
+	    ws.onclose = function (e) {
+	      _this.emit('close', e);
+	    };
+	    ws.onmessage = function (msg) {
+	      var data = void 0;
+	      if (typeof msg.data === 'string') {
+	        data = JSON.parse(msg.data);
+	      } else {
+	        data = msg.data;
+	      }
+	      _this.emit('message', data);
+	    };
+	  }
+
+	  _createClass(TomboWebSocket, [{
+	    key: 'send',
+	    value: function send(msg) {
+	      if ((typeof msg === 'undefined' ? 'undefined' : _typeof(msg)) === 'object') {
+	        this.ws.send(JSON.stringify(msg));
+	      } else {
+	        this.ws.send(msg);
+	      }
+	    }
+	  }, {
+	    key: 'close',
+	    value: function close() {
+	      this.ws.close.apply(this.ws, arguments);
+	    }
+	  }]);
+
+	  return TomboWebSocket;
+	}();
+
+	module.exports = TomboWebSocket;
+
+/***/ },
+/* 3 */
+/***/ function(module, exports) {
+
+	function Events(target){
+	  var events = {}, i, list, args, A = Array;
+	  target = target || this
+	    /**
+	     *  On: listen to events
+	     */
+	    target.on = function(type, func, ctx){
+	      events[type] || (events[type] = [])
+	      events[type].push({f:func, c:ctx})
+	    }
+	    /**
+	     *  Off: stop listening to event / specific callback
+	     */
+	    target.off = function(type, func){
+	      list = events[type] || []
+	      i = list.length = func ? list.length : 0
+	      while(i-->0) func == list[i].f && list.splice(i,1)
+	    }
+	    /** 
+	     * Emit: send event, callbacks will be triggered
+	     */
+	    target.emit = function(){
+	      args = A.apply([], arguments)
+	      list = events[args.shift()] || []
+	      i = list.length
+	      for(j=0;j<i;j++) list[j].f.apply(list[j].c, args) 
+	    };
+	}
+	var u, module, cjs = module != u;
+	(cjs ? module : window)[(cjs ? 'exports' : 'Events')] = Events;
+
 
 /***/ }
 /******/ ]);mergeInto(LibraryManager.library, tombopffs);
