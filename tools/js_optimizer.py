@@ -1,4 +1,8 @@
 
+from toolchain_profiler import ToolchainProfiler
+if __name__ == '__main__':
+  ToolchainProfiler.record_process_start()
+
 import os, sys, subprocess, multiprocessing, re, string, json, shutil, logging
 import shared
 
@@ -25,7 +29,7 @@ func_sig = re.compile('function ([_\w$]+)\(')
 func_sig_json = re.compile('\["defun", ?"([_\w$]+)",')
 import_sig = re.compile('(var|const) ([_\w$]+ *=[^;]+);')
 
-NATIVE_OPTIMIZER = os.environ.get('EMCC_NATIVE_OPTIMIZER') or '1' # use native optimizer by default, unless disabled by EMCC_NATIVE_OPTIMIZER=0 in the env
+NATIVE_OPTIMIZER = os.environ.get('EMCC_NATIVE_OPTIMIZER') or '2' # use optimized native optimizer by default, unless disabled by EMCC_NATIVE_OPTIMIZER=0 in the env
 
 def split_funcs(js, just_split=False):
   if just_split: return map(lambda line: ('(json)', line), js.split('\n'))
@@ -71,9 +75,13 @@ def get_native_optimizer():
     sys.exit(1)
 
   # Allow users to override the location of the optimizer executable by setting an environment variable EMSCRIPTEN_NATIVE_OPTIMIZER=/path/to/optimizer(.exe)
-  if os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER') and len(os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER')) > 0: return os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER')
+  if os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER') and len(os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER')) > 0:
+    logging.debug('env forcing native optimizer at ' + os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER'))
+    return os.environ.get('EMSCRIPTEN_NATIVE_OPTIMIZER')
   # Also, allow specifying the location of the optimizer in .emscripten configuration file under EMSCRIPTEN_NATIVE_OPTIMIZER='/path/to/optimizer'
-  if hasattr(shared, 'EMSCRIPTEN_NATIVE_OPTIMIZER') and len(shared.EMSCRIPTEN_NATIVE_OPTIMIZER) > 0: return shared.EMSCRIPTEN_NATIVE_OPTIMIZER
+  if hasattr(shared, 'EMSCRIPTEN_NATIVE_OPTIMIZER') and len(shared.EMSCRIPTEN_NATIVE_OPTIMIZER) > 0:
+    logging.debug('config forcing native optimizer at ' + shared.EMSCRIPTEN_NATIVE_OPTIMIZER)
+    return shared.EMSCRIPTEN_NATIVE_OPTIMIZER
 
   FAIL_MARKER = shared.Cache.get_path('optimizer.building_failed')
   if os.path.exists(FAIL_MARKER):
@@ -152,6 +160,7 @@ def get_native_optimizer():
                                          shared.path_from_root('tools', 'optimizer', 'parser.cpp'),
                                          shared.path_from_root('tools', 'optimizer', 'simple_ast.cpp'),
                                          shared.path_from_root('tools', 'optimizer', 'optimizer.cpp'),
+                                         shared.path_from_root('tools', 'optimizer', 'optimizer-shared.cpp'),
                                          shared.path_from_root('tools', 'optimizer', 'optimizer-main.cpp'),
                                          '-O3', '-std=c++11', '-fno-exceptions', '-fno-rtti', '-o', output] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
             outs.append(out)
@@ -222,18 +231,18 @@ class Minifier:
     else:
       self.globs = []
 
-    temp_file = temp_files.get('.minifyglobals.js').name
-    f = open(temp_file, 'w')
-    f.write(shell)
-    f.write('\n')
-    f.write('// EXTRA_INFO:' + json.dumps(self.serialize()))
-    f.close()
+    with temp_files.get_file('.minifyglobals.js') as temp_file:
+      f = open(temp_file, 'w')
+      f.write(shell)
+      f.write('\n')
+      f.write('// EXTRA_INFO:' + json.dumps(self.serialize()))
+      f.close()
 
-    output = subprocess.Popen(self.js_engine +
-        [JS_OPTIMIZER, temp_file, 'minifyGlobals', 'noPrintMetadata'] +
-        (['minifyWhitespace'] if minify_whitespace else []) +
-        (['--debug'] if source_map else []),
-        stdout=subprocess.PIPE).communicate()[0]
+      output = subprocess.Popen(self.js_engine +
+          [JS_OPTIMIZER, temp_file, 'minifyGlobals', 'noPrintMetadata'] +
+          (['minifyWhitespace'] if minify_whitespace else []) +
+          (['--debug'] if source_map else []),
+          stdout=subprocess.PIPE).communicate()[0]
 
     assert len(output) > 0 and not output.startswith('Assertion failed'), 'Error in js optimizer: ' + output
     #print >> sys.stderr, "minified SHELL 3333333333333333", output, "\n44444444444444444444"
@@ -421,9 +430,6 @@ EMSCRIPTEN_FUNCS();
   else:
     filenames = []
 
-  if shared.Settings.WASM:
-    passes = filter(lambda p: p != 'minifyWhitespace', passes) # if we are going to wasmify the asm module, no need to minify it before hand
-
   if len(filenames) > 0:
     if not use_native(passes, source_map) or not get_native_optimizer():
       commands = map(lambda filename: js_engine +
@@ -442,6 +448,14 @@ EMSCRIPTEN_FUNCS();
       if DEBUG: print >> sys.stderr, 'splitting up js optimization into %d chunks, using %d cores  (total: %.2f MB)' % (len(chunks), cores, total_size/(1024*1024.))
       pool = multiprocessing.Pool(processes=cores)
       filenames = pool.map(run_on_chunk, commands, chunksize=1)
+      try:
+        # Shut down the pool, since otherwise processes are left alive and would only be lazily terminated,
+        # and in other parts of the toolchain we also build up multiprocessing pools.
+        pool.terminate()
+        pool.join()
+      except Exception, e:
+        # On Windows we get occassional "Access is denied" errors when attempting to tear down the pool, ignore these.
+        logging.debug('Attempting to tear down multiprocessing pool failed with an exception: ' + str(e))
     else:
       # We can't parallize, but still break into chunks to avoid uglify/node memory issues
       if len(chunks) > 1 and DEBUG: print >> sys.stderr, 'splitting up js optimization into %d chunks' % (len(chunks))
@@ -457,32 +471,35 @@ EMSCRIPTEN_FUNCS();
     end_asm = '// EMSCRIPTEN_END_ASM\n'
     cl_sep = 'wakaUnknownBefore(); var asm=wakaUnknownAfter(global,env,buffer)\n'
 
-    cle = temp_files.get('.cl.js').name
-    c = open(cle, 'w')
-    pre_1, pre_2 = pre.split(start_asm)
-    post_1, post_2 = post.split(end_asm)
-    c.write(pre_1)
-    c.write(cl_sep)
-    c.write(post_2)
-    c.close()
-    cld = cle
-    if split_memory:
-      if DEBUG: print >> sys.stderr, 'running splitMemory on shell code'
-      cld = run_on_chunk(js_engine + [JS_OPTIMIZER, cld, 'splitMemoryShell'])
-      f = open(cld, 'a')
-      f.write(suffix_marker)
-      f.close()
-    if closure:
-      if DEBUG: print >> sys.stderr, 'running closure on shell code'
-      cld = shared.Building.closure_compiler(cld, pretty='minifyWhitespace' not in passes)
-      temp_files.note(cld)
-    elif cleanup:
-      if DEBUG: print >> sys.stderr, 'running cleanup on shell code'
-      next = cld + '.cl.js'
-      temp_files.note(next)
-      subprocess.Popen(js_engine + [JS_OPTIMIZER, cld, 'noPrintMetadata'] + (['minifyWhitespace'] if 'minifyWhitespace' in passes else []), stdout=open(next, 'w')).communicate()
-      cld = next
-    coutput = open(cld).read()
+    with temp_files.get_file('.cl.js') as cle:
+      c = open(cle, 'w')
+      pre_1, pre_2 = pre.split(start_asm)
+      post_1, post_2 = post.split(end_asm)
+      c.write(pre_1)
+      c.write(cl_sep)
+      c.write(post_2)
+      c.close()
+      cld = cle
+      if split_memory:
+        if DEBUG: print >> sys.stderr, 'running splitMemory on shell code'
+        cld = run_on_chunk(js_engine + [JS_OPTIMIZER, cld, 'splitMemoryShell'])
+        f = open(cld, 'a')
+        f.write(suffix_marker)
+        f.close()
+      if closure:
+        if DEBUG: print >> sys.stderr, 'running closure on shell code'
+        cld = shared.Building.closure_compiler(cld, pretty='minifyWhitespace' not in passes)
+        temp_files.note(cld)
+      elif cleanup:
+        if DEBUG: print >> sys.stderr, 'running cleanup on shell code'
+        next = cld + '.cl.js'
+        temp_files.note(next)
+        proc = subprocess.Popen(js_engine + [JS_OPTIMIZER, cld, 'noPrintMetadata', 'JSDCE'] + (['minifyWhitespace'] if 'minifyWhitespace' in passes else []), stdout=open(next, 'w'))
+        proc.communicate()
+        assert proc.returncode == 0
+        cld = next
+      coutput = open(cld).read()
+
     coutput = coutput.replace('wakaUnknownBefore();', start_asm)
     after = 'wakaUnknownAfter'
     start = coutput.find(after)
@@ -546,4 +563,5 @@ if __name__ == '__main__':
     extra_info = None
   out = run(sys.argv[1], sys.argv[2:], extra_info=extra_info)
   shutil.copyfile(out, sys.argv[1] + '.jsopt.js')
+  sys.exit(0)
 

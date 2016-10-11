@@ -5,6 +5,44 @@ c5,de,15,8a
 23,21
 40,10
 5,4
+small ctlz: 6,14
+llvm_ctpop_i32:
 22
+24
+0
+32
+16
+16
+16
+1
+1
+llvm_expect_i32:
 13
 72057594037927936
+125
+243
+18
+-12
+27
+-9
+1.0
+-1.0
+exp2_f32 8.0
+exp2_f64 22.6
+log2_f32 4.0
+log2_f64 4.3
+log10_f32 3.0
+log10_f64 3.3
+llvm_ceil_f64 2.0
+llvm_ceil_f64 2.0
+llvm_ceil_f64 2.0
+llvm_ceil_f64 -1.0
+llvm_ceil_f64 -1.0
+llvm_ceil_f64 -1.0
+llvm_floor_f64 1.0
+llvm_floor_f64 1.0
+llvm_floor_f64 1.0
+llvm_floor_f64 -2.0
+llvm_floor_f64 -2.0
+llvm_floor_f64 -2.0
+ok.

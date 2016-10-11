@@ -1,9 +1,10 @@
 //"use strict";
 
 // Utilities for browser environments
-mergeInto(LibraryManager.library, {
-  $Browser__deps: ['$PATH', 'emscripten_set_main_loop', 'emscripten_set_main_loop_timing'],
-  $Browser__postset: 'Module["requestFullScreen"] = function Module_requestFullScreen(lockPointer, resizeCanvas, vrDevice) { Browser.requestFullScreen(lockPointer, resizeCanvas, vrDevice) };\n' + // exports
+var LibraryBrowser = {
+  $Browser__deps: ['emscripten_set_main_loop', 'emscripten_set_main_loop_timing'],
+  $Browser__postset: 'Module["requestFullScreen"] = function Module_requestFullScreen(lockPointer, resizeCanvas, vrDevice) { Module.printErr("Module.requestFullScreen is deprecated. Please call Module.requestFullscreen instead."); Module["requestFullScreen"] = Module["requestFullscreen"]; Browser.requestFullScreen(lockPointer, resizeCanvas, vrDevice) };\n' + // exports
+                     'Module["requestFullscreen"] = function Module_requestFullscreen(lockPointer, resizeCanvas, vrDevice) { Browser.requestFullscreen(lockPointer, resizeCanvas, vrDevice) };\n' + // exports
                      'Module["requestAnimationFrame"] = function Module_requestAnimationFrame(func) { Browser.requestAnimationFrame(func) };\n' +
                      'Module["setCanvasSize"] = function Module_setCanvasSize(width, height, noUpdates) { Browser.setCanvasSize(width, height, noUpdates) };\n' +
                      'Module["pauseMainLoop"] = function Module_pauseMainLoop() { Browser.mainLoop.pause() };\n' +
@@ -74,7 +75,7 @@ mergeInto(LibraryManager.library, {
         if (Module['postMainLoop']) Module['postMainLoop']();
       }
     },
-    isFullScreen: false,
+    isFullscreen: false,
     pointerLock: false,
     moduleContextCreatedCallbacks: [],
     workers: [],
@@ -291,8 +292,6 @@ mergeInto(LibraryManager.library, {
         if (contextHandle) {
           ctx = GL.getContext(contextHandle).GLctx;
         }
-        // Set the background of the WebGL canvas to black
-        canvas.style.backgroundColor = "black";
       } else {
         ctx = canvas.getContext('2d');
       }
@@ -313,10 +312,10 @@ mergeInto(LibraryManager.library, {
 
     destroyContext: function(canvas, useWebGL, setInModule) {},
 
-    fullScreenHandlersInstalled: false,
+    fullscreenHandlersInstalled: false,
     lockPointer: undefined,
     resizeCanvas: undefined,
-    requestFullScreen: function(lockPointer, resizeCanvas, vrDevice) {
+    requestFullscreen: function(lockPointer, resizeCanvas, vrDevice) {
       Browser.lockPointer = lockPointer;
       Browser.resizeCanvas = resizeCanvas;
       Browser.vrDevice = vrDevice;
@@ -325,24 +324,22 @@ mergeInto(LibraryManager.library, {
       if (typeof Browser.vrDevice === 'undefined') Browser.vrDevice = null;
 
       var canvas = Module['canvas'];
-      function fullScreenChange() {
-        Browser.isFullScreen = false;
+      function fullscreenChange() {
+        Browser.isFullscreen = false;
         var canvasContainer = canvas.parentNode;
-        if ((document['webkitFullScreenElement'] || document['webkitFullscreenElement'] ||
-             document['mozFullScreenElement'] || document['mozFullscreenElement'] ||
-             document['fullScreenElement'] || document['fullscreenElement'] ||
-             document['msFullScreenElement'] || document['msFullscreenElement'] ||
+        if ((document['fullscreenElement'] || document['mozFullScreenElement'] ||
+             document['msFullscreenElement'] || document['webkitFullscreenElement'] ||
              document['webkitCurrentFullScreenElement']) === canvasContainer) {
-          canvas.cancelFullScreen = document['cancelFullScreen'] ||
-                                    document['mozCancelFullScreen'] ||
-                                    document['webkitCancelFullScreen'] ||
-                                    document['msExitFullscreen'] ||
-                                    document['exitFullscreen'] ||
-                                    function() {};
-          canvas.cancelFullScreen = canvas.cancelFullScreen.bind(document);
+          canvas.exitFullscreen = document['exitFullscreen'] ||
+                                  document['cancelFullScreen'] ||
+                                  document['mozCancelFullScreen'] ||
+                                  document['msExitFullscreen'] ||
+                                  document['webkitCancelFullScreen'] ||
+                                  function() {};
+          canvas.exitFullscreen = canvas.exitFullscreen.bind(document);
           if (Browser.lockPointer) canvas.requestPointerLock();
-          Browser.isFullScreen = true;
-          if (Browser.resizeCanvas) Browser.setFullScreenCanvasSize();
+          Browser.isFullscreen = true;
+          if (Browser.resizeCanvas) Browser.setFullscreenCanvasSize();
         } else {
           
           // remove the full screen specific parent of the canvas again to restore the HTML structure from before going full screen
@@ -351,16 +348,17 @@ mergeInto(LibraryManager.library, {
           
           if (Browser.resizeCanvas) Browser.setWindowedCanvasSize();
         }
-        if (Module['onFullScreen']) Module['onFullScreen'](Browser.isFullScreen);
+        if (Module['onFullScreen']) Module['onFullScreen'](Browser.isFullscreen);
+        if (Module['onFullscreen']) Module['onFullscreen'](Browser.isFullscreen);
         Browser.updateCanvasDimensions(canvas);
       }
 
-      if (!Browser.fullScreenHandlersInstalled) {
-        Browser.fullScreenHandlersInstalled = true;
-        document.addEventListener('fullscreenchange', fullScreenChange, false);
-        document.addEventListener('mozfullscreenchange', fullScreenChange, false);
-        document.addEventListener('webkitfullscreenchange', fullScreenChange, false);
-        document.addEventListener('MSFullscreenChange', fullScreenChange, false);
+      if (!Browser.fullscreenHandlersInstalled) {
+        Browser.fullscreenHandlersInstalled = true;
+        document.addEventListener('fullscreenchange', fullscreenChange, false);
+        document.addEventListener('mozfullscreenchange', fullscreenChange, false);
+        document.addEventListener('webkitfullscreenchange', fullscreenChange, false);
+        document.addEventListener('MSFullscreenChange', fullscreenChange, false);
       }
 
       // create a new parent to ensure the canvas has no siblings. this allows browsers to optimize full screen performance when its parent is the full screen root
@@ -369,16 +367,25 @@ mergeInto(LibraryManager.library, {
       canvasContainer.appendChild(canvas);
 
       // use parent of canvas as full screen root to allow aspect ratio correction (Firefox stretches the root to screen size)
-      canvasContainer.requestFullScreen = canvasContainer['requestFullScreen'] ||
+      canvasContainer.requestFullscreen = canvasContainer['requestFullscreen'] ||
                                           canvasContainer['mozRequestFullScreen'] ||
                                           canvasContainer['msRequestFullscreen'] ||
+                                         (canvasContainer['webkitRequestFullscreen'] ? function() { canvasContainer['webkitRequestFullscreen'](Element['ALLOW_KEYBOARD_INPUT']) } : null) ||
                                          (canvasContainer['webkitRequestFullScreen'] ? function() { canvasContainer['webkitRequestFullScreen'](Element['ALLOW_KEYBOARD_INPUT']) } : null);
 
       if (vrDevice) {
-        canvasContainer.requestFullScreen({ vrDisplay: vrDevice });
+        canvasContainer.requestFullscreen({ vrDisplay: vrDevice });
       } else {
-        canvasContainer.requestFullScreen();
+        canvasContainer.requestFullscreen();
       }
+    },
+
+    requestFullScreen: function(lockPointer, resizeCanvas, vrDevice) {
+        Module.printErr('Browser.requestFullScreen() is deprecated. Please call Browser.requestFullscreen instead.');
+        Browser.requestFullScreen = function(lockPointer, resizeCanvas, vrDevice) {
+          return Browser.requestFullscreen(lockPointer, resizeCanvas, vrDevice);
+        }
+        return Browser.requestFullscreen(lockPointer, resizeCanvas, vrDevice);
     },
 
     nextRAF: 0,
@@ -620,23 +627,8 @@ mergeInto(LibraryManager.library, {
       }
     },
 
-    xhrLoad: function(url, onload, onerror) {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.responseType = 'arraybuffer';
-      xhr.onload = function xhr_onload() {
-        if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) { // file URLs can return 0
-          onload(xhr.response);
-        } else {
-          onerror();
-        }
-      };
-      xhr.onerror = onerror;
-      xhr.send(null);
-    },
-
     asyncLoad: function(url, onload, onerror, noRunDep) {
-      Browser.xhrLoad(url, function(arrayBuffer) {
+      Module['readAsync'](url, function(arrayBuffer) {
         assert(arrayBuffer, 'Loading data file "' + url + '" failed (no arrayBuffer).');
         onload(new Uint8Array(arrayBuffer));
         if (!noRunDep) removeRunDependency('al ' + url);
@@ -667,7 +659,7 @@ mergeInto(LibraryManager.library, {
 
     windowedWidth: 0,
     windowedHeight: 0,
-    setFullScreenCanvasSize: function() {
+    setFullscreenCanvasSize: function() {
       // check if SDL is available   
       if (typeof SDL != "undefined") {
       	var flags = {{{ makeGetValue('SDL.screen+Runtime.QUANTUM_SIZE*0', '0', 'i32', 0, 1) }}};
@@ -704,10 +696,8 @@ mergeInto(LibraryManager.library, {
           h = Math.round(w / Module['forcedAspectRatio']);
         }
       }
-      if (((document['webkitFullScreenElement'] || document['webkitFullscreenElement'] ||
-           document['mozFullScreenElement'] || document['mozFullscreenElement'] ||
-           document['fullScreenElement'] || document['fullscreenElement'] ||
-           document['msFullScreenElement'] || document['msFullscreenElement'] ||
+      if (((document['fullscreenElement'] || document['mozFullScreenElement'] ||
+           document['msFullscreenElement'] || document['webkitFullscreenElement'] ||
            document['webkitCurrentFullScreenElement']) === canvas.parentNode) && (typeof screen != 'undefined')) {
          var factor = Math.min(screen.width / w, screen.height / h);
          w = Math.round(w * factor);
@@ -746,7 +736,7 @@ mergeInto(LibraryManager.library, {
   },
 
 #if ASYNCIFY
-  emscripten_wget__deps: ['emscripten_async_resume'],
+  emscripten_wget__deps: ['emscripten_async_resume', '$PATH'],
   emscripten_wget: function(url, file) {
     var _url = Pointer_stringify(url);
     var _file = Pointer_stringify(file);
@@ -766,6 +756,7 @@ mergeInto(LibraryManager.library, {
   },
 #endif
 
+  emscripten_async_wget__deps: ['$PATH'],
   emscripten_async_wget: function(url, file, onload, onerror) {
     Module['noExitRuntime'] = true;
 
@@ -857,7 +848,7 @@ mergeInto(LibraryManager.library, {
         try {
           FS.unlink(_file);
         } catch (e) {}
-        FS.createDataFile( _file.substr(0, index), _file.substr(index + 1), new Uint8Array(http.response), true, true);
+        FS.createDataFile( _file.substr(0, index), _file.substr(index + 1), new Uint8Array(http.response), true, true, false);
         if (onload) {
           var stack = Runtime.stackSave();
           Runtime.dynCall('viii', onload, [handle, arg, allocate(intArrayFromString(_file), 'i8', ALLOC_STACK)]);
@@ -898,8 +889,6 @@ mergeInto(LibraryManager.library, {
     if (_request == "POST") {
       //Send the proper header information along with the request
       http.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      http.setRequestHeader("Content-length", _param.length);
-      http.setRequestHeader("Connection", "close");
       http.send(_param);
     } else {
       http.send(null);
@@ -962,8 +951,6 @@ mergeInto(LibraryManager.library, {
     if (_request == "POST") {
       //Send the proper header information along with the request
       http.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      http.setRequestHeader("Content-length", _param.length);
-      http.setRequestHeader("Connection", "close");
       http.send(_param);
     } else {
       http.send(null);
@@ -981,6 +968,7 @@ mergeInto(LibraryManager.library, {
     }
   },
 
+  emscripten_run_preload_plugins__deps: ['$PATH'],
   emscripten_run_preload_plugins: function(file, onload, onerror) {
     Module['noExitRuntime'] = true;
 
@@ -1008,8 +996,9 @@ mergeInto(LibraryManager.library, {
     var _suffix = Pointer_stringify(suffix);
     if (!Browser.asyncPrepareDataCounter) Browser.asyncPrepareDataCounter = 0;
     var name = 'prepare_data_' + (Browser.asyncPrepareDataCounter++) + '.' + _suffix;
-    var cname = _malloc(name.length+1);
-    writeStringToMemory(name, cname);
+    var lengthAsUTF8 = lengthBytesUTF8(name);
+    var cname = _malloc(lengthAsUTF8+1);
+    stringToUTF8(name, cname, lengthAsUTF8+1);
     FS.createPreloadedFile(
       '/',
       name,
@@ -1073,7 +1062,8 @@ mergeInto(LibraryManager.library, {
 
     if (mode == 0 /*EM_TIMING_SETTIMEOUT*/) {
       Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler_setTimeout() {
-        setTimeout(Browser.mainLoop.runner, value); // doing this each time means that on exception, we stop
+        var timeUntilNextTick = Math.max(0, Browser.mainLoop.tickStartTime + value - _emscripten_get_now())|0;
+        setTimeout(Browser.mainLoop.runner, timeUntilNextTick); // doing this each time means that on exception, we stop
       };
       Browser.mainLoop.method = 'timeout';
     } else if (mode == 1 /*EM_TIMING_RAF*/) {
@@ -1085,7 +1075,7 @@ mergeInto(LibraryManager.library, {
       if (!window['setImmediate']) {
         // Emulate setImmediate. (note: not a complete polyfill, we don't emulate clearImmediate() to keep code size to minimum, since not needed)
         var setImmediates = [];
-        var emscriptenMainLoopMessageId = '__emcc';
+        var emscriptenMainLoopMessageId = 'setimmediate';
         function Browser_setImmediate_messageHandler(event) {
           if (event.source === window && event.data === emscriptenMainLoopMessageId) {
             event.stopPropagation();
@@ -1095,7 +1085,11 @@ mergeInto(LibraryManager.library, {
         window.addEventListener("message", Browser_setImmediate_messageHandler, true);
         window['setImmediate'] = function Browser_emulated_setImmediate(func) {
           setImmediates.push(func);
-          window.postMessage(emscriptenMainLoopMessageId, "*");
+          if (ENVIRONMENT_IS_WORKER) {
+            if (Module['setImmediates'] === undefined) Module['setImmediates'] = [];
+            Module['setImmediates'].push(func);
+            window.postMessage({target: emscriptenMainLoopMessageId}); // In --proxy-to-worker, route the message via proxyClient.js
+          } else window.postMessage(emscriptenMainLoopMessageId, "*"); // On the main thread, can just send the message to itself.
         }
       }
       Browser.mainLoop.scheduler = function Browser_mainLoop_scheduler_setImmediate() {
@@ -1106,7 +1100,7 @@ mergeInto(LibraryManager.library, {
     return 0;
   },
 
-  emscripten_set_main_loop__deps: ['emscripten_set_main_loop_timing'],
+  emscripten_set_main_loop__deps: ['emscripten_set_main_loop_timing', 'emscripten_get_now'],
   emscripten_set_main_loop: function(func, fps, simulateInfiniteLoop, arg, noSetTiming) {
     Module['noExitRuntime'] = true;
 
@@ -1114,6 +1108,18 @@ mergeInto(LibraryManager.library, {
 
     Browser.mainLoop.func = func;
     Browser.mainLoop.arg = arg;
+
+    var browserIterationFunc;
+    if (typeof arg !== 'undefined') {
+      var argArray = [arg];
+      browserIterationFunc = function() {
+        Runtime.dynCall('vi', func, argArray);
+      };
+    } else {
+      browserIterationFunc = function() {
+        Runtime.dynCall('v', func);
+      };
+    }
 
     var thisMainLoopId = Browser.mainLoop.currentlyRunningMainloop;
 
@@ -1136,6 +1142,10 @@ mergeInto(LibraryManager.library, {
         }
         console.log('main loop blocker "' + blocker.name + '" took ' + (Date.now() - start) + ' ms'); //, left: ' + Browser.mainLoop.remainingBlockers);
         Browser.mainLoop.updateStatus();
+        
+        // catches pause/resume main loop from blocker execution
+        if (thisMainLoopId < Browser.mainLoop.currentlyRunningMainloop) return;
+        
         setTimeout(Browser.mainLoop.runner, 0);
         return;
       }
@@ -1149,6 +1159,8 @@ mergeInto(LibraryManager.library, {
         // Not the scheduled time to render this frame - skip.
         Browser.mainLoop.scheduler();
         return;
+      } else if (Browser.mainLoop.timingMode == 0/*EM_TIMING_SETTIMEOUT*/) {
+        Browser.mainLoop.tickStartTime = _emscripten_get_now();
       }
 
       // Signal GL rendering layer that processing of a new frame is about to start. This helps it optimize
@@ -1157,18 +1169,24 @@ mergeInto(LibraryManager.library, {
       GL.newRenderingFrameStarted();
 #endif
 
+#if OFFSCREENCANVAS_SUPPORT
+      // If the current GL context is an OffscreenCanvas, but it was initialized with implicit swap mode, perform the swap
+      // in behalf of the user.
+      if (typeof GL !== 'undefined' && GL.currentContext && !GL.currentContext.attributes.explicitSwapControl && GL.currentContext.GLctx.commit) {
+        GL.currentContext.GLctx.commit();
+      }
+#endif
+
       if (Browser.mainLoop.method === 'timeout' && Module.ctx) {
         Module.printErr('Looks like you are rendering without using requestAnimationFrame for the main loop. You should use 0 for the frame rate in emscripten_set_main_loop in order to use requestAnimationFrame, as that can greatly improve your frame rates!');
         Browser.mainLoop.method = ''; // just warn once per call to set main loop
       }
 
-      Browser.mainLoop.runIter(function() {
-        if (typeof arg !== 'undefined') {
-          Runtime.dynCall('vi', func, [arg]);
-        } else {
-          Runtime.dynCall('v', func);
-        }
-      });
+      Browser.mainLoop.runIter(browserIterationFunc);
+
+#if STACK_OVERFLOW_CHECK
+      checkStackCookie();
+#endif
 
       // catch pauses from the main loop itself
       if (thisMainLoopId < Browser.mainLoop.currentlyRunningMainloop) return;
@@ -1280,7 +1298,7 @@ mergeInto(LibraryManager.library, {
     var canvas = Module['canvas'];
     {{{ makeSetValue('width', '0', 'canvas.width', 'i32') }}};
     {{{ makeSetValue('height', '0', 'canvas.height', 'i32') }}};
-    {{{ makeSetValue('isFullscreen', '0', 'Browser.isFullScreen ? 1 : 0', 'i32') }}};
+    {{{ makeSetValue('isFullscreen', '0', 'Browser.isFullscreen ? 1 : 0', 'i32') }}};
   },
 
   emscripten_create_worker: function(url) {
@@ -1344,30 +1362,45 @@ mergeInto(LibraryManager.library, {
       });
       info.awaited++;
     }
-    info.worker.postMessage({
+    var transferObject = {
       'funcName': funcName,
       'callbackId': callbackId,
-      'data': data ? new Uint8Array({{{ makeHEAPView('U8', 'data', 'data + size') }}}) : 0 // XXX copy to a new typed array as a workaround for chrome bug 169705
-    });
+      'data': data ? new Uint8Array({{{ makeHEAPView('U8', 'data', 'data + size') }}}) : 0
+    };
+    if (data) {
+      info.worker.postMessage(transferObject, [transferObject.data.buffer]);
+    } else {
+      info.worker.postMessage(transferObject);
+    }
   },
 
   emscripten_worker_respond_provisionally: function(data, size) {
     if (workerResponded) throw 'already responded with final response!';
-    postMessage({
+    var transferObject = {
       'callbackId': workerCallbackId,
       'finalResponse': false,
-      'data': data ? new Uint8Array({{{ makeHEAPView('U8', 'data', 'data + size') }}}) : 0 // XXX copy to a new typed array as a workaround for chrome bug 169705
-    });
+      'data': data ? new Uint8Array({{{ makeHEAPView('U8', 'data', 'data + size') }}}) : 0
+    };
+    if (data) {
+      postMessage(transferObject, [transferObject.data.buffer]);
+    } else {
+      postMessage(transferObject);
+    }
   },
 
   emscripten_worker_respond: function(data, size) {
     if (workerResponded) throw 'already responded with final response!';
     workerResponded = true;
-    postMessage({
+    var transferObject = {
       'callbackId': workerCallbackId,
       'finalResponse': true,
-      'data': data ? new Uint8Array({{{ makeHEAPView('U8', 'data', 'data + size') }}}) : 0 // XXX copy to a new typed array as a workaround for chrome bug 169705
-    });
+      'data': data ? new Uint8Array({{{ makeHEAPView('U8', 'data', 'data + size') }}}) : 0
+    };
+    if (data) {
+      postMessage(transferObject, [transferObject.data.buffer]);
+    } else {
+      postMessage(transferObject);
+    }
   },
 
   emscripten_get_worker_queue_size: function(id) {
@@ -1376,6 +1409,7 @@ mergeInto(LibraryManager.library, {
     return info.awaited;
   },
 
+  emscripten_get_preloaded_image_data__deps: ['$PATH'],
   emscripten_get_preloaded_image_data: function(path, w, h) {
     if (typeof path === "number") {
       path = Pointer_stringify(path);
@@ -1409,7 +1443,11 @@ mergeInto(LibraryManager.library, {
 
     return 0;
   }
-});
+};
+
+autoAddDeps(LibraryBrowser, '$Browser');
+
+mergeInto(LibraryManager.library, LibraryBrowser);
 
 /* Useful stuff for browser debugging
 
