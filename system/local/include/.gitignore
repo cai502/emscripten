@@ -11,3 +11,4 @@ openssl
 freetype2
 ogg
 vorbis
+sqlite*.h
