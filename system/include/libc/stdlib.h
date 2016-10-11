@@ -173,4 +173,8 @@ long double strtold_l(const char *__restrict, char **__restrict, struct __locale
 }
 #endif
 
+#ifdef A2O_LIBBSD_HEADERS
+#include <bsd/stdlib.h>
+#endif
+
 #endif
