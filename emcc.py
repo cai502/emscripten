@@ -689,6 +689,12 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
       elif newargs[i] == '--proxy-to-worker':
         proxy_to_worker = True
         newargs[i] = ''
+      elif newargs[i] == '--js-xhr-loading':
+        js_xhr_loading = True
+        newargs[i] = ''
+      elif newargs[i] == '--js-manual-loading':
+        js_manual_loading = True
+        newargs[i] = ''
       elif newargs[i] == '--valid-abspath':
         valid_abspaths.append(newargs[i+1])
         newargs[i] = ''
