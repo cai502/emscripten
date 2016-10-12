@@ -391,7 +391,7 @@ var EXPORTED_FUNCTIONS = ['_main'];
                                     // list (as _main is by default in this value, and if you override it
                                     // without keeping it there, you are in effect removing it).
 
-var NATIVE_LIBDISPATCH = 0;
+var NATIVE_LIBDISPATCH = 1;
 var OBJC_DEBUG = 0;
 
 var EXPORT_ALL = 0; // If true, we export all the symbols. Note that this does *not* affect LLVM, so it can
