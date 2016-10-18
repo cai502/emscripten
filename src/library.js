@@ -3855,11 +3855,10 @@ LibraryManager.library = {
       return 0;
   },
 
-  mach_absolute_time__deps: ["emscripten_get_now"],
+  mach_absolute_time__deps: ["emscripten_get_now", "emscripten_get_now_res"],
   mach_absolute_time: function() {
-      var r = _emscripten_get_now();
-      {{{ makeSetTempRet0('(r / 4294967296.0) >>> 0') }}};
-      return r >>> 0;
+      var r = _emscripten_get_now() * 1000000 / _emscripten_get_now_res();
+      {{{ makeSetTempRet0('(r>>>0)') }}};
   },
 
   // ==========================================================================
@@ -3899,9 +3898,9 @@ LibraryManager.library = {
                                "} else if (typeof dateNow !== 'undefined') {\n" +
                                "  _emscripten_get_now = dateNow;\n" +
                                "} else if (typeof self === 'object' && self['performance'] && typeof self['performance']['now'] === 'function') {\n" +
-                               "  _emscripten_get_now = function() { return self['performance']['now']() * 1000; };\n" +
+                               "  _emscripten_get_now = function() { return self['performance']['now'](); };\n" +
                                "} else if (typeof performance === 'object' && typeof performance['now'] === 'function') {\n" +
-                               "  _emscripten_get_now = function() { return performance['now']() * 1000; };\n" +
+                               "  _emscripten_get_now = function() { return performance['now'](); };\n" +
                                "} else {\n" +
                                "  _emscripten_get_now = Date.now;\n" +
                                "}",
