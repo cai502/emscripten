@@ -250,6 +250,9 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
       settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'].append("cyberdwarf_Debugger")
       settings['EXPORTED_FUNCTIONS'].append("cyberdwarf_Debugger")
 
+    # Use sanitized name after here
+    settings['EXPORTED_FUNCTIONS'] = map(lambda x: re.sub(r'\W', '_', x), settings['EXPORTED_FUNCTIONS'])
+
     # Integrate info from backend
     if settings['SIDE_MODULE']:
       settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'] = [] # we don't need any JS library contents in side modules
@@ -273,6 +276,7 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
     settings['MAX_GLOBAL_ALIGN'] = metadata['maxGlobalAlign']
 
     settings['IMPLEMENTED_FUNCTIONS'] = metadata['implementedFunctions'] + [k for k,v in metadata['aliases'].iteritems()]
+    settings['LIBRARY_IMPLEMENTED_FUNCTIONS'] = map(lambda x: re.sub(r'\W', '_', x), settings['LIBRARY_IMPLEMENTED_FUNCTIONS'])
 
     assert not (metadata['simd'] and settings['SPLIT_MEMORY']), 'SIMD is used, but not supported in SPLIT_MEMORY'
 
@@ -374,6 +378,7 @@ def function_tables_and_exports(funcs, metadata, mem_init, glue, forwarded_data,
       original_exports = settings['ORIGINAL_EXPORTED_FUNCTIONS']
       if original_exports[0] == '@': original_exports = json.loads(open(original_exports[1:]).read())
       for requested in original_exports:
+        requested = re.sub(r'\W', '_', requested)
         # check if already implemented
         # special-case malloc, EXPORTED by default for internal use, but we bake in a trivial allocator and warn at runtime if used in ASSERTIONS \
         if requested not in all_implemented and \
