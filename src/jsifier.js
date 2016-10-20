@@ -137,7 +137,7 @@ function JSify(data, functionsOnly) {
       var noExport = false;
 
       if ((!LibraryManager.library.hasOwnProperty(ident) && !LibraryManager.library.hasOwnProperty(ident + '__inline')) || SIDE_MODULE) {
-        if (!(finalName in IMPLEMENTED_FUNCTIONS)) {
+        if (!(finalName in IMPLEMENTED_FUNCTIONS || finalName in LIBRARY_IMPLEMENTED_FUNCTIONS)) {
           if (VERBOSE || ident.substr(0, 11) !== 'emscripten_') { // avoid warning on emscripten_* functions which are for internal usage anyhow
             if (!LINKABLE) {
               if (ERROR_ON_UNDEFINED_SYMBOLS) error('unresolved symbol: ' + ident);
