@@ -259,7 +259,11 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
       )
     ) + map(lambda x: x[1:], metadata['externs'])
     if settings['MAIN_MODULE'] == 2:
-      settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'] += [x[1:] for x in settings['EXPORTED_FUNCTIONS'] if x.find('.') == -1]
+      settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'] += set(map(lambda x: x[1:], settings['EXPORTED_FUNCTIONS'])).difference(
+          map(lambda x: x[1:], metadata['implementedFunctions'])
+      ).difference(
+          [k[1:] for k, v in metadata['namedGlobals'].iteritems()]
+      )
     if metadata['simd']:
       settings['SIMD'] = 1
     if metadata['cantValidate'] and settings['ASM_JS'] != 2:
@@ -268,7 +272,7 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
 
     settings['MAX_GLOBAL_ALIGN'] = metadata['maxGlobalAlign']
 
-    settings['IMPLEMENTED_FUNCTIONS'] = metadata['implementedFunctions']
+    settings['IMPLEMENTED_FUNCTIONS'] = metadata['implementedFunctions'] + [k for k,v in metadata['aliases'].iteritems()]
 
     assert not (metadata['simd'] and settings['SPLIT_MEMORY']), 'SIMD is used, but not supported in SPLIT_MEMORY'
 
@@ -359,6 +363,7 @@ def function_tables_and_exports(funcs, metadata, mem_init, glue, forwarded_data,
     for key in all_implemented:
       if key in all_exported_functions or export_all or (export_bindings and key.startswith('_emscripten_bind')):
         exported_implemented_functions.add(key)
+
     for func in all_exported_functions:
       if func in metadata['aliases']:
         alias_func = metadata['aliases'][func]
@@ -373,6 +378,8 @@ def function_tables_and_exports(funcs, metadata, mem_init, glue, forwarded_data,
         # special-case malloc, EXPORTED by default for internal use, but we bake in a trivial allocator and warn at runtime if used in ASSERTIONS \
         if requested not in all_implemented and \
            requested != '_malloc' and \
+           requested not in metadata['namedGlobals'] and \
+           (('var ' + requested.encode('utf-8')) not in pre) and \
            (('function ' + requested.encode('utf-8')) not in pre): # could be a js library func
           logging.warning('function requested to be exported, but not implemented: "%s"', requested)
 
