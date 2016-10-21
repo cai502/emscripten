@@ -3913,6 +3913,14 @@ var LibraryGL = {
     if (!fb) return 0;
     return GLctx.isFramebuffer(fb);
   },
+  
+  glDiscardFramebufferEXT__sig: 'viii',
+  glDiscardFramebufferEXT: function(target, numAttachments, attachments) {
+    GL.recordError(0x0500/*GL_INVALID_ENUM*/);
+#if GL_ASSERTIONS
+    Module.printErr("GL_INVALID_ENUM in glDiscardFramebufferEXT: Not implemented.");
+#endif
+  },
 
 #if LEGACY_GL_EMULATION
   glGenVertexArrays__deps: ['emulGlGenVertexArrays'],
@@ -7406,6 +7414,7 @@ var LibraryGL = {
   glMatrixMode: function(){ throw 'Legacy GL function (glMatrixMode) called. If you want legacy GL emulation, you need to compile with -s LEGACY_GL_EMULATION=1 to enable legacy GL emulation.'; },
   glBegin: function(){ throw 'Legacy GL function (glBegin) called. If you want legacy GL emulation, you need to compile with -s LEGACY_GL_EMULATION=1 to enable legacy GL emulation.'; },
   glLoadIdentity: function(){ throw 'Legacy GL function (glLoadIdentity) called. If you want legacy GL emulation, you need to compile with -s LEGACY_GL_EMULATION=1 to enable legacy GL emulation.'; },
+  glEnableClientState: function(){ throw 'Legacy GL function (glEnableClientState) called. If you want legacy GL emulation, you need to compile with -s LEGACY_GL_EMULATION=1 to enable legacy GL emulation.'; },
 
 #endif // LEGACY_GL_EMULATION
 
@@ -7627,6 +7636,22 @@ var LibraryGL = {
   glReleaseShaderCompiler__sig: 'v',
   glReleaseShaderCompiler: function() {
     // NOP (as allowed by GLES 2.0 spec)
+  },
+  
+  glRenderbufferStorageMultisampleAPPLE__sig: 'viiiii',
+  glRenderbufferStorageMultisampleAPPLE: function(target, samples, format, width, height) {
+    GL.recordError(0x0500/*GL_INVALID_ENUM*/);
+#if GL_ASSERTIONS
+    Module.printErr("GL_INVALID_ENUM in glRenderbufferStorageMultisampleAPPLE: Not implemented.");
+#endif
+  },
+  
+  glResolveMultisampleFramebufferAPPLE__sig: 'v',
+  glResolveMultisampleFramebufferAPPLE: function() {
+    GL.recordError(0x0500/*GL_INVALID_ENUM*/);
+#if GL_ASSERTIONS
+    Module.printErr("GL_INVALID_ENUM in glResolveMultisampleFramebufferAPPLE: Not implemented.");
+#endif
   },
 
   glGetError__sig: 'i',
