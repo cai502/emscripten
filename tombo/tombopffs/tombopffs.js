@@ -138,6 +138,7 @@ module.exports = {
         socket.send('"test"');
 
         for (const key of replace_entries) {
+          socket.send(JSON.encode({k: key, v: source.entries[key]}));
           if (destination.entries.hasOwnProperty(key)) {
             destination.entries[key].timestamp = source.entries[key].timestamp;
           } else {
@@ -146,6 +147,7 @@ module.exports = {
         }
 
         for (const key of delete_entries) {
+          socket.send(JSON.encode({k: key, null}));
           destination.entries.delete(key);
         }
 
