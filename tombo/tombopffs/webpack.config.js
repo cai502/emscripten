@@ -3,12 +3,30 @@ const WrapperPlugin = require('wrapper-webpack-plugin');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const outputFileName = `../../src/library_tombopffs${isProduction ? '.min' : ''}.js`;
+const libraryVarName = 'tombopffs';
 
 const babel_plugins = [];
 const webpack_plugins = [
   new WrapperPlugin({
-    header: '',
-    footer: 'mergeInto(LibraryManager.library, tombopffs);'
+    header: `
+mergeInto(LibraryManager.library, {
+  $TOMBOPFFS__deps: ['$FS', '$MEMFS', '$PATH'],
+  $TOMBOPFFS: {
+    mount: function() {
+`,
+    footer: `
+      // replace TOMBOPFFS
+      delete this.mount;
+      for (var key in ${libraryVarName}) {
+        if (${libraryVarName}.hasOwnProperty(key)) {
+          this[key] = ${libraryVarName}[key];
+        }
+      }
+      return TOMBOPFFS.mount(arguments);
+    }
+  }
+});
+`
   })
 ];
 if (isProduction) {
@@ -25,7 +43,7 @@ module.exports = {
   output: {
     path: __dirname,
     filename: outputFileName,
-    library: 'tombopffs',
+    library: libraryVarName,
     libraryTarget: 'var'
   },
   module: {
