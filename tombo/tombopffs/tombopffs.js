@@ -132,9 +132,6 @@ module.exports = {
 
     // TODO: set URL
     TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then((socket) => {
-      // TODO: send entries
-      socket.send('"test"');
-
       for (const key of replace_entries) {
         socket.send(JSON.encode({k: key, v: source.entries[key]}));
         if (destination.entries.hasOwnProperty(key)) {
