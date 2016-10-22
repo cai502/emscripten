@@ -148,6 +148,11 @@ module.exports = {
 
       callback(null);
     }).catch((error) => {
+      if (TOMBOPFFS.debug) {
+        console.groupCollapsed('TOMBOPFFS.reconcile() connectSocket()');
+        console.log(error);
+        console.groupEnd();
+      }
       callback(error);
     });
   }

@@ -69,7 +69,6 @@ var tombopffs =
 	  remote_entries: {},
 	  websocket: null,
 	  mount: function mount(_mount) {
-	    console.log('mountttttt');
 	    // reuse all of the core MEMFS functionality
 	    return MEMFS.mount.apply(null, arguments);
 	  },
@@ -191,10 +190,6 @@ var tombopffs =
 
 	    // TODO: set URL
 	    TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then(function (socket) {
-	      console.log('iketa');
-	      // TODO: send entries
-	      socket.send('"test"');
-
 	      var _iteratorNormalCompletion = true;
 	      var _didIteratorError = false;
 	      var _iteratorError = undefined;
@@ -253,7 +248,11 @@ var tombopffs =
 
 	      callback(null);
 	    }).catch(function (error) {
-	      console.log(error);
+	      if (TOMBOPFFS.debug) {
+	        console.groupCollapsed('TOMBOPFFS.reconcile() connectSocket()');
+	        console.log(error);
+	        console.groupEnd();
+	      }
 	      callback(error);
 	    });
 	  }
