@@ -110,7 +110,11 @@ var LibraryObjC = {
     objc_msgSendSuper2_stret: true,
     _objc_ignored_method: true,
     method_invoke: true,
-    method_invoke_stret: true
+    method_invoke_stret: true,
+    
+    clang_arc_use: function() {
+        // do nothing
+    }
 };
 
 autoAddDeps(LibraryObjC, '$ObjC');
