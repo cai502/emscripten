@@ -24,21 +24,13 @@ class TomboWebSocket {
       this.emit('close', e);
     };
     ws.onmessage = (msg) => {
-      let data;
-      if (typeof(msg.data) === 'string') {
-        data = msgpack.decode(msg.data);
-      } else {
-        data = msg.data;
-      }
+      console.log(msg.data);
+      const data = msgpack.decode(msg.data);
       this.emit('message', data);
     };
   }
   send(msg) {
-    if (typeof(msg) === 'object') {
-      this.ws.send(msgpack.encode(msg));
-    } else {
-      this.ws.send(msg);
-    }
+    this.ws.send(msgpack.encode(msg));
   }
   close() {
     this.ws.close.apply(this.ws, arguments);

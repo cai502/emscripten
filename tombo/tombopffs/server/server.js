@@ -30,7 +30,7 @@ class Server {
     try {
       m = msgpack.decode(message);
     } catch (error) {
-      console.log(`Invalid message ${message}`);
+      console.log(`Message must be encoded by msgpack`);
       return;
     }
     switch (m.type) {

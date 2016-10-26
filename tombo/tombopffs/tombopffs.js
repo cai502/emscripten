@@ -92,6 +92,62 @@ module.exports = {
     //       but I made that async for near future.
     return callback(null, { type: 'remote', entries: TOMBOPFFS.remote_entries });
   },
+  loadMEMFSEntry: function(path, callback) {
+    var stat, node;
+
+    try {
+      var lookup = FS.lookupPath(path);
+      node = lookup.node;
+      stat = FS.stat(path);
+    } catch (e) {
+      return callback(e);
+    }
+
+    if (FS.isDir(stat.mode)) {
+      return callback(null, { timestamp: stat.mtime, mode: stat.mode });
+    } else if (FS.isFile(stat.mode)) {
+      // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
+      // Therefore always convert the file contents to a typed array first before writing the data to IndexedDB.
+      node.contents = MEMFS.getFileDataAsTypedArray(node);
+      return callback(null, { timestamp: stat.mtime, mode: stat.mode, contents: node.contents });
+    } else {
+      return callback(new Error('node type not supported'));
+    }
+  },
+  storeLocalEntry: function(path, entry, callback) {
+    try {
+      if (FS.isDir(entry.mode)) {
+        FS.mkdir(path, entry.mode);
+      } else if (FS.isFile(entry.mode)) {
+        FS.writeFile(path, entry.contents, { encoding: 'binary', canOwn: true });
+      } else {
+        return callback(new Error('node type not supported'));
+      }
+
+      FS.chmod(path, entry.mode);
+      FS.utime(path, entry.timestamp, entry.timestamp);
+    } catch (e) {
+      return callback(e);
+    }
+
+    callback(null);
+  },
+  removeLocalEntry: function(path, callback) {
+    try {
+      var lookup = FS.lookupPath(path);
+      var stat = FS.stat(path);
+
+      if (FS.isDir(stat.mode)) {
+        FS.rmdir(path);
+      } else if (FS.isFile(stat.mode)) {
+        FS.unlink(path);
+      }
+    } catch (e) {
+      return callback(e);
+    }
+
+    callback(null);
+  },
   reconcile: function(source, destination, callback) {
     let total_entries = 0;
 
@@ -133,7 +189,17 @@ module.exports = {
     // TODO: set URL
     TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then((socket) => {
       for (const key of replace_entries) {
-        socket.send({k: key, v: source.entries[key]});
+        if (destination.type === 'memfs') {
+          // TODO: implement
+        } else if (destination.type == 'remote') {
+          TOMBOPFFS.loadMEMFSEntry(key, function(err, entry) {
+            console.log(entry.contents);
+            socket.send({type: 'replace', path: key, mode: entry.mode, timestamp: entry.timestamp, contents: entry.contents});
+          });
+        } else {
+          // TODO: error handling
+          console.log(`Invalid destination type ${destination.type}`);
+        }
         if (destination.entries.hasOwnProperty(key)) {
           destination.entries[key].timestamp = source.entries[key].timestamp;
         } else {
@@ -142,7 +208,7 @@ module.exports = {
       }
 
       for (const key of delete_entries) {
-        socket.send({k: key, null});
+        socket.send({type: 'delete', path: key});
         destination.entries.delete(key);
       }
 
