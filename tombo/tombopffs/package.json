@@ -13,7 +13,8 @@
   "author": "Tasuku SUENAGA",
   "license": "MIT",
   "dependencies": {
-    "minivents": "^1.2.0"
+    "minivents": "^1.2.0",
+    "msgpack-lite": "^0.1.26"
   },
   "devDependencies": {
     "babel-core": "^6.7.6",

@@ -1,4 +1,5 @@
 const Events = require('minivents');
+const msgpack = require('msgpack-lite');
 
 class TomboWebSocket {
   constructor(url, protocol) {
@@ -25,7 +26,7 @@ class TomboWebSocket {
     ws.onmessage = (msg) => {
       let data;
       if (typeof(msg.data) === 'string') {
-        data = JSON.parse(msg.data);
+        data = msgpack.decode(msg.data);
       } else {
         data = msg.data;
       }
@@ -34,7 +35,7 @@ class TomboWebSocket {
   }
   send(msg) {
     if (typeof(msg) === 'object') {
-      this.ws.send(JSON.stringify(msg));
+      this.ws.send(msgpack.encode(msg));
     } else {
       this.ws.send(msg);
     }

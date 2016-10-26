@@ -1,6 +1,7 @@
 'use strict';
 
 const WebSocketServer = require('ws').Server;
+const msgpack = require('msgpack-lite');
 
 class Server {
   constructor(opts) {
@@ -20,14 +21,14 @@ class Server {
   }
 
   static send(ws, message) {
-    ws.send(JSON.stringify(message));
+    ws.send(msgpack.encode(message));
   }
 
   static handleMessage(ws, message) {
     const s = Server.send.bind(null, ws);
     let m;
     try {
-      m = JSON.parse(message);
+      m = msgpack.decode(message);
     } catch (error) {
       console.log(`Invalid message ${message}`);
       return;
@@ -57,7 +58,7 @@ class Server {
       });
       break;
     default:
-      console.log(`Invalid type ${m.type}`);
+      console.log(`Invalid message type "${m.type}"`);
       break;
     }
   }
