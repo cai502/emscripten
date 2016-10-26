@@ -21,6 +21,7 @@ class Server {
   }
 
   static send(ws, message) {
+    console.log(message);
     ws.send(msgpack.encode(message));
   }
 

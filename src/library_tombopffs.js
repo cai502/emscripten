@@ -62,6 +62,8 @@ var tombopffs =
 	// TODO: Use dffptch to reduce difference
 	//       https://github.com/paldepind/dffptch
 
+	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
 	var TomboWebSocket = __webpack_require__(2);
 
 	module.exports = {
@@ -90,108 +92,117 @@ var tombopffs =
 	      });
 	    });
 	  },
+	  /* entry point of filesystem sync */
 	  syncfs: function syncfs(mount, populate, callback) {
-	    TOMBOPFFS.getMEMFSEntries(mount, function (err, memfs) {
-	      if (err) return callback(err);
+	    var memfs = void 0;
+	    TOMBOPFFS.getMEMFSEntries(mount).then(function (_memfs) {
+	      memfs = _memfs;
+	      return TOMBOPFFS.getRemoteEntries(mount);
+	    }).then(function (remote) {
+	      var source = populate ? remote : memfs;
+	      var destination = populate ? memfs : remote;
 
-	      TOMBOPFFS.getRemoteEntries(mount, function (err, remote) {
-	        if (err) return callback(err);
+	      return TOMBOPFFS.reconcile(source, destination);
+	    }).then(callback).catch(function (error) {
+	      console.groupCollapsed('TOMBOPFFS.syncfs()');
+	      console.log(error);
+	      console.groupEnd();
 
-	        var source = populate ? remote : memfs;
-	        var destination = populate ? memfs : remote;
-
-	        TOMBOPFFS.reconcile(source, destination, callback);
-	      });
+	      return callback(error);
 	    });
 	  },
-	  getMEMFSEntries: function getMEMFSEntries(mount, callback) {
-	    var entries = {};
+	  getMEMFSEntries: function getMEMFSEntries(mount) {
+	    return new Promise(function (resolve, reject) {
+	      var entries = {};
 
-	    function isRealDir(p) {
-	      return p !== '.' && p !== '..';
-	    };
-	    function toAbsolute(root) {
-	      return function (p) {
-	        return PATH.join2(root, p);
+	      function isRealDir(p) {
+	        return p !== '.' && p !== '..';
 	      };
-	    };
+	      function toAbsolute(root) {
+	        return function (p) {
+	          return PATH.join2(root, p);
+	        };
+	      };
 
-	    var check = FS.readdir(mount.mountpoint).filter(isRealDir).map(toAbsolute(mount.mountpoint));
+	      var check = FS.readdir(mount.mountpoint).filter(isRealDir).map(toAbsolute(mount.mountpoint));
 
-	    while (check.length) {
-	      var path = check.pop();
-	      var stat = void 0;
+	      while (check.length) {
+	        var path = check.pop();
+	        var stat = void 0;
+
+	        try {
+	          stat = FS.stat(path);
+	        } catch (e) {
+	          return reject(e);
+	        }
+
+	        if (FS.isDir(stat.mode)) {
+	          check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
+	        }
+
+	        entries[path] = { timestamp: stat.mtime };
+	      }
+
+	      /*
+	      if (TOMBOPFFS.debug) {
+	        console.groupCollapsed('TOMBOPFFS.getMEMFSEntries()');
+	        console.dir(entries);
+	        console.groupEnd();
+	      }
+	      */
+
+	      return resolve({ type: 'memfs', entries: entries });
+	    });
+	  },
+	  getRemoteEntries: function getRemoteEntries(mount) {
+	    // NOTE: currently, this function only returns local variable,
+	    //       but I made that async for near future.
+	    return new Promise(function (resolve, reject) {
+	      resolve({ type: 'remote', entries: TOMBOPFFS.remote_entries });
+	    });
+	  },
+	  loadMEMFSEntry: function loadMEMFSEntry(path) {
+	    return new Promise(function (resolve, reject) {
+	      var stat, node;
 
 	      try {
+	        var lookup = FS.lookupPath(path);
+	        node = lookup.node;
 	        stat = FS.stat(path);
 	      } catch (e) {
-	        return callback(e);
+	        return reject(e);
 	      }
 
 	      if (FS.isDir(stat.mode)) {
-	        check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
+	        return resolve({ timestamp: stat.mtime, mode: stat.mode });
+	      } else if (FS.isFile(stat.mode)) {
+	        // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
+	        // Therefore always convert the file contents to a typed array first before writing the data to IndexedDB.
+	        node.contents = MEMFS.getFileDataAsTypedArray(node);
+	        return resolve({ timestamp: stat.mtime, mode: stat.mode, contents: node.contents });
+	      } else {
+	        return reject(new Error('node type not supported'));
 	      }
-
-	      entries[path] = { timestamp: stat.mtime };
-	    }
-
-	    /*
-	    if (TOMBOPFFS.debug) {
-	      console.groupCollapsed('TOMBOPFFS.getMEMFSEntries()');
-	      console.dir(entries);
-	      console.groupEnd();
-	    }
-	    */
-
-	    return callback(null, { type: 'memfs', entries: entries });
+	    });
 	  },
-	  getRemoteEntries: function getRemoteEntries(mount, callback) {
-	    // NOTE: currently, this function only returns local variable,
-	    //       but I made that async for near future.
-	    return callback(null, { type: 'remote', entries: TOMBOPFFS.remote_entries });
-	  },
-	  loadMEMFSEntry: function loadMEMFSEntry(path, callback) {
-	    var stat, node;
-
-	    try {
-	      var lookup = FS.lookupPath(path);
-	      node = lookup.node;
-	      stat = FS.stat(path);
-	    } catch (e) {
-	      return callback(e);
-	    }
-
-	    if (FS.isDir(stat.mode)) {
-	      return callback(null, { timestamp: stat.mtime, mode: stat.mode });
-	    } else if (FS.isFile(stat.mode)) {
-	      // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
-	      // Therefore always convert the file contents to a typed array first before writing the data to IndexedDB.
-	      node.contents = MEMFS.getFileDataAsTypedArray(node);
-	      return callback(null, { timestamp: stat.mtime, mode: stat.mode, contents: node.contents });
-	    } else {
-	      return callback(new Error('node type not supported'));
-	    }
-	  },
-	  storeLocalEntry: function storeLocalEntry(path, entry, callback) {
-	    try {
+	  storeMEMFSEntry: function storeMEMFSEntry(path, entry) {
+	    return new Promise(function (resolve, reject) {
 	      if (FS.isDir(entry.mode)) {
 	        FS.mkdir(path, entry.mode);
 	      } else if (FS.isFile(entry.mode)) {
 	        FS.writeFile(path, entry.contents, { encoding: 'binary', canOwn: true });
 	      } else {
-	        return callback(new Error('node type not supported'));
+	        return reject(new Error('node type not supported'));
 	      }
 
 	      FS.chmod(path, entry.mode);
 	      FS.utime(path, entry.timestamp, entry.timestamp);
-	    } catch (e) {
-	      return callback(e);
-	    }
 
-	    callback(null);
+	      resolve();
+	    });
 	  },
-	  removeLocalEntry: function removeLocalEntry(path, callback) {
-	    try {
+	  removeMEMFSEntry: function removeMEMFSEntry(path) {
+	    return new Promise(function (resolve, reject) {
 	      var lookup = FS.lookupPath(path);
 	      var stat = FS.stat(path);
 
@@ -200,13 +211,14 @@ var tombopffs =
 	      } else if (FS.isFile(stat.mode)) {
 	        FS.unlink(path);
 	      }
-	    } catch (e) {
+
+	      resolve();
+	    });
+	    try {} catch (e) {
 	      return callback(e);
 	    }
-
-	    callback(null);
 	  },
-	  reconcile: function reconcile(source, destination, callback) {
+	  reconcile: function reconcile(source, destination) {
 	    var total_entries = 0;
 
 	    var replace_entries = [];
@@ -228,7 +240,7 @@ var tombopffs =
 	    });
 
 	    if (total_entries == 0) {
-	      return callback(null);
+	      return Promise.resolve();
 	    }
 
 	    /*
@@ -245,7 +257,7 @@ var tombopffs =
 	    */
 
 	    // TODO: set URL
-	    TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then(function (socket) {
+	    return TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then(function (socket) {
 	      var _iteratorNormalCompletion = true;
 	      var _didIteratorError = false;
 	      var _iteratorError = undefined;
@@ -257,13 +269,14 @@ var tombopffs =
 	          if (destination.type === 'memfs') {
 	            // TODO: implement
 	          } else if (destination.type == 'remote') {
-	            TOMBOPFFS.loadMEMFSEntry(key, function (err, entry) {
+	            TOMBOPFFS.loadMEMFSEntry(key).then(function (entry) {
 	              console.log(entry.contents);
 	              socket.send({ type: 'replace', path: key, mode: entry.mode, timestamp: entry.timestamp, contents: entry.contents });
 	            });
 	          } else {
-	            // TODO: error handling
-	            console.log('Invalid destination type ' + destination.type);
+	            return {
+	              v: new Promise.reject(new Error('Invalid destination type ' + destination.type))
+	            };
 	          }
 	          if (destination.entries.hasOwnProperty(key)) {
 	            destination.entries[key].timestamp = source.entries[key].timestamp;
@@ -273,7 +286,9 @@ var tombopffs =
 	        };
 
 	        for (var _iterator = replace_entries[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-	          _loop();
+	          var _ret = _loop();
+
+	          if ((typeof _ret === 'undefined' ? 'undefined' : _typeof(_ret)) === "object") return _ret.v;
 	        }
 	      } catch (err) {
 	        _didIteratorError = true;
@@ -315,15 +330,6 @@ var tombopffs =
 	          }
 	        }
 	      }
-
-	      callback(null);
-	    }).catch(function (error) {
-	      if (TOMBOPFFS.debug) {
-	        console.groupCollapsed('TOMBOPFFS.reconcile() connectSocket()');
-	        console.log(error);
-	        console.groupEnd();
-	      }
-	      callback(error);
 	    });
 	  }
 	};
