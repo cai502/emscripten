@@ -133,7 +133,7 @@ module.exports = {
     // TODO: set URL
     TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then((socket) => {
       for (const key of replace_entries) {
-        socket.send(JSON.encode({k: key, v: source.entries[key]}));
+        socket.send({k: key, v: source.entries[key]});
         if (destination.entries.hasOwnProperty(key)) {
           destination.entries[key].timestamp = source.entries[key].timestamp;
         } else {
@@ -142,7 +142,7 @@ module.exports = {
       }
 
       for (const key of delete_entries) {
-        socket.send(JSON.encode({k: key, null}));
+        socket.send({k: key, null});
         destination.entries.delete(key);
       }
 

@@ -198,7 +198,7 @@ var tombopffs =
 	        for (var _iterator = replace_entries[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
 	          var key = _step.value;
 
-	          socket.send(JSON.encode({ k: key, v: source.entries[key] }));
+	          socket.send({ k: key, v: source.entries[key] });
 	          if (destination.entries.hasOwnProperty(key)) {
 	            destination.entries[key].timestamp = source.entries[key].timestamp;
 	          } else {
@@ -228,7 +228,7 @@ var tombopffs =
 	        for (var _iterator2 = delete_entries[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
 	          var _key = _step2.value;
 
-	          socket.send(JSON.encode({ k: _key, null: null }));
+	          socket.send({ k: _key, null: null });
 	          destination.entries.delete(_key);
 	        }
 	      } catch (err) {
