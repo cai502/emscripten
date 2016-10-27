@@ -154,10 +154,6 @@ module.exports = {
 
       resolve();
     });
-    try {
-    } catch (e) {
-      return callback(e);
-    }
   },
   reconcile: function(source, destination) {
     let total_entries = 0;
