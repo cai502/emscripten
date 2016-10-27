@@ -82,7 +82,7 @@ var tombopffs =
 	      var websocket = new TomboWebSocket(url);
 	      TOMBOPFFS.websocket = websocket;
 	      websocket.on('message', function (message) {
-	        console.log('MESSAGE: %s', message);
+	        console.log('MESSAGE: ' + JSON.stringify(message));
 	      });
 	      websocket.on('open', function () {
 	        resolve(websocket);
@@ -370,9 +370,15 @@ var tombopffs =
 	      _this.emit('close', e);
 	    };
 	    ws.onmessage = function (msg) {
-	      console.log(msg.data);
-	      var data = msgpack.decode(msg.data);
-	      _this.emit('message', data);
+	      if (msg.data && msg.data.size > 0) {
+	        (function () {
+	          var reader = new FileReader();
+	          reader.onload = function () {
+	            _this.emit('message', msgpack.decode(new Uint8Array(reader.result)));
+	          };
+	          reader.readAsArrayBuffer(msg.data);
+	        })();
+	      }
 	    };
 	  }
 

@@ -21,7 +21,7 @@ module.exports = {
       let websocket = new TomboWebSocket(url);
       TOMBOPFFS.websocket = websocket;
       websocket.on('message', (message) => {
-        console.log('MESSAGE: %s', message);
+        console.log(`MESSAGE: ${JSON.stringify(message)}`);
       });
       websocket.on('open', () => {
         resolve(websocket);

@@ -24,9 +24,13 @@ class TomboWebSocket {
       this.emit('close', e);
     };
     ws.onmessage = (msg) => {
-      console.log(msg.data);
-      const data = msgpack.decode(msg.data);
-      this.emit('message', data);
+      if (msg.data && msg.data.size > 0) {
+        let reader = new FileReader();
+        reader.onload = () => {
+          this.emit('message', msgpack.decode(new Uint8Array(reader.result)));
+        };
+        reader.readAsArrayBuffer(msg.data);
+      }
     };
   }
   send(msg) {
