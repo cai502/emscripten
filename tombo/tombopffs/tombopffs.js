@@ -200,7 +200,6 @@ module.exports = {
           // TODO: implement
         } else if (destination.type == 'remote') {
           TOMBOPFFS.loadMEMFSEntry(key).then((entry) => {
-            console.log(entry.contents);
             socket.send({type: 'replace', path: key, mode: entry.mode, timestamp: entry.timestamp, contents: entry.contents});
           });
         } else {

@@ -214,9 +214,6 @@ var tombopffs =
 
 	      resolve();
 	    });
-	    try {} catch (e) {
-	      return callback(e);
-	    }
 	  },
 	  reconcile: function reconcile(source, destination) {
 	    var total_entries = 0;
@@ -270,7 +267,6 @@ var tombopffs =
 	            // TODO: implement
 	          } else if (destination.type == 'remote') {
 	            TOMBOPFFS.loadMEMFSEntry(key).then(function (entry) {
-	              console.log(entry.contents);
 	              socket.send({ type: 'replace', path: key, mode: entry.mode, timestamp: entry.timestamp, contents: entry.contents });
 	            });
 	          } else {
