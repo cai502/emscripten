@@ -11,7 +11,8 @@ module.exports = {
   websocket: null,
   mount: function(mount) {
     // reuse all of the core MEMFS functionality
-    return MEMFS.mount.apply(null, arguments);
+    let node = MEMFS.mount.apply(null, arguments);
+    return node;
   },
   connectSocket: function(url) {
     return new Promise((resolve, reject) => {
@@ -38,8 +39,8 @@ module.exports = {
       memfs = _memfs;
       return TOMBOPFFS.getRemoteEntries(mount);
     }).then((remote) => {
-      var source = populate ? remote : memfs;
-      var destination = populate ? memfs : remote;
+      let source = populate ? remote : memfs;
+      let destination = populate ? memfs : remote;
 
       return TOMBOPFFS.reconcile(source, destination);
     }).then(callback).catch((error) => {
@@ -103,10 +104,10 @@ module.exports = {
   },
   loadMEMFSEntry: function(path) {
     return new Promise((resolve, reject) => {
-      var stat, node;
+      let stat, node;
 
       try {
-        var lookup = FS.lookupPath(path);
+        let lookup = FS.lookupPath(path);
         node = lookup.node;
         stat = FS.stat(path);
       } catch (e) {
@@ -143,8 +144,8 @@ module.exports = {
   },
   removeMEMFSEntry: function(path) {
     return new Promise((resolve, reject) => {
-      var lookup = FS.lookupPath(path);
-      var stat = FS.stat(path);
+      let lookup = FS.lookupPath(path);
+      let stat = FS.stat(path);
 
       if (FS.isDir(stat.mode)) {
         FS.rmdir(path);
@@ -160,15 +161,15 @@ module.exports = {
 
     let replace_entries = [];
     Object.keys(source.entries).forEach(function (key) {
-      var e1 = source.entries[key];
-      var e2 = destination.entries[key];
+      let e1 = source.entries[key];
+      let e2 = destination.entries[key];
       if (!e2 || e1.timestamp > e2.timestamp) {
         replace_entries.push(key);
         total_entries++;
       }
     });
 
-    var delete_entries = [];
+    let delete_entries = [];
     Object.keys(destination.entries).forEach(function (key) {
       if (!source.entries[key]) {
         delete_entries.push(key);

@@ -72,7 +72,8 @@ var tombopffs =
 	  websocket: null,
 	  mount: function mount(_mount) {
 	    // reuse all of the core MEMFS functionality
-	    return MEMFS.mount.apply(null, arguments);
+	    var node = MEMFS.mount.apply(null, arguments);
+	    return node;
 	  },
 	  connectSocket: function connectSocket(url) {
 	    return new Promise(function (resolve, reject) {
@@ -163,7 +164,8 @@ var tombopffs =
 	  },
 	  loadMEMFSEntry: function loadMEMFSEntry(path) {
 	    return new Promise(function (resolve, reject) {
-	      var stat, node;
+	      var stat = void 0,
+	          node = void 0;
 
 	      try {
 	        var lookup = FS.lookupPath(path);
