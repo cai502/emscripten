@@ -13,7 +13,8 @@
   "author": "Tasuku SUENAGA",
   "license": "MIT",
   "dependencies": {
-    "ws": "^0.8.0"
+    "ws": "^0.8.0",
+    "mkdirp": "^0.5.1"
   },
   "devDependencies": {
     "mocha": "^2.4.5",

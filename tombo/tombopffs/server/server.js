@@ -1,7 +1,10 @@
 'use strict';
 
-const WebSocketServer = require('ws').Server;
+const fs = require('fs');
+const path = require('path');
+const mkdirp = require('mkdirp');
 const msgpack = require('msgpack-lite');
+const WebSocketServer = require('ws').Server;
 
 class Server {
   constructor(opts) {
@@ -24,6 +27,47 @@ class Server {
     ws.send(msgpack.encode(message));
   }
 
+  static replace(m, s) {
+    // NOTE: This is not safe, but this server is just for testing
+    if (m.path[0] != '/') {
+      console.log('path should start with /');
+      return;
+    }
+    const sync_path = `synced_files${m.path}`;
+    const sync_dirname = path.dirname(sync_path);
+
+    mkdirp(sync_dirname, (err, made) => {
+      if (m.contents === null) {
+        // directory
+        console.log(`DIR: ${sync_path}`);
+        fs.mkdir(sync_path, m.mode, (err) => {
+          s({
+            type: 'ok',
+            path: m.path,
+            mtime: m.mtime
+          });
+        });
+      } else {
+        // file
+        console.log(`FILE: ${sync_path}`);
+        fs.open(sync_path, 'w', m.mode, (err, fd) => {
+          fs.writeFile(fd, m.contents, (err) => {
+            // NOTE: set atime as mtime
+            fs.futimes(fd, m.mtime, m.mtime, (err) => {
+              fs.close(fd, (err) => {
+                s({
+                  type: 'ok',
+                  path: m.path,
+                  mtime: m.mtime
+                });
+              });
+            });
+          });
+        });
+      }
+    });
+  }
+
   static handleMessage(ws, message) {
     const s = Server.send.bind(null, ws);
     let m;
@@ -35,13 +79,7 @@ class Server {
     }
     switch (m.type) {
     case 'replace':
-      s({
-        type: 'ok',
-        applicationId: 'FIXME:',
-        path: m.path,
-        timestamp: 'FIXME:',
-        version: 'FIXME:'
-      });
+      Server.replace(m, s);
       break;
     case 'delete':
       s({
