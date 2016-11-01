@@ -176,6 +176,7 @@ var tombopffs =
 	      }
 
 	      if (FS.isDir(stat.mode)) {
+	        // NOTE: If path points a directory, 'contents' is not set
 	        return resolve({ timestamp: stat.mtime, mode: stat.mode });
 	      } else if (FS.isFile(stat.mode)) {
 	        // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
@@ -269,7 +270,13 @@ var tombopffs =
 	            // TODO: implement
 	          } else if (destination.type == 'remote') {
 	            TOMBOPFFS.loadMEMFSEntry(key).then(function (entry) {
-	              socket.send({ type: 'replace', path: key, mode: entry.mode, timestamp: entry.timestamp, contents: entry.contents });
+	              socket.send({
+	                type: 'replace',
+	                path: key,
+	                mode: entry.mode,
+	                mtime: entry.timestamp,
+	                contents: entry.contents || null // If null, this is a directory.
+	              });
 	            });
 	          } else {
 	            return {
