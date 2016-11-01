@@ -48,10 +48,11 @@ class Server {
           });
         });
       } else {
+        // NOTE: m.contents should be Uint8Array
         // file
         console.log(`FILE: ${sync_path}`);
         fs.open(sync_path, 'w', m.mode, (err, fd) => {
-          fs.writeFile(fd, m.contents, (err) => {
+          fs.writeFile(fd, new Buffer(m.contents), (err) => {
             // NOTE: set atime as mtime
             fs.futimes(fd, m.mtime, m.mtime, (err) => {
               fs.close(fd, (err) => {
