@@ -1,4 +1,5 @@
 const WebSocket = require('ws');
+const msgpack = require('msgpack-lite');
 const client = new WebSocket('ws://localhost:8080/');
 
 client.on('error', (error) => {
@@ -12,11 +13,13 @@ client.on('close', () => {
 client.on('open', () => {
   console.log('WebSocket Client Connected');
 
-  client.send(JSON.stringify({
+  client.send(msgpack.encode({
     type: 'fetchall',
   }));
 });
 
-client.on('message', (message) => {
-  console.log(`Received: ${message}`);
+client.on('message', (encoded_message) => {
+  const message = msgpack.decode(encoded_message);
+  console.log('Received');
+  console.log(message);
 });
