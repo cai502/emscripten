@@ -12,25 +12,32 @@ var LibraryIFrame = {
         var iframe = document.createElement("iframe");
         var id = ++IFrame.iFrameIdCounter;
         iframe.id = "iframe"+id;
+        iframe.style.display = "none";
+        
         IFrame.iframes[id] = iframe;
+        
+        var parent = Module["canvas"].parentElement;
+        parent.appendChild(iframe);
+        
         return id;
     },
 
     iframe_destroy: function(id) {
-        delete IFrame.iframes[id];
-    },
-    
-    iframe_attach: function(id) {
-        var iframe = IFrame.iframes[id];
-        var parent = Module["canvas"].parentElement;
-        parent.appendChild(iframe);
-    },
-    
-    iframe_detach: function(id) {
         var iframe = IFrame.iframes[id];
         var parent = Module["canvas"].parentElement;
         if(parent.contains(iframe)) {
             parent.removeChild(iframe);
+        }
+        
+        delete IFrame.iframes[id];
+    },
+    
+    iframe_setVisible: function(id, visible) { // display 0:
+        var iframe = IFrame.iframes[id];
+        if(visible) {
+            iframe.style.display = "block";
+        } else {
+            iframe.style.display = "none";
         }
     },
     
@@ -74,6 +81,12 @@ var LibraryIFrame = {
     iframe_goForward: function(id) {
         var iframe = IFrame.iframes[id];
         iframe.contentWindow.history.forward();
+    },
+    
+    iframe_evalJs: function(id, script) {
+        var iframe = IFrame.iframes[id];
+        var ret = iframe.contentWindow.eval(Pointer_stringify(script));
+        return allocate(intArrayFromString(ret), 'i8', ALLOC_NORMAL);
     }
 };
 
