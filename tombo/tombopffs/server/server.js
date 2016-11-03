@@ -44,8 +44,7 @@ class Server {
         fs.mkdir(sync_path, m.mode, (err) => {
           s({
             type: 'ok',
-            path: m.path,
-            mtime: m.mtime,
+            request_type: m.type,
             request_id: m.request_id
           });
         });
@@ -60,8 +59,7 @@ class Server {
               fs.close(fd, (err) => {
                 s({
                   type: 'ok',
-                  path: m.path,
-                  mtime: m.mtime,
+                  request_type: m.type,
                   request_id: m.request_id
                 });
               });
@@ -81,10 +79,11 @@ class Server {
       const rel_path = path.relative('synced_files', full_path);
       s({
         type: 'replace',
-        path: rel_path,
+        path: '/' + rel_path,
         mode: fileStats.mode,
         mtime: fileStats.mtime,
         contents: null,
+        request_type: m.type,
         request_id: m.request_id
       });
       sent_directories++;
@@ -96,10 +95,11 @@ class Server {
       fs.readFile(full_path, (err, contents) => {
         s({
           type: 'replace',
-          path: rel_path,
+          path: '/' + rel_path,
           mode: fileStats.mode,
           mtime: fileStats.mtime,
           contents: contents,
+          request_type: m.type,
           request_id: m.request_id
         });
         sent_files++;
@@ -107,6 +107,7 @@ class Server {
       })
     })
     walker.on('errors', (root, nodeStatsArray, next) => {
+      // TODO: implement error handlings
       next();
     });
     walker.on('end', () => {
@@ -114,6 +115,7 @@ class Server {
         type: 'ok',
         sent_directories: sent_directories,
         sent_files: sent_files,
+        request_type: m.type,
         request_id: m.request_id
       });
     });
@@ -135,10 +137,7 @@ class Server {
     case 'delete':
       s({
         type: 'ok',
-        applicationId: 'FIXME:',
-        path: m.path,
-        timestamp: 'FIXME:',
-        version: 'FIXME:',
+        request_type: m.type,
         request_id: m.request_id
       });
       break;
