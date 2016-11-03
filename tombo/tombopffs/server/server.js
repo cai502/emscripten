@@ -84,7 +84,8 @@ class Server {
         path: rel_path,
         mode: fileStats.mode,
         mtime: fileStats.mtime,
-        contents: null
+        contents: null,
+        request_id: m.request_id
       });
       sent_directories++;
       next();
@@ -98,7 +99,8 @@ class Server {
           path: rel_path,
           mode: fileStats.mode,
           mtime: fileStats.mtime,
-          contents: contents
+          contents: contents,
+          request_id: m.request_id
         });
         sent_files++;
         next();
