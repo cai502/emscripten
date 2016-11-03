@@ -320,8 +320,12 @@ var LibraryDispatch = {
             };
             DISPATCH.groupWait = function(groupId, timeout) {
                 var group = groupList.get(groupId);
-                if(group.count > 0) {
-                    throw new Error("dead lock!");
+
+                while(group.count != 0 && (timeout == -1 || performance.now() < timeout)) {
+    	            var queue = selectNextQueue(DISPATCH.currentQueue);
+     	            if(!queue) return;
+    	            var task = queue.tasks.shift();
+                    task.execute();
                 }
             };
             DISPATCH.groupNotify = function(groupId, queueId, ctx, func) {
@@ -342,10 +346,11 @@ var LibraryDispatch = {
                 var group = groupList.get(groupId);
                 group.leave();
             };
-            function selectNextQueue() {
+            function selectNextQueue(exclude) {
                 var list = queueList.list;
                 for(var i = 0; i < list.length; i++) {
                     var queue = list[i];
+                    if(queue == exclude) continue;
                     if(!queue.suspend && queue.tasks.length > 0) {
                         DISPATCH.currentQueue = queue;
                         return queue;
@@ -372,7 +377,7 @@ var LibraryDispatch = {
                 
                 // execute at least one task
                 do {
-    	            var queue = selectNextQueue();
+    	            var queue = selectNextQueue(null);
     	            if(!queue) return;
     	            var task = queue.tasks.shift();
                     task.execute();
