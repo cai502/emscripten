@@ -71,10 +71,13 @@ var tombopffs =
 	  remote_entries: {},
 	  mount_point: null,
 	  websocket: null,
+	  sent_directories: 0,
+	  sent_files: 0,
 	  mount: function mount(_mount) {
 	    // reuse all of the core MEMFS functionality
 	    var node = MEMFS.mount.apply(null, arguments);
 	    TOMBOPFFS.mount_point = _mount[0].mountpoint;
+	    TOMBOPFFS.fetchAllRemoteEntries();
 	    return node;
 	  },
 	  connectSocket: function connectSocket(url) {
@@ -85,7 +88,7 @@ var tombopffs =
 	      var websocket = new TomboWebSocket(url);
 	      TOMBOPFFS.websocket = websocket;
 	      websocket.on('message', function (message) {
-	        console.log('MESSAGE: ' + JSON.stringify(message));
+	        TOMBOPFFS.onRemoteMessage(message);
 	      });
 	      websocket.on('open', function () {
 	        resolve(websocket);
@@ -95,10 +98,50 @@ var tombopffs =
 	      });
 	    });
 	  },
+	  onRemoteMessage: function onRemoteMessage(message) {
+	    switch (message.type) {
+	      case 'ok':
+	        if (message.request_type === 'fetch-all') {
+	          TOMBOPFFS.sent_directories = message.sent_directories;
+	          TOMBOPFFS.sent_files = message.sent_files;
+	        }
+	        break;
+	      case 'replace':
+	        var local_path = TOMBOPFFS.mount_point + message.path;
+	        TOMBOPFFS.remote_entries[local_path] = {
+	          mode: message.mode,
+	          mtime: message.mtime
+	        };
+	        if (message.contents) {
+	          TOMBOPFFS.remote_entries[local_path].contents = message.contents;
+	        }
+	        break;
+	      default:
+	        console.log('ERROR: invalid message type ' + message.type);
+	    }
+	  },
+	  waitForFetchAll: function waitForFetchAll() {
+	    return new Promise(function (resolve, reject) {
+	      var f = function f() {
+	        var sent = TOMBOPFFS.sent_directories + TOMBOPFFS.sent_files;
+	        var current = Object.keys(TOMBOPFFS.remote_entries).length;
+	        // console.log(`current: ${current} sent: ${sent}`);
+	        if (sent === current) {
+	          resolve();
+	        } else {
+	          console.log('waiting fetching files from the remote server: current ' + current);
+	          setTimeout(f, 100);
+	        }
+	      };
+	      f();
+	    });
+	  },
 	  /* entry point of filesystem sync */
 	  syncfs: function syncfs(mount, populate, callback) {
 	    var memfs = void 0;
-	    TOMBOPFFS.getMEMFSEntries(mount).then(function (_memfs) {
+	    TOMBOPFFS.waitForFetchAll().then(function () {
+	      return TOMBOPFFS.getMEMFSEntries(mount);
+	    }).then(function (_memfs) {
 	      memfs = _memfs;
 	      return TOMBOPFFS.getRemoteEntries(mount);
 	    }).then(function (remote) {
@@ -143,7 +186,7 @@ var tombopffs =
 	          check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
 	        }
 
-	        entries[path] = { timestamp: stat.mtime };
+	        entries[path] = { mtime: stat.mtime };
 	      }
 
 	      /*
@@ -164,6 +207,16 @@ var tombopffs =
 	      resolve({ type: 'remote', entries: TOMBOPFFS.remote_entries });
 	    });
 	  },
+	  fetchAllRemoteEntries: function fetchAllRemoteEntries() {
+	    TOMBOPFFS.sent_directories = 0;
+	    TOMBOPFFS.sent_files = 0;
+	    return TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then(function (socket) {
+	      socket.send({
+	        type: 'fetch-all',
+	        request_id: 'fetch-all-dummy' // TODO: replace a proper id
+	      });
+	    });
+	  },
 	  loadMEMFSEntry: function loadMEMFSEntry(path) {
 	    return new Promise(function (resolve, reject) {
 	      var stat = void 0,
@@ -179,12 +232,12 @@ var tombopffs =
 
 	      if (FS.isDir(stat.mode)) {
 	        // NOTE: If path points a directory, 'contents' is not set
-	        return resolve({ timestamp: stat.mtime, mode: stat.mode });
+	        return resolve({ mtime: stat.mtime, mode: stat.mode });
 	      } else if (FS.isFile(stat.mode)) {
 	        // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
 	        // Therefore always convert the file contents to a typed array first before writing the data to IndexedDB.
 	        node.contents = MEMFS.getFileDataAsTypedArray(node);
-	        return resolve({ timestamp: stat.mtime, mode: stat.mode, contents: node.contents });
+	        return resolve({ mtime: stat.mtime, mode: stat.mode, contents: node.contents });
 	      } else {
 	        return reject(new Error('node type not supported'));
 	      }
@@ -279,8 +332,9 @@ var tombopffs =
 	                type: 'replace',
 	                path: key.substring(TOMBOPFFS.mount_point.length),
 	                mode: entry.mode,
-	                mtime: entry.timestamp,
-	                contents: entry.contents || null // If null, this is a directory.
+	                mtime: entry.mtime,
+	                contents: entry.contents || null, // If null, this is a directory.
+	                request_id: 'dummy' // TODO: replace a proper id
 	              });
 	            });
 	          } else {
@@ -289,9 +343,9 @@ var tombopffs =
 	            };
 	          }
 	          if (destination.entries.hasOwnProperty(key)) {
-	            destination.entries[key].timestamp = source.entries[key].timestamp;
+	            destination.entries[key].mtime = source.entries[key].mtime;
 	          } else {
-	            destination.entries[key] = { timestamp: source.entries[key].timestamp };
+	            destination.entries[key] = { mtime: source.entries[key].mtime };
 	          }
 	        };
 
@@ -323,7 +377,11 @@ var tombopffs =
 	        for (var _iterator2 = delete_entries[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
 	          var _key = _step2.value;
 
-	          socket.send({ type: 'delete', path: _key });
+	          socket.send({
+	            type: 'delete',
+	            path: _key,
+	            request_id: 'dummy' // TODO: replace a proper id
+	          });
 	          destination.entries.delete(_key);
 	        }
 	      } catch (err) {

@@ -10,10 +10,13 @@ module.exports = {
   remote_entries: {},
   mount_point: null,
   websocket: null,
+  sent_directories: 0,
+  sent_files: 0,
   mount: function(mount) {
     // reuse all of the core MEMFS functionality
     let node = MEMFS.mount.apply(null, arguments);
     TOMBOPFFS.mount_point = mount[0].mountpoint;
+    TOMBOPFFS.fetchAllRemoteEntries();
     return node;
   },
   connectSocket: function(url) {
@@ -24,7 +27,7 @@ module.exports = {
       let websocket = new TomboWebSocket(url);
       TOMBOPFFS.websocket = websocket;
       websocket.on('message', (message) => {
-        console.log(`MESSAGE: ${JSON.stringify(message)}`);
+        TOMBOPFFS.onRemoteMessage(message);
       });
       websocket.on('open', () => {
         resolve(websocket);
@@ -34,10 +37,50 @@ module.exports = {
       });
     });
   },
+  onRemoteMessage: function(message) {
+    switch(message.type) {
+    case 'ok':
+      if (message.request_type === 'fetch-all') {
+        TOMBOPFFS.sent_directories = message.sent_directories;
+        TOMBOPFFS.sent_files = message.sent_files;
+      }
+      break;
+    case 'replace':
+      const local_path = TOMBOPFFS.mount_point + message.path;
+      TOMBOPFFS.remote_entries[local_path] = {
+        mode: message.mode,
+        mtime: message.mtime,
+      }
+      if (message.contents) {
+        TOMBOPFFS.remote_entries[local_path].contents = message.contents;
+      }
+      break;
+    default:
+      console.log(`ERROR: invalid message type ${message.type}`);
+    }
+  },
+  waitForFetchAll: function() {
+    return new Promise((resolve, reject) => {
+      let f = () => {
+        const sent = TOMBOPFFS.sent_directories + TOMBOPFFS.sent_files;
+        const current = Object.keys(TOMBOPFFS.remote_entries).length;
+        // console.log(`current: ${current} sent: ${sent}`);
+        if (sent === current) {
+          resolve();
+        } else {
+          console.log(`waiting fetching files from the remote server: current ${current}`);
+          setTimeout(f, 100);
+        }
+      };
+      f();
+    });
+  },
   /* entry point of filesystem sync */
   syncfs: function(mount, populate, callback) {
     let memfs;
-    TOMBOPFFS.getMEMFSEntries(mount).then((_memfs) => {
+    TOMBOPFFS.waitForFetchAll().then(() => {
+      return TOMBOPFFS.getMEMFSEntries(mount);
+    }).then((_memfs) => {
       memfs = _memfs;
       return TOMBOPFFS.getRemoteEntries(mount);
     }).then((remote) => {
@@ -83,7 +126,7 @@ module.exports = {
           check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
         }
 
-        entries[path] = { timestamp: stat.mtime };
+        entries[path] = { mtime: stat.mtime };
       }
 
       /*
@@ -104,6 +147,16 @@ module.exports = {
       resolve({ type: 'remote', entries: TOMBOPFFS.remote_entries });
     });
   },
+  fetchAllRemoteEntries: function() {
+    TOMBOPFFS.sent_directories = 0;
+    TOMBOPFFS.sent_files = 0;
+    return TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then((socket) => {
+      socket.send({
+        type: 'fetch-all',
+        request_id: 'fetch-all-dummy' // TODO: replace a proper id
+      });
+    });
+  },
   loadMEMFSEntry: function(path) {
     return new Promise((resolve, reject) => {
       let stat, node;
@@ -118,12 +171,12 @@ module.exports = {
 
       if (FS.isDir(stat.mode)) {
         // NOTE: If path points a directory, 'contents' is not set
-        return resolve({ timestamp: stat.mtime, mode: stat.mode });
+        return resolve({ mtime: stat.mtime, mode: stat.mode });
       } else if (FS.isFile(stat.mode)) {
         // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
         // Therefore always convert the file contents to a typed array first before writing the data to IndexedDB.
         node.contents = MEMFS.getFileDataAsTypedArray(node);
-        return resolve({ timestamp: stat.mtime, mode: stat.mode, contents: node.contents });
+        return resolve({ mtime: stat.mtime, mode: stat.mode, contents: node.contents });
       } else {
         return reject(new Error('node type not supported'));
       }
@@ -211,22 +264,27 @@ module.exports = {
               type: 'replace',
               path: key.substring(TOMBOPFFS.mount_point.length),
               mode: entry.mode,
-              mtime: entry.timestamp,
-              contents: entry.contents || null // If null, this is a directory.
+              mtime: entry.mtime,
+              contents: entry.contents || null, // If null, this is a directory.
+              request_id: 'dummy' // TODO: replace a proper id
             });
           });
         } else {
           return new Promise.reject(new Error(`Invalid destination type ${destination.type}`));
         }
         if (destination.entries.hasOwnProperty(key)) {
-          destination.entries[key].timestamp = source.entries[key].timestamp;
+          destination.entries[key].mtime = source.entries[key].mtime;
         } else {
-          destination.entries[key] = { timestamp: source.entries[key].timestamp };
+          destination.entries[key] = { mtime: source.entries[key].mtime };
         }
       }
 
       for (const key of delete_entries) {
-        socket.send({type: 'delete', path: key});
+        socket.send({
+          type: 'delete',
+          path: key,
+          request_id: 'dummy' // TODO: replace a proper id
+        });
         destination.entries.delete(key);
       }
     });
