@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const walk = require('walk');
 const mkdirp = require('mkdirp');
 const msgpack = require('msgpack-lite');
 const WebSocketServer = require('ws').Server;
@@ -44,7 +45,8 @@ class Server {
           s({
             type: 'ok',
             path: m.path,
-            mtime: m.mtime
+            mtime: m.mtime,
+            request_id: m.request_id
           });
         });
       } else {
@@ -59,13 +61,59 @@ class Server {
                 s({
                   type: 'ok',
                   path: m.path,
-                  mtime: m.mtime
+                  mtime: m.mtime,
+                  request_id: m.request_id
                 });
               });
             });
           });
         });
       }
+    });
+  }
+
+  static fetchAll(m, s) {
+    let sent_directories = 0;
+    let sent_files = 0;
+    let walker = walk.walk('synced_files', {});
+    walker.on('directory', (root, fileStats, next) => {
+      const full_path = path.resolve(root, fileStats.name);
+      const rel_path = path.relative('synced_files', full_path);
+      s({
+        type: 'replace',
+        path: rel_path,
+        mode: fileStats.mode,
+        mtime: fileStats.mtime,
+        contents: null
+      });
+      sent_directories++;
+      next();
+    });
+    walker.on('file', (root, fileStats, next) => {
+      const full_path = path.resolve(root, fileStats.name);
+      const rel_path = path.relative('synced_files', full_path);
+      fs.readFile(full_path, (err, contents) => {
+        s({
+          type: 'replace',
+          path: rel_path,
+          mode: fileStats.mode,
+          mtime: fileStats.mtime,
+          contents: contents
+        });
+        sent_files++;
+        next();
+      })
+    })
+    walker.on('errors', (root, nodeStatsArray, next) => {
+      next();
+    });
+    walker.on('end', () => {
+      s({
+        type: 'ok',
+        sent_directories: sent_directories,
+        sent_files: sent_files,
+        request_id: m.request_id
+      });
     });
   }
 
@@ -88,13 +136,12 @@ class Server {
         applicationId: 'FIXME:',
         path: m.path,
         timestamp: 'FIXME:',
-        version: 'FIXME:'
+        version: 'FIXME:',
+        request_id: m.request_id
       });
       break;
-    case 'fetchall':
-      s({
-        type: 'fetchall'
-      });
+    case 'fetch-all':
+      Server.fetchAll(m, s);
       break;
     default:
       console.log(`Invalid message type "${m.type}"`);

@@ -14,7 +14,8 @@ client.on('open', () => {
   console.log('WebSocket Client Connected');
 
   client.send(msgpack.encode({
-    type: 'fetchall',
+    type: 'fetch-all',
+    request_id: 'test-fetch-all'
   }));
 });
 
