@@ -69,10 +69,12 @@ var tombopffs =
 	module.exports = {
 	  debug: true,
 	  remote_entries: {},
+	  mount_point: null,
 	  websocket: null,
 	  mount: function mount(_mount) {
 	    // reuse all of the core MEMFS functionality
 	    var node = MEMFS.mount.apply(null, arguments);
+	    TOMBOPFFS.mount_point = _mount[0].mountpoint;
 	    return node;
 	  },
 	  connectSocket: function connectSocket(url) {
@@ -270,9 +272,12 @@ var tombopffs =
 	            // TODO: implement
 	          } else if (destination.type == 'remote') {
 	            TOMBOPFFS.loadMEMFSEntry(key).then(function (entry) {
+	              if (!key.startsWith(TOMBOPFFS.mount_point)) {
+	                return Promise.reject(new Error('Invalid path ' + key));
+	              }
 	              socket.send({
 	                type: 'replace',
-	                path: key,
+	                path: key.substring(TOMBOPFFS.mount_point.length),
 	                mode: entry.mode,
 	                mtime: entry.timestamp,
 	                contents: entry.contents || null // If null, this is a directory.
