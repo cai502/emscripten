@@ -47,13 +47,18 @@ module.exports = {
       break;
     case 'replace':
       const local_path = TOMBOPFFS.mount_point + message.path;
-      TOMBOPFFS.remote_entries[local_path] = {
+      // NOTE: now direct update
+      // TODO: wait for parent directory
+      TOMBOPFFS.storeMEMFSEntry(local_path, {
         mode: message.mode,
-        mtime: message.mtime,
-      }
-      if (message.contents) {
-        TOMBOPFFS.remote_entries[local_path].contents = message.contents;
-      }
+        timestamp: message.mtime,
+        contents: message.contents // could be null
+      }).then(() => {
+        TOMBOPFFS.remote_entries[local_path] = {
+          mode: message.mode,
+          mtime: message.mtime,
+        }
+      });
       break;
     default:
       console.log(`ERROR: invalid message type ${message.type}`);
@@ -78,23 +83,40 @@ module.exports = {
   /* entry point of filesystem sync */
   syncfs: function(mount, populate, callback) {
     let memfs;
-    TOMBOPFFS.waitForFetchAll().then(() => {
-      return TOMBOPFFS.getMEMFSEntries(mount);
-    }).then((_memfs) => {
-      memfs = _memfs;
-      return TOMBOPFFS.getRemoteEntries(mount);
-    }).then((remote) => {
-      let source = populate ? remote : memfs;
-      let destination = populate ? memfs : remote;
+    // TODO: mutex during syncing
+    if (populate) {
+      // remote to MEMFS
+      TOMBOPFFS.waitForFetchAll()
+      .then(callback)
+      .catch((error) => {
+        console.groupCollapsed('TOMBOPFFS.syncfs() remote => MEMFS');
+        console.log(error);
+        console.groupEnd();
 
-      return TOMBOPFFS.reconcile(source, destination);
-    }).then(callback).catch((error) => {
-      console.groupCollapsed('TOMBOPFFS.syncfs()');
-      console.log(error);
-      console.groupEnd();
+        return callback(error);
+      });
+    } else {
+      // MEMFS to remote
+      TOMBOPFFS.getMEMFSEntries(mount).then((_memfs) => {
+        memfs = _memfs;
+        return TOMBOPFFS.getRemoteEntries(mount);
+      })
+      .then((remote) => {
+        let source = memfs;
+        let destination = remote;
 
-      return callback(error);
-    });
+        // TODO: reconcile should be bi-directional
+        return TOMBOPFFS.reconcile(source, destination);
+      })
+      .then(callback)
+      .catch((error) => {
+        console.groupCollapsed('TOMBOPFFS.syncfs() MEMFS => remote');
+        console.log(error);
+        console.groupEnd();
+
+        return callback(error);
+      });
+    }
   },
   getMEMFSEntries: function(mount) {
     return new Promise((resolve, reject) => {

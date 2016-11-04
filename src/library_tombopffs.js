@@ -99,26 +99,33 @@ var tombopffs =
 	    });
 	  },
 	  onRemoteMessage: function onRemoteMessage(message) {
-	    switch (message.type) {
-	      case 'ok':
-	        if (message.request_type === 'fetch-all') {
-	          TOMBOPFFS.sent_directories = message.sent_directories;
-	          TOMBOPFFS.sent_files = message.sent_files;
-	        }
-	        break;
-	      case 'replace':
-	        var local_path = TOMBOPFFS.mount_point + message.path;
-	        TOMBOPFFS.remote_entries[local_path] = {
-	          mode: message.mode,
-	          mtime: message.mtime
-	        };
-	        if (message.contents) {
-	          TOMBOPFFS.remote_entries[local_path].contents = message.contents;
-	        }
-	        break;
-	      default:
-	        console.log('ERROR: invalid message type ' + message.type);
-	    }
+	    (function () {
+	      switch (message.type) {
+	        case 'ok':
+	          if (message.request_type === 'fetch-all') {
+	            TOMBOPFFS.sent_directories = message.sent_directories;
+	            TOMBOPFFS.sent_files = message.sent_files;
+	          }
+	          break;
+	        case 'replace':
+	          var local_path = TOMBOPFFS.mount_point + message.path;
+	          // NOTE: now direct update
+	          // TODO: wait for parent directory
+	          TOMBOPFFS.storeMEMFSEntry(local_path, {
+	            mode: message.mode,
+	            timestamp: message.mtime,
+	            contents: message.contents // could be null
+	          }).then(function () {
+	            TOMBOPFFS.remote_entries[local_path] = {
+	              mode: message.mode,
+	              mtime: message.mtime
+	            };
+	          });
+	          break;
+	        default:
+	          console.log('ERROR: invalid message type ' + message.type);
+	      }
+	    })();
 	  },
 	  waitForFetchAll: function waitForFetchAll() {
 	    return new Promise(function (resolve, reject) {
@@ -139,23 +146,35 @@ var tombopffs =
 	  /* entry point of filesystem sync */
 	  syncfs: function syncfs(mount, populate, callback) {
 	    var memfs = void 0;
-	    TOMBOPFFS.waitForFetchAll().then(function () {
-	      return TOMBOPFFS.getMEMFSEntries(mount);
-	    }).then(function (_memfs) {
-	      memfs = _memfs;
-	      return TOMBOPFFS.getRemoteEntries(mount);
-	    }).then(function (remote) {
-	      var source = populate ? remote : memfs;
-	      var destination = populate ? memfs : remote;
+	    // TODO: mutex during syncing
+	    if (populate) {
+	      // remote to MEMFS
+	      TOMBOPFFS.waitForFetchAll().then(callback).catch(function (error) {
+	        console.groupCollapsed('TOMBOPFFS.syncfs() remote => MEMFS');
+	        console.log(error);
+	        console.groupEnd();
 
-	      return TOMBOPFFS.reconcile(source, destination);
-	    }).then(callback).catch(function (error) {
-	      console.groupCollapsed('TOMBOPFFS.syncfs()');
-	      console.log(error);
-	      console.groupEnd();
+	        return callback(error);
+	      });
+	    } else {
+	      // MEMFS to remote
+	      TOMBOPFFS.getMEMFSEntries(mount).then(function (_memfs) {
+	        memfs = _memfs;
+	        return TOMBOPFFS.getRemoteEntries(mount);
+	      }).then(function (remote) {
+	        var source = memfs;
+	        var destination = remote;
 
-	      return callback(error);
-	    });
+	        // TODO: reconcile should be bi-directional
+	        return TOMBOPFFS.reconcile(source, destination);
+	      }).then(callback).catch(function (error) {
+	        console.groupCollapsed('TOMBOPFFS.syncfs() MEMFS => remote');
+	        console.log(error);
+	        console.groupEnd();
+
+	        return callback(error);
+	      });
+	    }
 	  },
 	  getMEMFSEntries: function getMEMFSEntries(mount) {
 	    return new Promise(function (resolve, reject) {
@@ -350,9 +369,9 @@ var tombopffs =
 	        };
 
 	        for (var _iterator = replace_entries[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-	          var _ret = _loop();
+	          var _ret2 = _loop();
 
-	          if ((typeof _ret === 'undefined' ? 'undefined' : _typeof(_ret)) === "object") return _ret.v;
+	          if ((typeof _ret2 === 'undefined' ? 'undefined' : _typeof(_ret2)) === "object") return _ret2.v;
 	        }
 	      } catch (err) {
 	        _didIteratorError = true;
