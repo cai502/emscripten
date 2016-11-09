@@ -1491,10 +1491,8 @@ mergeInto(LibraryManager.library, {
         var part = parts.pop();
         if (!part) continue;
         var current = PATH.join2(parent, part);
-        try {
+        if(!FS.analyzePath(current).exists) {
           FS.mkdir(current);
-        } catch (e) {
-          // ignore EEXIST
         }
         parent = current;
       }
