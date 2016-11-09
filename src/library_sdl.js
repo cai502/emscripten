@@ -2223,6 +2223,20 @@ var LibrarySDL = {
             data[destPtr++] = value;
             data[destPtr++] = 255;
           }
+        } else if (raw.bpp == 2) {
+          // grayscale + alpha
+          var pixels = raw.size;
+          var data = imageData.data;
+          var sourcePtr = raw.data;
+          var destPtr = 0;
+          for (var i = 0; i < pixels; i++) {
+            var gray = {{{ makeGetValue('sourcePtr++', 0, 'i8', null, 1) }}};
+            var alpha = {{{ makeGetValue('sourcePtr++', 0, 'i8', null, 1) }}};
+            data[destPtr++] = gray;
+            data[destPtr++] = gray;
+            data[destPtr++] = gray;
+            data[destPtr++] = alpha;
+          }
         } else {
           Module.printErr('cannot handle bpp ' + raw.bpp);
           return 0;
