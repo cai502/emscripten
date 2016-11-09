@@ -363,7 +363,8 @@ def function_tables_and_exports(funcs, metadata, mem_init, glue, forwarded_data,
     exported_implemented_functions = set(metadata['exports'])
     export_bindings = settings['EXPORT_BINDINGS']
     export_all = settings['EXPORT_ALL']
-    all_implemented = metadata['implementedFunctions'] + forwarded_json['Functions']['implementedFunctions'].keys() # XXX perf?
+    all_implemented = set(metadata['implementedFunctions'] + forwarded_json['Functions']['implementedFunctions'].keys()) # XXX perf?
+
     for key in all_implemented:
       if key in all_exported_functions or export_all or (export_bindings and key.startswith('_emscripten_bind')):
         exported_implemented_functions.add(key)
