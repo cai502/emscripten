@@ -131,7 +131,7 @@ var LibraryDispatch = {
                     this.timerCancelNormal();
                 }
                 
-                this.execurteCancelHandler();
+                this.executeCancelHandler();
             };
             Source.prototype.timerCancelSpecial = function() {
                 delete Source.specialEvents[this.specialPriority()-1];
@@ -139,7 +139,7 @@ var LibraryDispatch = {
             Source.prototype.timerCancelNormal = function() {
                 clearTimeout(this.timeoutId);
             };
-            Source.prototype.executeCancelHanlder = function() {
+            Source.prototype.executeCancelHandler = function() {
                 var cancel = this.cancelHandler;
                 if(cancel) {
                     if(this.suspend) {
@@ -290,7 +290,7 @@ var LibraryDispatch = {
                 source.cancelHandler = task;
             };
             DISPATCH.sourceCancel = function(sourceId) {
-                var source = DISPATCH.get(sourceId);
+                var source = sourceList.get(sourceId);
                 if(source.type != Source.Type.Timer) throw new Error("not a timer source");
                 
                 source.timerCancel();
