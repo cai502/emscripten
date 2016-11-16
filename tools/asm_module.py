@@ -262,13 +262,11 @@ class AsmModule():
 
   def parse_tables(self, js):
     tables = {}
-    parts = js.split(';/**/')
+    parts = js.split(';')
     for part in parts:
       if '=' not in part: continue
       part = part.split('var ')[1]
-      eq = part.index('=')
-      name = part[:eq]
-      data = part[eq+1:]
+      name, data = part.split('=')
       tables[name.strip()] = data.strip()
     return tables
 
@@ -338,3 +336,4 @@ class AsmModule():
       return 'd'
     else:
       return '?'
+

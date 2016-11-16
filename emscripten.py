@@ -497,14 +497,28 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
     def make_func(name, code, params, coercions): return 'function %s(%s) {\n %s %s\n}' % (name, params, coercions, code)
 
     in_table = set()
-    
-    assert not settings["EMULATE_FUNCTION_POINTER_CASTS"], "EMULATE_FUNCTION_POINTER_CASTS is not supproted"
 
     def make_table(sig, raw):
       params = make_params(sig)
       coerced_params = make_coerced_params(sig)
       coercions = make_coercions(sig)
-      Counter.pre = []
+      def make_bad(target=None):
+        i = Counter.i
+        Counter.i += 1
+        if target is None: target = i
+        name = 'b' + str(i)
+        if not settings['ASSERTIONS']:
+          code = 'abort(%s);' % target
+        else:
+          code = 'nullFunc_' + sig + '(%d);' % target
+        if sig[0] != 'v':
+          code += 'return %s' % shared.JS.make_initializer(sig[0], settings) + ';'
+        return name, make_func(name, code, params, coercions)
+      bad, bad_func = make_bad() # the default bad func
+      if settings['ASSERTIONS'] <= 1:
+        Counter.pre = [bad_func]
+      else:
+        Counter.pre = []
       start = raw.index('[')
       end = raw.rindex(']')
       body = raw[start+1:end].split(',')
@@ -527,8 +541,39 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
       def fix_item(item):
         j = Counter.j
         Counter.j += 1
+        newline = Counter.j % 30 == 29
         if item == '0':
-          return ''
+          if j > 0 and settings['EMULATE_FUNCTION_POINTER_CASTS'] and j in function_pointer_targets: # emulate all non-null pointer calls, if asked to
+            proper_sig, proper_target = function_pointer_targets[j]
+            if settings['EMULATED_FUNCTION_POINTERS']:
+              if proper_target in all_implemented:
+                proper_target = "asm['" + proper_target + "']"
+            def make_emulated_param(i):
+              if i >= len(sig): return shared.JS.make_initializer(proper_sig[i], settings) # extra param, just send a zero
+              return shared.JS.make_coercion('p%d' % (i-1), proper_sig[i], settings, convert_from=sig[i])
+            proper_code = proper_target + '(' + ','.join(map(lambda i: make_emulated_param(i+1), range(len(proper_sig)-1))) + ')'
+            if proper_sig[0] != 'v':
+              # proper sig has a return, which the wrapper may or may not use
+              proper_code = shared.JS.make_coercion(proper_code, proper_sig[0], settings)
+              if proper_sig[0] != sig[0]:
+                # first coercion ensured we call the target ok; this one ensures we return the right type in the wrapper
+                proper_code = shared.JS.make_coercion(proper_code, sig[0], settings, convert_from=proper_sig[0])
+              if sig[0] != 'v':
+                proper_code = 'return ' + proper_code
+            else:
+              # proper sig has no return, we may need a fake return
+              if sig[0] != 'v':
+                proper_code = 'return ' + shared.JS.make_initializer(sig[0], settings)
+            name = 'fpemu_%s_%d' % (sig, j)
+            wrapper = make_func(name, proper_code, params, coercions)
+            Counter.pre.append(wrapper)
+            return name if not newline else (name + '\n')
+          if settings['ASSERTIONS'] <= 1:
+            return bad if not newline else (bad + '\n')
+          else:
+            specific_bad, specific_bad_func = make_bad(j)
+            Counter.pre.append(specific_bad_func)
+            return specific_bad if not newline else (specific_bad + '\n')
         clean_item = item.replace("asm['", '').replace("']", '')
         # when emulating function pointers, we don't need wrappers
         # but if relocating, then we also have the copies in-module, and do
@@ -545,12 +590,12 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
           Counter.pre.append(make_func(clean_item + '__wrapper', code, params, coercions))
-          return "x%s[%s]=%s;" % (sig, j, clean_item + '__wrapper')
-        return "x%s[%s]=%s;" % (sig, j, item)
+          return clean_item + '__wrapper'
+        return item if not newline else (item + '\n')
       if settings['ASSERTIONS'] >= 2:
         debug_tables[sig] = body
-      body = ''.join(map(fix_item, body))
-      return ('\n'.join(Counter.pre), "%s(function(){var x%s=new Array(%s);%sreturn x%s;})();/**/" % (raw[:start], sig, Counter.j, body, sig))
+      body = ','.join(map(fix_item, body))
+      return ('\n'.join(Counter.pre), ''.join([raw[:start+1], body, raw[end:]]))
 
     infos = [make_table(sig, raw) for sig, raw in last_forwarded_json['Functions']['tables'].iteritems()]
     Counter.pre = []
