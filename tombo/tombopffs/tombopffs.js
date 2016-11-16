@@ -51,7 +51,7 @@ module.exports = {
       // TODO: wait for parent directory
       TOMBOPFFS.storeMEMFSEntry(local_path, {
         mode: message.mode,
-        timestamp: message.mtime,
+        mtime: message.mtime,
         contents: message.contents // could be null
       }).then(() => {
         TOMBOPFFS.remote_entries[local_path] = {
@@ -215,7 +215,7 @@ module.exports = {
       }
 
       FS.chmod(path, entry.mode);
-      FS.utime(path, entry.timestamp, entry.timestamp);
+      FS.utime(path, entry.mtime, entry.mtime);
 
       resolve();
     });
@@ -241,7 +241,7 @@ module.exports = {
     Object.keys(source.entries).forEach(function (key) {
       let e1 = source.entries[key];
       let e2 = destination.entries[key];
-      if (!e2 || e1.timestamp > e2.timestamp) {
+      if (!e2 || e1.mtime > e2.mtime) {
         replace_entries.push(key);
         total_entries++;
       }

@@ -113,7 +113,7 @@ var tombopffs =
 	          // TODO: wait for parent directory
 	          TOMBOPFFS.storeMEMFSEntry(local_path, {
 	            mode: message.mode,
-	            timestamp: message.mtime,
+	            mtime: message.mtime,
 	            contents: message.contents // could be null
 	          }).then(function () {
 	            TOMBOPFFS.remote_entries[local_path] = {
@@ -273,7 +273,7 @@ var tombopffs =
 	      }
 
 	      FS.chmod(path, entry.mode);
-	      FS.utime(path, entry.timestamp, entry.timestamp);
+	      FS.utime(path, entry.mtime, entry.mtime);
 
 	      resolve();
 	    });
@@ -299,7 +299,7 @@ var tombopffs =
 	    Object.keys(source.entries).forEach(function (key) {
 	      var e1 = source.entries[key];
 	      var e2 = destination.entries[key];
-	      if (!e2 || e1.timestamp > e2.timestamp) {
+	      if (!e2 || e1.mtime > e2.mtime) {
 	        replace_entries.push(key);
 	        total_entries++;
 	      }
