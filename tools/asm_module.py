@@ -64,7 +64,7 @@ class AsmModule():
 
     # tables and exports
     post_js = self.js[self.end_funcs:self.end_asm]
-    ret = post_js.find('return ')
+    ret = re.search(r"return ?{", post_js).start()
     self.tables_js = post_js[:ret]
     self.exports_js = post_js[ret:]
     self.tables = self.parse_tables(self.tables_js)
@@ -262,11 +262,13 @@ class AsmModule():
 
   def parse_tables(self, js):
     tables = {}
-    parts = js.split(';')
-    for part in parts:
+    compressed = ')();' in js
+    parts = re.finditer(r'var.*?\)\(\);', js) if compressed else re.finditer(r'var.*?];', js)
+    for p in parts:
+      part = p.group()
       if '=' not in part: continue
-      part = part.split('var ')[1]
-      name, data = part.split('=')
+      part = part.split('var ', 1)[1]
+      name, data = part.split('=', 1)
       tables[name.strip()] = data.strip()
     return tables
 
@@ -336,4 +338,3 @@ class AsmModule():
       return 'd'
     else:
       return '?'
-

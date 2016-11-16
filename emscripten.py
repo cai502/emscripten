@@ -515,7 +515,7 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
           code += 'return %s' % shared.JS.make_initializer(sig[0], settings) + ';'
         return name, make_func(name, code, params, coercions)
       bad, bad_func = make_bad() # the default bad func
-      if settings['ASSERTIONS'] <= 1:
+      if settings['ASSERTIONS'] <= 1 and settings['COMPRESS_FUNCTION_TABLE'] == 0:
         Counter.pre = [bad_func]
       else:
         Counter.pre = []
@@ -543,6 +543,8 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
         Counter.j += 1
         newline = Counter.j % 30 == 29
         if item == '0':
+          if settings['COMPRESS_FUNCTION_TABLE'] == 1:
+            return ''
           if j > 0 and settings['EMULATE_FUNCTION_POINTER_CASTS'] and j in function_pointer_targets: # emulate all non-null pointer calls, if asked to
             proper_sig, proper_target = function_pointer_targets[j]
             if settings['EMULATED_FUNCTION_POINTERS']:
@@ -590,12 +592,22 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
           Counter.pre.append(make_func(clean_item + '__wrapper', code, params, coercions))
-          return clean_item + '__wrapper'
-        return item if not newline else (item + '\n')
+          if settings['COMPRESS_FUNCTION_TABLE'] == 1:
+            "x%s[%s]=%s;" % (sig, j, item + '__wrapper')
+          else:
+            return clean_item + '__wrapper'
+        if settings['COMPRESS_FUNCTION_TABLE'] == 1:
+          return "x%s[%s]=%s;" % (sig, j, item)
+        else:
+          return item if not newline else (item + '\n')
       if settings['ASSERTIONS'] >= 2:
         debug_tables[sig] = body
-      body = ','.join(map(fix_item, body))
-      return ('\n'.join(Counter.pre), ''.join([raw[:start+1], body, raw[end:]]))
+      if settings['COMPRESS_FUNCTION_TABLE'] == 1:
+        body = ''.join(map(fix_item, body))
+        return ('\n'.join(Counter.pre), "%s(function(){var x%s=new Array(%s);%sreturn x%s;})();" % (raw[:start], sig, Counter.j, body, sig))
+      else:
+        body = ','.join(map(fix_item, body))
+        return ('\n'.join(Counter.pre), ''.join([raw[:start+1], body, raw[end:]]))
 
     infos = [make_table(sig, raw) for sig, raw in last_forwarded_json['Functions']['tables'].iteritems()]
     Counter.pre = []

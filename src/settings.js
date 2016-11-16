@@ -766,4 +766,5 @@ var OFFSCREENCANVAS_SUPPORT = 0; // If set to 1, enables support for transferrin
 
 var LIBRARY_IMPLEMENTED_FUNCTIONS = [];
 
+var COMPRESS_FUNCTION_TABLE = 0;
 // Reserved: variables containing POINTER_MASKING.
