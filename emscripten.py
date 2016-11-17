@@ -121,6 +121,8 @@ def get_and_parse_backend(infile, settings, temp_files, DEBUG):
       if settings['RELOCATABLE']:
         backend_args += ['-emscripten-relocatable']
         backend_args += ['-emscripten-global-base=0']
+        if settings['COMPRESS_RELOCATION_TABLE']:
+          backend_args += ['-emscripten-compress-relocation-table']
       elif settings['GLOBAL_BASE'] >= 0:
         backend_args += ['-emscripten-global-base=%d' % settings['GLOBAL_BASE']]
       backend_args += ['-O' + str(settings['OPT_LEVEL'])]
