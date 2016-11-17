@@ -108,7 +108,7 @@ var LibraryObjC = {
     objc_msgSend_stret: true,
     objc_msgSendSuper_stret: true,
     objc_msgSendSuper2_stret: true,
-    _objc_ignored_method: true,
+    _objc_ignored_method: function() {},
     method_invoke: true,
     method_invoke_stret: true,
     
