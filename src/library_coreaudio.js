@@ -7,6 +7,10 @@ var LibraryCoreAudio = {
         audioPlayers: {},
         playerIdCounter: 1,
         init: function() {
+            if(typeof window === 'undefined') {
+                Module.printErr("CoreAudio is not available.");
+                return;
+            }
             window.AudioContext = window.AudioContext || window.webkitAudioContext;
             CoreAudio.context = new AudioContext();
             

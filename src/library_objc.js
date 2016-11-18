@@ -11,10 +11,14 @@ var LibraryObjC = {
                 {{{ makeSetValue('__objc_msgForward_impcache', 0, 'addr', 'i32') }}};
             });
             __ATINIT__.unshift(function(){
-                __objc_init();
+                if(typeof __objc_init === 'function') {
+                    __objc_init();
+                }
             });
             __ATINIT__.push(function(){
-                __objc_load_images();
+                if(typeof __objc_load_images === 'function') {
+                    __objc_load_images();
+                }
             });
         }
     },
