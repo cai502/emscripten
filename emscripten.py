@@ -844,6 +844,7 @@ function ftCall_%s(%s) {%s
             body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
           funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
     
+    objc_message_funcs = []
     for msgFunc in metadata['objCMessageFuncs']:
       #function_tables.append(msgFunc)
       
@@ -880,8 +881,15 @@ function ftCall_%s(%s) {%s
         func_prefix = "try{ " + func_prefix
         func_postfix = func_postfix + ";} catch(e) { Module.print('error sel:'+Pointer_stringify(sel)); throw e;}"
       
+      if settings['EMULATED_FUNCTION_POINTERS']:
+        func = 'ftCall'
+        basic_funcs.append(msgFunc)
+      else:
+        func = 'dynCall'
+        function_tables.append(msgFunc)
+      
       if item == "_objc_msgSend":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(self,sel%s) {
     self=self|0; sel=sel|0;%s
     var cls = 0, imp = 0;
@@ -891,11 +899,11 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, null_return, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSend_stret":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(staddr,self,sel%s) {
     staddr=staddr|0;self=self|0; sel=sel|0;%s
     var cls = 0, imp = 0;
@@ -905,11 +913,11 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, null_return, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(objcSuper,sel%s) {
     objcSuper=objcSuper|0; sel=sel|0;%s
     var self = 0, superCls = 0, imp = 0;
@@ -919,11 +927,11 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper_stret":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(staddr,objcSuper,sel%s) {
     staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
     var self = 0, superCls = 0, imp = 0;
@@ -933,11 +941,11 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper2":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(objcSuper,sel%s) {
     objcSuper=objcSuper|0; sel=sel|0;%s
     var self = 0, cls = 0, superCls = 0, imp = 0;
@@ -948,11 +956,11 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper2_stret":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(staddr,objcSuper,sel%s) {
     staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
     var self = 0|0, cls = 0|0, superCls = 0|0, imp = 0|0;
@@ -963,29 +971,29 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
       elif item == "_method_invoke":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(self,method%s) {
     self=self|0;method=method|0;%s
     var imp = 0, sel = 0;
     imp = HEAP32[(method+8)>>2]|0;
     sel = HEAP32[(method)>>2]|0;
-    %sdynCall_%s(imp|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, dynCall, sig, coerced_args, func_postfix))
       elif item == "_method_invoke_stret":
-        function_tables_impls.append('''
+        objc_message_funcs.append('''
   function %s(staddr,self,method%s) {
     staddr=staddr|0;self=self|0;method=method|0;%s
     var imp = 0, sel = 0;
     imp = HEAP32[(method+8)>>2]|0;
     sel = HEAP32[(method)>>2]|0;
-    %sdynCall_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
 
     # calculate exports
     exported_implemented_functions = list(exported_implemented_functions) + metadata['initializers']
@@ -1097,9 +1105,11 @@ return real_''' + s + '''.apply(null, arguments);
 
     if DEBUG: logging.debug('asm text sizes' + str([map(len, funcs_js), len(asm_setup), len(asm_global_vars), len(asm_global_funcs), len(pre_tables), len('\n'.join(function_tables_impls)), len(function_tables_defs) + (function_tables_defs.count('\n') * len('  ')), len(exports), len(the_global), len(sending), len(receiving)]))
 
-    final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
-    if settings.get('EMULATED_FUNCTION_POINTERS'):
-      asm_setup += '\n' + '\n'.join(function_tables_impls) + '\n'
+    if not settings.get('EMULATED_FUNCTION_POINTERS'):
+      final_function_tables = '\n'.join(function_tables_impls) + '\n'.join(objc_message_funcs) + '\n' + function_tables_defs
+    else:
+      final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
+      asm_setup += '\n' + '\n'.join(function_tables_impls) + '\n'.join(objc_message_funcs) + '\n'
       receiving += '\n' + function_tables_defs.replace('// EMSCRIPTEN_END_FUNCS\n', '') + '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
       for sig in last_forwarded_json['Functions']['tables'].keys():
         name = 'FUNCTION_TABLE_' + sig
