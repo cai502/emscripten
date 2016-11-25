@@ -10,13 +10,10 @@ var LibraryObjC = {
                 });
                 {{{ makeSetValue('__objc_msgForward_impcache', 0, 'addr', 'i32') }}};
             });
-            __ATINIT__.unshift(function(){
-                if(typeof __objc_init === 'function') {
+            addOnInit(function(){
+                if(typeof __objc_init === 'function' && typeof ___CFInitialize === 'function' && typeof __objc_load_images === 'function') {
                     __objc_init();
-                }
-            });
-            __ATINIT__.push(function(){
-                if(typeof __objc_load_images === 'function') {
+                    ___CFInitialize();
                     __objc_load_images();
                 }
             });
