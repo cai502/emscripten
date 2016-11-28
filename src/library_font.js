@@ -14,9 +14,17 @@ var LibraryA2OFont = {
             baseline.style.height = "0px";
             baseline.style.verticalAlign = "baseline";
             var textSpan = document.createElement("span");
+            var pad1 = document.createElement("span");
+            pad1.style.fontSize = "1px";
+            pad1.innerHTML = ".";
+            var pad2 = document.createElement("span");
+            pad2.style.fontSize = "1px";
+            pad2.innerHTML = ".";
             var container = document.createElement("div");
             container.appendChild(baseline);
+            container.appendChild(pad1);
             container.appendChild(textSpan);
+            container.appendChild(pad2);
             A2OFont.elements.textSpan = textSpan;
             A2OFont.elements.baseline = baseline;
             A2OFont.elements.container = container;
