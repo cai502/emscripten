@@ -15,10 +15,10 @@
   "dependencies": {
     "ws": "^0.8.0",
     "mkdirp": "^0.5.1",
-    "walk": "^2.3.9"
+    "walk": "^2.3.9",
+    "msgpack-lite": "^0.1.26"
   },
   "devDependencies": {
-    "mocha": "^2.4.5",
-    "msgpack-lite": "^0.1.26"
+    "mocha": "^2.4.5"
   }
 }
