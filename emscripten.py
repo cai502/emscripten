@@ -983,7 +983,7 @@ function ftCall_%s(%s) {%s
     sel = HEAP32[(method)>>2]|0;
     %s%s_%s(imp|0,self|0,sel|0%s)%s;
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, dynCall, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
       elif item == "_method_invoke_stret":
         objc_message_funcs.append('''
   function %s(staddr,self,method%s) {
