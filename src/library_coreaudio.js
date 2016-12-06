@@ -139,12 +139,12 @@ var LibraryCoreAudio = {
     audioPlayer_play: function(playerId, delay) {
         var player = CoreAudio.audioPlayers[playerId];
         var source = player.source = CoreAudio.context.createBufferSource();
-        var gain = CoreAudio.context.createGain();
+        var gain = player.gain = CoreAudio.context.createGain();
         
         source.buffer = player.buffer;
         source.connect(gain);
         
-        gain.value = player.volume;
+        gain.gain.value = player.volume;
         gain.connect(CoreAudio.context.destination);
         
         var beginAt = player.beginAt = CoreAudio.context.currentTime + delay;
@@ -163,6 +163,7 @@ var LibraryCoreAudio = {
         var source = player.source;
         if(source) {
             source.stop();
+            delete player.gain;
             delete player.source;
         }
         player.offset = CoreAudio.calcPosition(CoreAudio.context.currentTime, player.beginAt, player.buffer.duration);
@@ -174,6 +175,10 @@ var LibraryCoreAudio = {
     audioPlayer_setVolume: function(playerId, volume) {
         var player = CoreAudio.audioPlayers[playerId];
         player.volume = volume;
+        var gain = player.gain;
+        if(gain) {
+            gain.gain.value = volume;
+        }
     },
     audioPlayer_setNumberOfLoops: function(playerId, numberOfLoops) {
         var player = CoreAudio.audioPlayers[playerId];
