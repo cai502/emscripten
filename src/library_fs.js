@@ -1290,11 +1290,11 @@ mergeInto(LibraryManager.library, {
     createSpecialDirectories: function() {
       // create /proc/self/fd which allows /proc/self/fd/6 => readlink gives the name of the stream for fd 6 (see test_unistd_ttyname)
       FS.mkdir('/proc');
-      FS.mkdir('/proc/self');
+      var parent = FS.mkdir('/proc/self');
       FS.mkdir('/proc/self/fd');
       FS.mount({
         mount: function() {
-          var node = FS.createNode('/proc/self', 'fd', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, {{{ cDefine('S_IXUGO') }}});
+          var node = FS.createNode(parent, 'fd', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, {{{ cDefine('S_IXUGO') }}});
           node.node_ops = {
             lookup: function(parent, name) {
               var fd = +name;
