@@ -2,7 +2,16 @@ var XHRWrapper = {
     $XHRWrapper__deps: ["dispatch_async_f","dispatch_sync_f"],
     $XHRWrapper: {
         nextId: 0,
-        xhrs: {}
+        xhrs: {},
+        getUserJwt: function() {
+            var cookies = document.cookie.split("; ");
+            for(var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].split("=", 2);
+                if(cookie[0] == "user_jwt") {
+                    return cookie[1];
+                }
+            }
+        }
     },
     _xhr_create: function() {
         if(typeof XMLHttpRequest === "undefined" && ENVIRONMENT_IS_NODE) XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
@@ -14,12 +23,36 @@ var XHRWrapper = {
         var xhr = XHRWrapper.xhrs[id];
         var method = Pointer_stringify(method);
         var url = Pointer_stringify(url);
-        async = !!async;
+        var async = !!async;
         var user = user ? Pointer_stringify(user) : null;
         var pass = pass ? Pointer_stringify(pass) : null;
-        xhr.open(method, url, async, user, pass);
-        xhr.overrideMimeType('text/plain; charset=x-user-defined');
-        xhr.async = async;
+        var useProxy = xhr.useProxy = true;
+        if(useProxy) {
+            var proxyUrl = Module["proxyUrl"] || "http://api.tombo.io/proxy";
+            xhr.open("POST", proxyUrl, async);
+            xhr.method = method;
+            xhr.url = url;
+            xhr.async = async;
+            xhr.user = user;
+            xhr.pass = pass;
+            xhr.headers = [];
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.getResponseJson = function() {
+                if(this.responseJson) return this.responseJson;
+                try {
+                    this.responseJson = JSON.parse(this.responseText);
+                } catch(e) {
+                    // TODO
+                    console.log(e);
+                    this.responseJson = {}
+                }
+                return this.responseJson;
+            }
+            xhr.responseJson = null;
+        } else {
+            xhr.open(method, url, async, user, pass);
+            xhr.async = async;
+        }
     },
     _xhr_clean: function(id) {
         delete XHRWrapper.xhrs[id];
@@ -36,11 +69,15 @@ var XHRWrapper = {
     },
     _xhr_set_onerror: function(id, queue, ctx, func) {
         var xhr = XHRWrapper.xhrs[id];
-        xhr.onerror = function(e) {
-            if(xhr.async) {
-                _dispatch_async_f(queue, ctx, func);
-            } else {
-                _dispatch_sync_f(queue, ctx, func);
+        if(xhr.useProxy) {
+            // TODO
+        } else {
+            xhr.onerror = function(e) {
+                if(xhr.async) {
+                    _dispatch_async_f(queue, ctx, func);
+                } else {
+                    _dispatch_sync_f(queue, ctx, func);
+                }
             }
         }
     },
@@ -48,12 +85,20 @@ var XHRWrapper = {
         var xhr = XHRWrapper.xhrs[id];
         var key = Pointer_stringify(key);
         var value = Pointer_stringify(value);
-        if(key == "User-Agent") return;
-        xhr.setRequestHeader(key, value);
+        if(xhr.useProxy) {
+            xhr.headers.push(key + ": "+value);
+        } else {
+            if(key == "User-Agent") return;
+            xhr.setRequestHeader(key, value);
+        }
     },
     _xhr_set_with_credentials: function(id, withCredentials) {
-        var xhr = XHRWrapper.xhrs[id];
-        xhr.withCredentials = !!withCredentials;
+        if(xhr.useProxy) {
+            // ignored
+        } else {
+            var xhr = XHRWrapper.xhrs[id];
+            xhr.withCredentials = !!withCredentials;
+        }
     },
     _xhr_set_timeout: function(id, timeout) {
         var xhr = XHRWrapper.xhrs[id];
@@ -61,14 +106,26 @@ var XHRWrapper = {
     },
     _xhr_send: function(id, data, length) {
         var xhr = XHRWrapper.xhrs[id];
-        try {
-            if(data && length) {
-                xhr.send(HEAPU8.subarray(data, data+length));
-            } else {
-                xhr.send();
+        if(xhr.useProxy) {
+            var req = "";
+            req += "proxy[url]=" + encodeURIComponent(xhr.url);
+            req += "&proxy[method]=" + encodeURIComponent(xhr.method);
+            for(var i = 0; i < xhr.headers.length; i++) {
+                req += "&proxy[headers][]=" + encodeURIComponent(xhr.headers[i]);
             }
-        } catch(e) {
-            console.log(e);
+            req += "&proxy[body]=" + ((data && length) ? encodeURIComponent(String.fromCharCode.apply(null, HEAPU8.subarray(data, data+length))) : "");
+            req += "&user_jwt=" + encodeURIComponent(XHRWrapper.getUserJwt());
+            xhr.send(req);
+        } else {
+            try {
+                if(data && length) {
+                    xhr.send(HEAPU8.subarray(data, data+length));
+                } else {
+                    xhr.send();
+                }
+            } catch(e) {
+                console.log(e);
+            }
         }
     },
     _xhr_get_ready_state: function(id) {
@@ -77,11 +134,16 @@ var XHRWrapper = {
     },
     _xhr_get_status: function(id) {
         var xhr = XHRWrapper.xhrs[id];
-        return xhr.status;
+        if(xhr.useProxy) {
+            var res = xhr.getResponseJson();
+            return res.status;
+        } else {
+            return xhr.status;
+        }
     },
     _xhr_get_status_text: function(id, text) {
         var xhr = XHRWrapper.xhrs[id];
-        var statusText = xhr.statusText 
+        var statusText = xhr.useProxy? xhr.getResponseJson().statusLine : xhr.statusText; // TODO exactly not same
         var length = statusText.length;
         var buf = _malloc(length);
         writeAsciiToMemory(statusText, buf);
@@ -90,11 +152,11 @@ var XHRWrapper = {
     },
     _xhr_get_response_text: function(id, data) {
         var xhr = XHRWrapper.xhrs[id];
-        var responseText = xhr.responseText;
+        var responseText = xhr.useProxy ? atob(xhr.getResponseJson().body) : xhr.responseText;
         var length = responseText.length;
         var buf = _malloc(length);
         for(var i = 0; i < length; i++) {
-            var c = responseText.charCodeAt(i) & 0xff;
+            var c = responseText.charCodeAt(i);
             {{{ makeSetValue('buf', 'i', 'c', 'i8') }}}
         }
         {{{ makeSetValue('data', '0', 'buf', 'i32') }}}
@@ -102,7 +164,7 @@ var XHRWrapper = {
     },
     _xhr_get_all_response_headers: function(id, data) {
         var xhr = XHRWrapper.xhrs[id];
-        var headers = xhr.getAllResponseHeaders();
+        var headers = xhr.useProxy ? xhr.getResponseJson().headers : xhr.getAllResponseHeaders();
         var length = headers.length+1;
         var buf = _malloc(length);
         writeAsciiToMemory(headers, buf);
