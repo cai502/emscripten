@@ -1,4 +1,4 @@
-var XHRWrapper = {
+var LibraryXHR = {
     $XHRWrapper__deps: ["dispatch_async_f","dispatch_sync_f"],
     $XHRWrapper: {
         nextId: 0,
@@ -11,6 +11,7 @@ var XHRWrapper = {
                     return cookie[1];
                 }
             }
+            return "";
         },
         useProxy: function(url) {
             var prefixes = Module['proxyUrlPrefixes'] || [];
@@ -19,7 +20,12 @@ var XHRWrapper = {
                 if(url.indexOf(prefix) == 0) return true;
             }
             return false;
-        }
+        },
+        logNetworkAccess: function(message) {
+            if(Module['httpLogging']) {
+                Module.print(message);
+            }
+        },
     },
     _xhr_create: function() {
         if(typeof XMLHttpRequest === "undefined" && ENVIRONMENT_IS_NODE) XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
@@ -29,20 +35,16 @@ var XHRWrapper = {
     },
     _xhr_open: function(id, method, url, async, user, pass) {
         var xhr = XHRWrapper.xhrs[id];
-        var method = Pointer_stringify(method);
-        var url = Pointer_stringify(url);
-        var async = !!async;
-        var user = user ? Pointer_stringify(user) : null;
-        var pass = pass ? Pointer_stringify(pass) : null;
-        var useProxy = xhr.useProxy = XHRWrapper.useProxy(url);
-        if(useProxy) {
+        xhr.method = Pointer_stringify(method);
+        xhr.url = Pointer_stringify(url);
+        xhr.async = !!async;
+        xhr.user = user ? Pointer_stringify(user) : null;
+        xhr.pass = pass ? Pointer_stringify(pass) : null;
+        xhr.useProxy = XHRWrapper.useProxy(xhr.url);
+        
+        if(xhr.useProxy) {
             var proxyUrl = Module["proxyUrl"] || "http://api.tombo.io/proxy";
-            xhr.open("POST", proxyUrl, async);
-            xhr.method = method;
-            xhr.url = url;
-            xhr.async = async;
-            xhr.user = user;
-            xhr.pass = pass;
+            xhr.open("POST", proxyUrl, xhr.async);
             xhr.headers = [];
             xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
             xhr.getResponseJson = function() {
@@ -58,8 +60,7 @@ var XHRWrapper = {
             }
             xhr.responseJson = null;
         } else {
-            xhr.open(method, url, async, user, pass);
-            xhr.async = async;
+            xhr.open(xhr.method, xhr.url, xhr.async, xhr.user, xhr.pass);
         }
     },
     _xhr_clean: function(id) {
@@ -115,6 +116,8 @@ var XHRWrapper = {
     _xhr_send: function(id, data, length) {
         var xhr = XHRWrapper.xhrs[id];
         if(xhr.useProxy) {
+            XHRWrapper.logNetworkAccess("HTTP[Proxy] "+xhr.method+" "+xhr.url);
+            
             var req = "";
             req += "proxy[url]=" + encodeURIComponent(xhr.url);
             req += "&proxy[method]=" + encodeURIComponent(xhr.method);
@@ -123,8 +126,11 @@ var XHRWrapper = {
             }
             req += "&proxy[body]=" + ((data && length) ? encodeURIComponent(String.fromCharCode.apply(null, HEAPU8.subarray(data, data+length))) : "");
             req += "&user_jwt=" + encodeURIComponent(XHRWrapper.getUserJwt());
+            
             xhr.send(req);
         } else {
+            XHRWrapper.logNetworkAccess("HTTP[Direct] "+xhr.method+" "+xhr.url);
+            
             try {
                 if(data && length) {
                     xhr.send(HEAPU8.subarray(data, data+length));
@@ -181,8 +187,8 @@ var XHRWrapper = {
     }
 };
 
-autoAddDeps(XHRWrapper, '$XHRWrapper');
-mergeInto(LibraryManager.library, XHRWrapper);
+autoAddDeps(LibraryXHR, '$XHRWrapper');
+mergeInto(LibraryManager.library, LibraryXHR);
 
 DEFAULT_LIBRARY_FUNCS_TO_INCLUDE.splice(-1,0,
 "_xhr_create",
