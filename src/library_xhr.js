@@ -11,6 +11,14 @@ var XHRWrapper = {
                     return cookie[1];
                 }
             }
+        },
+        useProxy: function(url) {
+            var prefixes = Module['proxyUrlPrefixes'] || [];
+            for(var i = 0; i < prefixes.length; i++) {
+                var prefix = prefixes[i];
+                if(url.indexOf(prefix) == 0) return true;
+            }
+            return false;
         }
     },
     _xhr_create: function() {
@@ -26,7 +34,7 @@ var XHRWrapper = {
         var async = !!async;
         var user = user ? Pointer_stringify(user) : null;
         var pass = pass ? Pointer_stringify(pass) : null;
-        var useProxy = xhr.useProxy = true;
+        var useProxy = xhr.useProxy = XHRWrapper.useProxy(url);
         if(useProxy) {
             var proxyUrl = Module["proxyUrl"] || "http://api.tombo.io/proxy";
             xhr.open("POST", proxyUrl, async);
@@ -36,7 +44,7 @@ var XHRWrapper = {
             xhr.user = user;
             xhr.pass = pass;
             xhr.headers = [];
-            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
             xhr.getResponseJson = function() {
                 if(this.responseJson) return this.responseJson;
                 try {
