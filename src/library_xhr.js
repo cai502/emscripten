@@ -49,12 +49,24 @@ var LibraryXHR = {
             xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
             xhr.getResponseJson = function() {
                 if(this.responseJson) return this.responseJson;
-                try {
-                    this.responseJson = JSON.parse(this.responseText);
-                } catch(e) {
-                    // TODO
-                    console.log(e);
-                    this.responseJson = {}
+                if(this.status == 200) {
+                    try {
+                        this.responseJson = JSON.parse(this.responseText);
+                    } catch(e) {
+                        this.responseJson = {
+                            status: 0,
+                            error: {
+                                message: "Failed to parse proxy response Error="+e.toString()+", Response="+this.responseText
+                            }
+                        }
+                    }
+                } else {
+                    this.responseJson = {
+                        status: 0,
+                        error: {
+                            message: "Failed to connect proxy server StatusCode="+xhr.status
+                        }
+                    }
                 }
                 return this.responseJson;
             }
@@ -118,16 +130,29 @@ var LibraryXHR = {
         if(xhr.useProxy) {
             XHRWrapper.logNetworkAccess("HTTP[Proxy] "+xhr.method+" "+xhr.url);
             
-            var req = "";
-            req += "proxy[url]=" + encodeURIComponent(xhr.url);
-            req += "&proxy[method]=" + encodeURIComponent(xhr.method);
-            for(var i = 0; i < xhr.headers.length; i++) {
-                req += "&proxy[headers][]=" + encodeURIComponent(xhr.headers[i]);
+            try {
+                var req = "";
+                req += "proxy[url]=" + encodeURIComponent(xhr.url);
+                req += "&proxy[method]=" + encodeURIComponent(xhr.method);
+                for(var i = 0; i < xhr.headers.length; i++) {
+                    req += "&proxy[headers][]=" + encodeURIComponent(xhr.headers[i]);
+                }
+                req += "&proxy[body]=" + ((data && length) ? encodeURIComponent(String.fromCharCode.apply(null, HEAPU8.subarray(data, data+length))) : "");
+                req += "&user_jwt=" + encodeURIComponent(XHRWrapper.getUserJwt());
+                
+                xhr.send(req);
+                
+                if(!xhr.async && xhr.status == 200) {
+                    // handle error of synchronouse request between origin and proxy server
+                    var res = xhr.getResponseJson();
+                    if(res.error) {
+                        XHRWrapper.logNetworkAccess("HTTP[Proxy] Error response from proxy server: "+res.error.message);
+                    }
+                }
+            } catch(e) {
+                XHRWrapper.logNetworkAccess("HTTP[Proxy] Exception caught: "+e);
             }
-            req += "&proxy[body]=" + ((data && length) ? encodeURIComponent(String.fromCharCode.apply(null, HEAPU8.subarray(data, data+length))) : "");
-            req += "&user_jwt=" + encodeURIComponent(XHRWrapper.getUserJwt());
             
-            xhr.send(req);
         } else {
             XHRWrapper.logNetworkAccess("HTTP[Direct] "+xhr.method+" "+xhr.url);
             
@@ -138,7 +163,7 @@ var LibraryXHR = {
                     xhr.send();
                 }
             } catch(e) {
-                console.log(e);
+                XHRWrapper.logNetworkAccess("HTTP[Direct] Exception caught: "+e);
             }
         }
     },
