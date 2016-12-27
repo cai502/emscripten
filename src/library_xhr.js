@@ -43,7 +43,7 @@ var LibraryXHR = {
         xhr.useProxy = XHRWrapper.useProxy(xhr.url);
         
         if(xhr.useProxy) {
-            var proxyUrl = Module["proxyUrl"] || "http://api.tombo.io/proxy";
+            var proxyUrl = Module["proxyServer"] || "http://api.tombo.io/proxy";
             xhr.open("POST", proxyUrl, xhr.async);
             xhr.headers = [];
             xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
