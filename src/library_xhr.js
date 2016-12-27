@@ -1,7 +1,7 @@
 var LibraryXHR = {
     $XHRWrapper__deps: ["dispatch_async_f","dispatch_sync_f"],
     $XHRWrapper: {
-        nextId: 0,
+        nextId: 1,
         xhrs: {},
         getUserJwt: function() {
             var cookies = document.cookie.split("; ");
@@ -81,6 +81,14 @@ var LibraryXHR = {
     _xhr_set_onload: function(id, queue, ctx, func) {
         var xhr = XHRWrapper.xhrs[id];
         xhr.onload = function(e) {
+            if(xhr.useProxy) {
+                var res = xhr.getResponseJson();
+                if(res.error) {
+                    xhr.onerror(new Error());
+                    return;
+                }
+            }
+            
             if(xhr.async) {
                 _dispatch_async_f(queue, ctx, func);
             } else {
@@ -90,15 +98,11 @@ var LibraryXHR = {
     },
     _xhr_set_onerror: function(id, queue, ctx, func) {
         var xhr = XHRWrapper.xhrs[id];
-        if(xhr.useProxy) {
-            // TODO
-        } else {
-            xhr.onerror = function(e) {
-                if(xhr.async) {
-                    _dispatch_async_f(queue, ctx, func);
-                } else {
-                    _dispatch_sync_f(queue, ctx, func);
-                }
+        xhr.onerror = function(e) {
+            if(xhr.async) {
+                _dispatch_async_f(queue, ctx, func);
+            } else {
+                _dispatch_sync_f(queue, ctx, func);
             }
         }
     },
