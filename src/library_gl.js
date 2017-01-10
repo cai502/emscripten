@@ -6689,7 +6689,7 @@ var LibraryGL = {
       var attributes = GLImmediate.liveClientAttributes;
       attributes.length = 0;
       for (var i = 0; i < 3+GLImmediate.MAX_TEXTURES; i++) {
-        if (GLImmediate.enabledClientAttributes[i]) {
+        if (GLImmediate.enabledClientAttributes[i] && GLImmediate.clientAttributes[i].size) {
           var attr = GLImmediate.clientAttributes[i];
           attributes.push(attr);
           clientStartPointer = Math.min(clientStartPointer, attr.pointer);
