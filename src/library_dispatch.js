@@ -18,11 +18,11 @@ var LibraryDispatch = {
             ObjectList.prototype.get = function(id) {
                 return this.list[id];
             };
-            
+
             var queueList = new ObjectList();
             var sourceList = new ObjectList();
             var groupList = new ObjectList();
-            
+
             // ================================================================================
             // Queue
             // ================================================================================
@@ -68,23 +68,23 @@ var LibraryDispatch = {
             queueList.add(mainQueue);
             queueList.add(backgroundQueue);
             DISPATCH.currentQueue = mainQueue;
-            
+
             // ================================================================================
             // Source
             // ================================================================================
             function Source(type, handle, mask, queue) {
                 this.id = null;
-                
+
                 // common
                 this.type = type;
                 this.handle = handle;
                 this.mask = mask;
                 this.queue = queue;
                 this.canceled = 0;
-                this.suspend = 1;
+                this.suspendCount = 1;
                 this.eventHandler = null;
                 this.cancelHandler = null;
-                
+
                 // timer events
                 this.interval = 0;
                 this.start = 0;
@@ -113,7 +113,7 @@ var LibraryDispatch = {
             Source.prototype.timerStartNormal = function() {
                 var queueing = function(source) {
                     var event = source.eventHandler;
-                    if(!source.suspend) {
+                    if(!source.suspendCount) {
                         source.queue.tasks.push(event);
                     }
                     if(source.interval) {
@@ -124,13 +124,13 @@ var LibraryDispatch = {
             };
             Source.prototype.timerCancel = function() {
                 if(this.canceled) return;
-                
+
                 if(this.specialPriority() > 0) {
                     this.timerCancelSpecial();
                 } else {
                     this.timerCancelNormal();
                 }
-                
+
                 this.executeCancelHandler();
             };
             Source.prototype.timerCancelSpecial = function() {
@@ -142,7 +142,7 @@ var LibraryDispatch = {
             Source.prototype.executeCancelHandler = function() {
                 var cancel = this.cancelHandler;
                 if(cancel) {
-                    if(this.suspend) {
+                    if(this.suspendCount) {
                         this.canceled = 1; // cancel handler pending
                         return;
                     } else {
@@ -154,16 +154,16 @@ var LibraryDispatch = {
                 }
             };
             Source.prototype.suspend = function() {
-                this.suspend++;
+                this.suspendCount++;
             }
             Source.prototype.resume = function() {
-                this.suspend--;
+                this.suspendCount--;
                 if(this.canceled == 1) {
                     this.canceled = 2;
                     source.queue.tasks.push(source.cancelHandler);
                 }
             }
-            
+
             // ================================================================================
             // Task
             // ================================================================================
@@ -180,7 +180,7 @@ var LibraryDispatch = {
                     this.group.leave();
 	            }
             }
-            
+
             // ================================================================================
             // Grooup
             // ================================================================================
@@ -201,7 +201,7 @@ var LibraryDispatch = {
                     }
                 }
             }
-            
+
             // ================================================================================
             // APIs
             // ================================================================================
@@ -214,7 +214,7 @@ var LibraryDispatch = {
                 if(DISPATCH.currentQueue == queue) {
                     throw new Error("dead lock!");
                 }
-                
+
                 var currentQueueSave = DISPATCH.currentQueue;
                 DISPATCH.currentQueue = queue;
                 queue.flush();
@@ -226,7 +226,7 @@ var LibraryDispatch = {
                 if(DISPATCH.currentQueue == queue) {
                     throw new Error("dead lock!");
                 }
-                
+
                 var currentQueueSave = DISPATCH.currentQueue;
                 DISPATCH.currentQueue = queue;
                 queue.flush();
@@ -262,7 +262,7 @@ var LibraryDispatch = {
                 var queue = queueList.get(queueId);
                 return queue.setSpecific(key, value, dtor);
             };
-            
+
             DISPATCH.sourceCreate = function(type, handle, mask, queueId) {
                 var queue = queueList.get(queueId);
                 var source = new Source(type, handle, mask, queue);
@@ -272,7 +272,7 @@ var LibraryDispatch = {
             DISPATCH.sourceSetTimer = function(sourceId, start, interval, leeway) {
                 var source = sourceList.get(sourceId);
                 if(source.type != Source.Type.Timer) throw new Error("not a timer source");
-                
+
                 source.start = start;
                 source.interval = interval;
                 source.timerStart();
@@ -292,7 +292,7 @@ var LibraryDispatch = {
             DISPATCH.sourceCancel = function(sourceId) {
                 var source = sourceList.get(sourceId);
                 if(source.type != Source.Type.Timer) throw new Error("not a timer source");
-                
+
                 source.timerCancel();
             },
             DISPATCH.sourceSuspend = function(sourceId) {
@@ -303,7 +303,7 @@ var LibraryDispatch = {
                 var source = sourceList.get(sourceId);
                 source.resume();
             };
-            
+
             DISPATCH.groupCreate = function() {
                 var group = new Group();
                 groupList.add(group);
@@ -312,7 +312,7 @@ var LibraryDispatch = {
             DISPATCH.groupAsync = function(groupId, queueId, ctx, func) {
                 var group = groupList.get(groupId);
                 var queue = queueList.get(queueId);
-                
+
                 group.enter();
                 var task = new Task(ctx, func);
                 task.group = group;
@@ -331,7 +331,7 @@ var LibraryDispatch = {
             DISPATCH.groupNotify = function(groupId, queueId, ctx, func) {
                 var group = groupList.get(groupId);
                 var queue = queueList.get(queueId);
-                
+
                 group.enter();
                 var task = new Task(ctx, func);
                 task.queue = queue;
@@ -358,7 +358,7 @@ var LibraryDispatch = {
                 }
                 return null;
             }
-            
+
             DISPATCH.handleQueue = function() {
                 var begin = performance.now();
 
@@ -368,13 +368,13 @@ var LibraryDispatch = {
                     var source = specialEvents[i];
                     if(source) {
                         var event = source.eventHandler;
-                        if(event && !source.suspend) {
+                        if(event && !source.suspendCount) {
                             DISPATCH.currentQueue = source.queue;
                             event.execute();
                         }
                     }
                 }
-                
+
                 // execute at least one task
                 do {
     	            var queue = selectNextQueue(null);
