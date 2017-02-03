@@ -211,9 +211,19 @@ var LibraryXHR = {
             var responseText = xhr.useProxy ? atob(xhr.getResponseJson().body) : xhr.responseText;
             length = responseText.length;
             buf = _malloc(length);
-            for(var i = 0; i < length; i++) {
-                var c = responseText.charCodeAt(i);
-                {{{ makeSetValue('buf', 'i', 'c', 'i8') }}}
+            if(Module['httpLogging']) {
+                for(var i = 0; i < length; i++) {
+                    var c = responseText.charCodeAt(i);
+                    if(c > 0xff) {
+                        XHRWrapper.logNetworkAccess("HTTP: Detect non-ascii character '"+c+"' at "+i);
+                    }
+                    {{{ makeSetValue('buf', 'i', 'c', 'i8') }}}
+                }
+            } else {
+                for(var i = 0; i < length; i++) {
+                    var c = responseText.charCodeAt(i);
+                    {{{ makeSetValue('buf', 'i', 'c', 'i8') }}}
+                }
             }
         } else {
             var arraybuffer = xhr.response;
