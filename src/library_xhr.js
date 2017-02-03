@@ -11,7 +11,7 @@ var LibraryXHR = {
                     return cookie[1];
                 }
             }
-            return "";
+            return null;
         },
         useProxy: function(url) {
             var prefixes = Module['proxyUrlPrefixes'] || [];
@@ -41,7 +41,7 @@ var LibraryXHR = {
         xhr.user = user ? Pointer_stringify(user) : null;
         xhr.pass = pass ? Pointer_stringify(pass) : null;
         xhr.useProxy = XHRWrapper.useProxy(xhr.url);
-        
+
         if(xhr.useProxy) {
             var proxyUrl = Module["proxyServer"] || "http://api.tombo.io/proxy";
             xhr.open("POST", proxyUrl, xhr.async);
@@ -88,7 +88,7 @@ var LibraryXHR = {
                     return;
                 }
             }
-            
+
             if(xhr.async) {
                 _dispatch_async_f(queue, ctx, func);
             } else {
@@ -133,8 +133,16 @@ var LibraryXHR = {
         var xhr = XHRWrapper.xhrs[id];
         if(xhr.useProxy) {
             XHRWrapper.logNetworkAccess("HTTP[Proxy] "+xhr.method+" "+xhr.url);
-            
+
             try {
+                var user_jwt = XHRWrapper.getUserJwt();
+
+                if(!user_jwt) {
+                    XHRWrapper.logNetworkAccess("HTTP[Proxy] user_jwt doesn't exist");
+                    setTimeout(xhr.onerror, 1);
+                    return;
+                }
+
                 var req = "";
                 req += "proxy[url]=" + encodeURIComponent(xhr.url);
                 req += "&proxy[method]=" + encodeURIComponent(xhr.method);
@@ -142,10 +150,10 @@ var LibraryXHR = {
                     req += "&proxy[headers][]=" + encodeURIComponent(xhr.headers[i]);
                 }
                 req += "&proxy[body]=" + ((data && length) ? encodeURIComponent(String.fromCharCode.apply(null, HEAPU8.subarray(data, data+length))) : "");
-                req += "&user_jwt=" + encodeURIComponent(XHRWrapper.getUserJwt());
-                
+                req += "&user_jwt=" + encodeURIComponent(user_jwt);
+
                 xhr.send(req);
-                
+
                 if(!xhr.async && xhr.status == 200) {
                     // handle error of synchronouse request between origin and proxy server
                     var res = xhr.getResponseJson();
@@ -156,10 +164,10 @@ var LibraryXHR = {
             } catch(e) {
                 XHRWrapper.logNetworkAccess("HTTP[Proxy] Exception caught: "+e);
             }
-            
+
         } else {
             XHRWrapper.logNetworkAccess("HTTP[Direct] "+xhr.method+" "+xhr.url);
-            
+
             try {
                 if(data && length) {
                     xhr.send(HEAPU8.subarray(data, data+length));
