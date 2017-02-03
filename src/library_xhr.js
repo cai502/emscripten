@@ -72,6 +72,9 @@ var LibraryXHR = {
             }
             xhr.responseJson = null;
         } else {
+            if(xhr.async) {
+                xhr.responseType = "arraybuffer";
+            }
             xhr.open(xhr.method, xhr.url, xhr.async, xhr.user, xhr.pass);
         }
     },
@@ -203,12 +206,20 @@ var LibraryXHR = {
     },
     _xhr_get_response_text: function(id, data) {
         var xhr = XHRWrapper.xhrs[id];
-        var responseText = xhr.useProxy ? atob(xhr.getResponseJson().body) : xhr.responseText;
-        var length = responseText.length;
-        var buf = _malloc(length);
-        for(var i = 0; i < length; i++) {
-            var c = responseText.charCodeAt(i);
-            {{{ makeSetValue('buf', 'i', 'c', 'i8') }}}
+        var buf, length;
+        if(xhr.useProxy || !xhr.async) {
+            var responseText = xhr.useProxy ? atob(xhr.getResponseJson().body) : xhr.responseText;
+            length = responseText.length;
+            buf = _malloc(length);
+            for(var i = 0; i < length; i++) {
+                var c = responseText.charCodeAt(i);
+                {{{ makeSetValue('buf', 'i', 'c', 'i8') }}}
+            }
+        } else {
+            var arraybuffer = xhr.response;
+            length = arraybuffer.byteLength;
+            buf = _malloc(length);
+            HEAPU8.set(new Uint8Array(arraybuffer), buf);
         }
         {{{ makeSetValue('data', '0', 'buf', 'i32') }}}
         return length;
