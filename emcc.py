@@ -2047,7 +2047,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
     if final_suffix == 'html':
       logging.debug('generating HTML')
       shell = open(shell_path).read()
-      assert '{{{ SCRIPT }}}' in shell, 'HTML shell must contain  {{{ SCRIPT }}}  , see src/shell.html for an example'
+      # assert '{{{ SCRIPT }}}' in shell, 'HTML shell must contain  {{{ SCRIPT }}}  , see src/shell.html for an example'
       base_js_target = os.path.basename(js_target)
 
       def un_src(): # use this if you want to modify the script and need it to be inline
