@@ -57,6 +57,7 @@ var LibraryJSEvents = {
         if (typeof target == 'string') return document.getElementById(target);
         else return target;
       } else {
+        if(Module['canvas']) return Module['canvas'];
         // The sensible target varies between events, but use window as the default
         // since DOM events mostly can default to that. Specific callback registrations
         // override their own defaults.
