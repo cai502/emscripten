@@ -146,8 +146,8 @@ var LibraryXHR = {
             try {
                 var user_jwt = XHRWrapper.getUserJwt();
 
-                if(!user_jwt) {
-                    XHRWrapper.logNetworkAccess("HTTP[Proxy] user_jwt doesn't exist");
+                if(!Module["httpProxyServer"] && !user_jwt) {
+                    XHRWrapper.logNetworkAccess("HTTP[Proxy] Trying to access platform proxy server but user_jwt doesn't exist");
                     setTimeout(xhr.onerror, 1);
                     return;
                 }
