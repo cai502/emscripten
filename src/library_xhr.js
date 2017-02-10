@@ -14,7 +14,7 @@ var LibraryXHR = {
             return null;
         },
         useProxy: function(url) {
-            var prefixes = Module['proxyUrlPrefixes'] || [];
+            var prefixes = Module['httpProxyUrlPrefixes'] || [];
             for(var i = 0; i < prefixes.length; i++) {
                 var prefix = prefixes[i];
                 if(url.indexOf(prefix) == 0) return true;
@@ -43,7 +43,7 @@ var LibraryXHR = {
         xhr.useProxy = XHRWrapper.useProxy(xhr.url);
 
         if(xhr.useProxy) {
-            var proxyUrl = Module["proxyServer"] || "http://api.tombo.io/proxy";
+            var proxyUrl = Module["httpProxyServer"] || "http://api.tombo.io/proxy";
             xhr.open("POST", proxyUrl, xhr.async);
             xhr.headers = [];
             xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
