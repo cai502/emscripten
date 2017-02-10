@@ -137,6 +137,12 @@ var LibraryXHR = {
         if(xhr.useProxy) {
             XHRWrapper.logNetworkAccess("HTTP[Proxy] "+xhr.method+" "+xhr.url);
 
+            if(Module['httpLogging']) {
+                xhr.addEventListener("error", function(e) {
+                    XHRWrapper.logNetworkAccess("HTTP[Proxy] Error detected while accessing proxy server. See console for details");
+                }, false);
+            }
+
             try {
                 var user_jwt = XHRWrapper.getUserJwt();
 
@@ -170,6 +176,12 @@ var LibraryXHR = {
 
         } else {
             XHRWrapper.logNetworkAccess("HTTP[Direct] "+xhr.method+" "+xhr.url);
+
+            if(Module['httpLogging']) {
+                xhr.addEventListener("error", function(e) {
+                    XHRWrapper.logNetworkAccess("HTTP[Direct] Error detected. See console for details.");
+                }, false);
+            }
 
             try {
                 if(data && length) {
