@@ -42,7 +42,9 @@ var LibraryCoreAudio = {
                 var source = CoreAudio.context.createBufferSource();
                 source.buffer = buffer;
                 source.connect(CoreAudio.context.destination);
-                source.noteOn(0);
+                if (typeof source.noteOn === "function") {
+                    source.noteOn(0);
+                }
             }, false);
 
         },
