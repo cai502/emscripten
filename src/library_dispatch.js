@@ -377,11 +377,13 @@ var LibraryDispatch = {
 
                 // execute at least one task
                 do {
-    	            var queue = selectNextQueue(null);
-    	            if(!queue) return;
-    	            var task = queue.tasks.shift();
+      	            var queue = selectNextQueue(null);
+      	            if(!queue) return;
+      	            var task = queue.tasks.shift();
                     task.execute();
                 } while(performance.now() - begin < 1000);
+
+                DISPATCH.currentQueue = mainQueue;
             };
         },
         pointerToId: function(pointer) {
