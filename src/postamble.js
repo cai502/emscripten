@@ -303,13 +303,13 @@ function abort(what) {
   var extra = '';
 #endif
 
-  var output = 'abort(' + what + ') at ' + stackTrace() + extra;
+  var output = 'abort(' + what + ') ' + extra;
   if (abortDecorators) {
     abortDecorators.forEach(function(decorator) {
       output = decorator(output, what);
     });
   }
-  throw output;
+  throw new Error(output);
 }
 Module['abort'] = Module.abort = abort;
 
