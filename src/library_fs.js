@@ -1,5 +1,15 @@
 mergeInto(LibraryManager.library, {
-  $FS__deps: ['$ERRNO_CODES', '$ERRNO_MESSAGES', '__setErrNo', '$PATH', '$TTY', '$MEMFS', '$IDBFS', '$NODEFS', '$WORKERFS', 'stdin', 'stdout', 'stderr'],
+  $FS__deps: ['$ERRNO_CODES', '$ERRNO_MESSAGES', '__setErrNo', '$PATH', '$TTY', '$MEMFS',
+#if __EMSCRIPTEN_HAS_idbfs_js__
+    '$IDBFS',
+#endif
+#if __EMSCRIPTEN_HAS_nodefs_js__
+    '$NODEFS',
+#endif
+#if __EMSCRIPTEN_HAS_workerfs_js__
+    '$WORKERFS',
+#endif
+    'stdin', 'stdout', 'stderr'],
   $FS__postset: 'FS.staticInit();' +
                 '__ATINIT__.unshift(function() { if (!Module["noFSInit"] && !FS.init.initialized) FS.init() });' +
                 '__ATMAIN__.push(function() { FS.ignorePermissions = false });' +
@@ -631,6 +641,20 @@ mergeInto(LibraryManager.library, {
       mode |= {{{ cDefine('S_IFDIR') }}};
       return FS.mknod(path, mode, 0);
     },
+    // Creates a whole directory tree chain if it doesn't yet exist
+    mkdirTree: function(path, mode) {
+      var dirs = path.split('/');
+      var d = '';
+      for (var i = 0; i < dirs.length; ++i) {
+        if (!dirs[i]) continue;
+        d += '/' + dirs[i];
+        try {
+          FS.mkdir(d, mode);
+        } catch(e) {
+          if (e.errno != ERRNO_CODES.EEXIST) throw e;
+        }
+      }
+    },
     mkdev: function(path, mode, dev) {
       if (typeof(dev) === 'undefined') {
         dev = mode;
@@ -1224,6 +1248,9 @@ mergeInto(LibraryManager.library, {
     },
     chdir: function(path) {
       var lookup = FS.lookupPath(path, { follow: true });
+      if (lookup.node === null) {
+        throw new FS.ErrnoError(ERRNO_CODES.ENOENT);
+      }
       if (!FS.isDir(lookup.node.mode)) {
         throw new FS.ErrnoError(ERRNO_CODES.ENOTDIR);
       }
@@ -1389,9 +1416,15 @@ mergeInto(LibraryManager.library, {
 
       FS.filesystems = {
         'MEMFS': MEMFS,
+#if __EMSCRIPTEN_HAS_idbfs_js__
         'IDBFS': IDBFS,
+#endif
+#if __EMSCRIPTEN_HAS_nodefs_js__
         'NODEFS': NODEFS,
+#endif
+#if __EMSCRIPTEN_HAS_workerfs_js__
         'WORKERFS': WORKERFS,
+#endif
       };
     },
     init: function(input, output, error) {

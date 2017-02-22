@@ -68,11 +68,12 @@ class NativeBenchmarker(Benchmarker):
     if lib_builder: native_args = native_args + lib_builder(self.name, native=True, env_init={ 'CC': self.cc, 'CXX': self.cxx })
     if not native_exec:
       compiler = self.cxx if filename.endswith('cpp') else self.cc
-      process = Popen([compiler, '-fno-math-errno', filename, '-o', filename+'.native'] + self.args + shared_args + native_args, stdout=PIPE, stderr=parent.stderr_redirect)
+      cmd = [compiler, '-fno-math-errno', filename, '-o', filename+'.native'] + self.args + shared_args + native_args + get_clang_native_args()
+      process = Popen(cmd, stdout=PIPE, stderr=parent.stderr_redirect, env=get_clang_native_env())
       output = process.communicate()
       if process.returncode is not 0:
-        print >> sys.stderr, "Building native executable with command failed"
-        print "Output: " + output[0]
+        print >> sys.stderr, "Building native executable with command failed", ' '.join(cmd)
+        print "Output: " + str(output[0]) + '\n' + str(output[1])
     else:
       shutil.copyfile(native_exec, filename + '.native')
       shutil.copymode(native_exec, filename + '.native')
@@ -116,13 +117,13 @@ process(sys.argv[1])
     output = Popen([PYTHON, EMCC, filename, #'-O3',
                     '-O3', '-s', 'DOUBLE_MODE=0', '-s', 'PRECISE_I64_MATH=0',
                     '--memory-init-file', '0', '--js-transform', 'python hardcode.py',
-                    '-s', 'TOTAL_MEMORY=128*1024*1024',
+                    '-s', 'TOTAL_MEMORY=256*1024*1024',
                     '-s', 'NO_EXIT_RUNTIME=1',
                     '-s', 'BENCHMARK=%d' % (1 if IGNORE_COMPILATION and not has_output_parser else 0),
                     #'--profiling',
                     #'--closure', '1',
                     '-o', final] + shared_args + emcc_args + self.extra_args, stdout=PIPE, stderr=PIPE, env=self.env).communicate()
-    assert os.path.exists(final), 'Failed to compile file: ' + output[0]
+    assert os.path.exists(final), 'Failed to compile file: ' + output[0] + ' (looked for ' + final + ')'
     self.filename = final
 
   def run(self, args):
@@ -130,38 +131,18 @@ process(sys.argv[1])
 
 # Benchmarkers
 try:
-  default_native = LLVM_3_2
-  default_native_name = 'clang-3.2'
-except:
-  if 'benchmark' in str(sys.argv):
-    print 'LLVM_3_2 not defined, using our LLVM instead (%s)' % LLVM_ROOT
-  default_native = LLVM_ROOT
-  default_native_name = 'clang'
-
-try:
   benchmarkers_error = ''
-  benchmarkers = [
-    #NativeBenchmarker(default_native_name, os.path.join(default_native, 'clang'), os.path.join(default_native, 'clang++')),
-    #NativeBenchmarker('clang', CLANG_CC, CLANG),
-    #NativeBenchmarker('clang-3.6', os.path.join(LLVM_3_6, 'clang'), os.path.join(LLVM_3_6, 'clang++')),
-    #NativeBenchmarker(default_native_name, os.path.join(default_native, 'clang'), os.path.join(default_native, 'clang++')),
-    #NativeBenchmarker('clang-3.2-O3', os.path.join(default_native, 'clang'), os.path.join(default_native, 'clang++'), ['-O3']),
-    #NativeBenchmarker('clang-3.3', os.path.join(LLVM_3_3, 'clang'), os.path.join(LLVM_3_3, 'clang++')),
-    #NativeBenchmarker('clang-3.4', os.path.join(LLVM_3_4, 'clang'), os.path.join(LLVM_3_4, 'clang++')),
-    #NativeBenchmarker('gcc', 'gcc', 'g++'),
-    JSBenchmarker('sm-f32', SPIDERMONKEY_ENGINE, ['-s', 'PRECISE_F32=2']),
-    #JSBenchmarker('sm-wasm',     SPIDERMONKEY_ENGINE, ['-s', 'PRECISE_F32=2''-s', 'BINARYEN=1', '-s', 'BINARYEN_METHOD="native-wasm"', '-s', 'BINARYEN_SCRIPTS="spidermonkify.py"'])
-    #JSBenchmarker('sm-imprecise', SPIDERMONKEY_ENGINE,                   ['-s', 'PRECISE_F32=1', '-s', 'BINARYEN=1', '-s', 'BINARYEN_METHOD="native-wasm"', '-s', 'BINARYEN_SCRIPTS="spidermonkify.py"', '-s', 'BINARYEN_IMPRECISE=1']),
-    #JSBenchmarker('sm-f32-si', SPIDERMONKEY_ENGINE, ['--profiling', '-s', 'PRECISE_F32=2', '-s', 'SIMPLIFY_IFS=1']),
-    #JSBenchmarker('sm-f32-aggro', SPIDERMONKEY_ENGINE, ['-s', 'PRECISE_F32=2', '-s', 'AGGRESSIVE_VARIABLE_ELIMINATION=1']),
-    #JSBenchmarker('sm-f32-3.2', SPIDERMONKEY_ENGINE, ['-s', 'PRECISE_F32=2'], env={ 'LLVM': LLVM_3_2 }),
-    #JSBenchmarker('sm-f32-3.3', SPIDERMONKEY_ENGINE, ['-s', 'PRECISE_F32=2'], env={ 'LLVM': LLVM_3_3 }),
-    #JSBenchmarker('sm-f32-3.4', SPIDERMONKEY_ENGINE, ['-s', 'PRECISE_F32=2'], env={ 'LLVM': LLVM_3_4 }),
-    #JSBenchmarker('sm-noasm',     SPIDERMONKEY_ENGINE + ['--no-asmjs']),
-    #JSBenchmarker('sm-noasm-f32', SPIDERMONKEY_ENGINE + ['--no-asmjs'], ['-s', 'PRECISE_F32=2']),
-    #JSBenchmarker('v8',           V8_ENGINE),
-    #JSBenchmarker('sm-emterp', SPIDERMONKEY_ENGINE, ['-s', 'EMTERPRETIFY=1', '--memory-init-file', '1']),
-  ]
+  benchmarkers = [NativeBenchmarker('clang', CLANG_CC, CLANG)]
+  if SPIDERMONKEY_ENGINE and Building.which(SPIDERMONKEY_ENGINE[0]):
+    benchmarkers += [
+      JSBenchmarker('sm-asmjs', SPIDERMONKEY_ENGINE, ['-s', 'PRECISE_F32=2']),
+      JSBenchmarker('sm-simd',  SPIDERMONKEY_ENGINE, ['-s', 'SIMD=1']),
+      JSBenchmarker('sm-wasm',  SPIDERMONKEY_ENGINE, ['-s', 'BINARYEN=1', '-s', 'BINARYEN_METHOD="native-wasm"', '-s', 'BINARYEN_IMPRECISE=1'])
+    ]
+  if V8_ENGINE and Building.which(V8_ENGINE[0]):
+    benchmarkers += [
+      JSBenchmarker('v8-wasm',  V8_ENGINE,           ['-s', 'BINARYEN=1', '-s', 'BINARYEN_METHOD="native-wasm"', '-s', 'BINARYEN_IMPRECISE=1'])
+    ]
 except Exception, e:
   benchmarkers_error = str(e)
   benchmarkers = []
@@ -221,8 +202,8 @@ class benchmark(RunnerCore):
 
   def test_primes(self):
     src = r'''
-      #include<stdio.h>
-      #include<math.h>
+      #include <stdio.h>
+      #include <math.h>
       int main(int argc, char **argv) {
         int arg = argc > 1 ? argv[1][0] - '0' : 3;
         switch(arg) {
@@ -257,9 +238,9 @@ class benchmark(RunnerCore):
 
   def test_memops(self):
     src = '''
-      #include<stdio.h>
-      #include<string.h>
-      #include<stdlib.h>
+      #include <stdio.h>
+      #include <string.h>
+      #include <stdlib.h>
       int main(int argc, char **argv) {
         int N, M;
         int arg = argc > 1 ? argv[1][0] - '0' : 3;
@@ -290,9 +271,9 @@ class benchmark(RunnerCore):
 
   def zzztest_files(self):
     src = r'''
-      #include<stdio.h>
-      #include<stdlib.h>
-      #include<assert.h>
+      #include <stdio.h>
+      #include <stdlib.h>
+      #include <assert.h>
       #include <unistd.h>
 
       int main() {
@@ -333,7 +314,7 @@ class benchmark(RunnerCore):
 
   def test_copy(self):
     src = r'''
-      #include<stdio.h>
+      #include <stdio.h>
       struct vec {
         int x, y, z;
         int r, g, b;
@@ -488,8 +469,8 @@ class benchmark(RunnerCore):
 
   def test_corrections(self):
     src = r'''
-      #include<stdio.h>
-      #include<math.h>
+      #include <stdio.h>
+      #include <math.h>
       int main(int argc, char **argv) {
         int N, M;
         int arg = argc > 1 ? argv[1][0] - '0' : 3;
@@ -518,6 +499,40 @@ class benchmark(RunnerCore):
       }
     '''
     self.do_benchmark('corrections', src, 'final:')
+
+  def zzz_test_corrections64(self):
+    src = r'''
+      #include <stdio.h>
+      #include <math.h>
+      #include <stdint.h>
+      int main(int argc, char **argv) {
+        int64_t N, M;
+        int arg = argc > 1 ? argv[1][0] - '0' : 3;
+        switch(arg) {
+          case 0: return 0; break;
+          case 1: N = 8000; M = 550; break;
+          case 2: N = 8000; M = 3500; break;
+          case 3: N = 8000; M = 7000; break;
+          case 4: N = 8000; M = 5*7000; break;
+          case 5: N = 8000; M = 10*7000; break;
+          default: printf("error: %d\\n", arg); return -1;
+        }
+
+        uint64_t f = 0;
+        uint32_t s = 0;
+        for (int64_t t = 0; t < M; t++) {
+          for (int64_t i = 0; i < N; i++) {
+            f += i / ((t % 5)+1);
+            if (f > 1000) f /= (t % 3)+1;
+            if (i % 4 == 0) f += i * (i % 8 == 0 ? 1 : -1);
+            s += (short(f)*short(f)) % 256;
+          }
+        }
+        printf("final: %lld:%d.\n", f, s);
+        return 0;
+      }
+    '''
+    self.do_benchmark('corrections64', src, 'final:')
 
   def fasta(self, name, double_rep, emcc_args=[]):
     src = open(path_from_root('tests', 'fasta.cpp'), 'r').read().replace('double', double_rep)
@@ -567,6 +582,56 @@ class benchmark(RunnerCore):
     def output_parser(output):
       return 100.0/float(re.search('Unrolled Single  Precision +([\d\.]+) Mflops', output).group(1))
     self.do_benchmark('linpack_float', open(path_from_root('tests', 'linpack.c')).read(), '''Unrolled Single  Precision''', force_c=True, output_parser=output_parser, shared_args=['-DSP'])
+
+  def zzz_test_memcpy_128b(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memcpy_128b', open(path_from_root('tests', 'benchmark_memcpy.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMAX_COPY=128', '-DBUILD_FOR_SHELL'])
+
+  def zzz_test_memcpy_4k(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memcpy_4k', open(path_from_root('tests', 'benchmark_memcpy.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=128', '-DMAX_COPY=4096', '-DBUILD_FOR_SHELL'])
+
+  def test_memcpy_16k(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memcpy_16k', open(path_from_root('tests', 'benchmark_memcpy.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=4096', '-DMAX_COPY=16384', '-DBUILD_FOR_SHELL'])
+
+  def zzz_test_memcpy_1mb(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memcpy_1mb', open(path_from_root('tests', 'benchmark_memcpy.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=16384', '-DMAX_COPY=1048576', '-DBUILD_FOR_SHELL'])
+
+  def zzz_test_memcpy_16mb(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memcpy_16mb', open(path_from_root('tests', 'benchmark_memcpy.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=1048576', '-DBUILD_FOR_SHELL'])
+
+  def zzz_test_memset_128b(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memset_128b', open(path_from_root('tests', 'benchmark_memset.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMAX_COPY=128', '-DBUILD_FOR_SHELL'])
+
+  def zzz_test_memset_4k(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memset_4k', open(path_from_root('tests', 'benchmark_memset.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=128', '-DMAX_COPY=4096', '-DBUILD_FOR_SHELL'])
+
+  def test_memset_16k(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memset_16k', open(path_from_root('tests', 'benchmark_memset.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=4096', '-DMAX_COPY=16384', '-DBUILD_FOR_SHELL'])
+
+  def zzz_test_memset_1mb(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memset_1mb', open(path_from_root('tests', 'benchmark_memset.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=16384', '-DMAX_COPY=1048576', '-DBUILD_FOR_SHELL'])
+
+  def zzz_test_memset_16mb(self):
+    def output_parser(output):
+      return float(re.search('Total time: ([\d\.]+)', output).group(1))
+    self.do_benchmark('memset_16mb', open(path_from_root('tests', 'benchmark_memset.cpp')).read(), '''Total time:''', output_parser=output_parser, shared_args=['-DMIN_COPY=1048576', '-DBUILD_FOR_SHELL'])
 
   def test_zzz_java_nbody(self): # tests xmlvm compiled java, including bitcasts of doubles, i64 math, etc.
     if CORE_BENCHMARKS: return
@@ -621,8 +686,12 @@ class benchmark(RunnerCore):
                                          os.path.join('src', '.libs', 'libLinearMath.a')],
                               configure_args=['--disable-demos','--disable-dependency-tracking'], native=native, cache_name_extra=name, env_init=env_init)
 
-    emcc_args = ['-s', 'DEAD_FUNCTIONS=["__ZSt9terminatev"]']
-
-    self.do_benchmark('bullet', src, '\nok.\n', emcc_args=emcc_args, shared_args=['-I' + path_from_root('tests', 'bullet', 'src'),
+    self.do_benchmark('bullet', src, '\nok.\n', shared_args=['-I' + path_from_root('tests', 'bullet', 'src'),
                                 '-I' + path_from_root('tests', 'bullet', 'Demos', 'Benchmarks')], lib_builder=lib_builder)
+
+  def zzz_test_zzz_lzma(self):
+    src = open(path_from_root('tests', 'lzma', 'benchmark.c'), 'r').read()
+    def lib_builder(name, native, env_init):
+      return self.get_library('lzma', [os.path.join('lzma.a')], configure=None, native=native, cache_name_extra=name, env_init=env_init)
+    self.do_benchmark('lzma', src, 'ok.', shared_args=['-I' + path_from_root('tests', 'lzma')], lib_builder=lib_builder)
 

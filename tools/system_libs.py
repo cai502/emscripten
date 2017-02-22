@@ -23,7 +23,7 @@ def run_commands(commands):
     for command in commands:
       call_process(command)
   else:
-    pool = multiprocessing.Pool(processes=cores)
+    pool = shared.Building.get_multiprocessing_pool()
     # https://stackoverflow.com/questions/1408356/keyboard-interrupts-with-pythons-multiprocessing-pool, https://bugs.python.org/issue8296
     pool.map_async(call_process, commands, chunksize=1).get(maxint)
 
@@ -35,19 +35,17 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
   # Check if we need to include some libraries that we compile. (We implement libc ourselves in js, but
   # compile a malloc implementation and stdlibc++.)
 
-  def read_symbols(path, exclude=None):
-    symbols = map(lambda line: line.strip().split(' ')[1], open(path).readlines())
-    if exclude:
-      symbols = filter(lambda symbol: symbol not in exclude, symbols)
-    return set(symbols)
+  def read_symbols(path):
+    with open(path) as f:
+      return shared.Building.parse_symbols(f.read()).defs
 
   default_opts = ['-Werror']
 
   # XXX We also need to add libc symbols that use malloc, for example strdup. It's very rare to use just them and not
   #     a normal malloc symbol (like free, after calling strdup), so we haven't hit this yet, but it is possible.
   libc_symbols = read_symbols(shared.path_from_root('system', 'lib', 'libc.symbols'))
-  libcxx_symbols = read_symbols(shared.path_from_root('system', 'lib', 'libcxx', 'symbols'), exclude=libc_symbols)
-  libcxxabi_symbols = read_symbols(shared.path_from_root('system', 'lib', 'libcxxabi', 'symbols'), exclude=libc_symbols)
+  libcxx_symbols = read_symbols(shared.path_from_root('system', 'lib', 'libcxx', 'symbols'))
+  libcxxabi_symbols = read_symbols(shared.path_from_root('system', 'lib', 'libcxxabi', 'symbols'))
   gl_symbols = read_symbols(shared.path_from_root('system', 'lib', 'gl.symbols'))
   compiler_rt_symbols = read_symbols(shared.path_from_root('system', 'lib', 'compiler-rt.symbols'))
   pthreads_symbols = read_symbols(shared.path_from_root('system', 'lib', 'pthreads.symbols'))
@@ -303,7 +301,7 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
       add_back_deps(need) # recurse to get deps of deps
 
   # Scan symbols
-  symbolses = map(lambda temp_file: shared.Building.llvm_nm(temp_file), temp_files)
+  symbolses = shared.Building.parallel_llvm_nm(map(os.path.abspath, temp_files))
 
   if len(symbolses) == 0:
     class Dummy:
@@ -585,6 +583,8 @@ class Ports:
 
   @staticmethod
   def build_native(subdir):
+    shared.Building.ensure_no_emmake('We cannot build the native system library in "%s" when under the influence of emmake/emconfigure. To avoid this, create system dirs beforehand, so they are not auto-built on demand. For example, for binaryen, do "python embuilder.py build binaryen"' % subdir)
+
     old = os.getcwd()
 
     try:
@@ -601,7 +601,7 @@ class Ports:
       # Make variants support '-jX' for number of cores to build, MSBuild does /maxcpucount:X
       num_cores = os.environ.get('EMCC_CORES') or str(multiprocessing.cpu_count())
       make_args = []
-      if 'Makefiles' in generator: make_args = ['--', '-j', num_cores]
+      if 'Makefiles' in generator and not 'NMake' in generator: make_args = ['--', '-j', num_cores]
       elif 'Visual Studio' in generator: make_args = ['--config', cmake_build_type, '--', '/maxcpucount:' + num_cores]
 
       # Kick off the build.

@@ -60,6 +60,10 @@ TODO:        You can also provide .crn files yourself, pre-crunched. With this o
              to dds files in the browser, exactly the same as if this tool compressed them.
 '''
 
+from toolchain_profiler import ToolchainProfiler
+if __name__ == '__main__':
+  ToolchainProfiler.record_process_start()
+
 import os, sys, shutil, random, uuid, ctypes
 import posixpath
 import shared
@@ -235,7 +239,7 @@ def should_ignore(fullname):
 
 # Returns the given string with escapes added so that it can safely be placed inside a string in JS code.
 def escape_for_js_string(s):
-  s = s.replace("'", "\\'").replace('"', '\\"').replace('\\', '/')
+  s = s.replace('\\', '/').replace("'", "\\'").replace('"', '\\"')
   return s
 
 # Expand directories into individual files
@@ -585,7 +589,7 @@ if has_preloaded:
     var REMOTE_PACKAGE_NAME = typeof Module['locateFile'] === 'function' ?
                               Module['locateFile'](REMOTE_PACKAGE_BASE) :
                               ((Module['filePackagePrefixURL'] || '') + REMOTE_PACKAGE_BASE);
-  ''' % (data_target, remote_package_name)
+  ''' % (escape_for_js_string(data_target), escape_for_js_string(remote_package_name))
   metadata['remote_package_size'] = remote_package_size
   metadata['package_uuid'] = str(package_uuid)
   ret += '''
@@ -885,3 +889,6 @@ if force or len(data_files) > 0:
       f = open(jsoutput + '.metadata', 'w')
       json.dump(metadata, f, separators=(',', ':'))
       f.close()
+
+if __name__ == '__main__':
+  sys.exit(0)

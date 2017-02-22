@@ -113,7 +113,7 @@ var LibraryPThreadStub = {
   pthread_once: function(ptr, func) {
     if (!_pthread_once.seen) _pthread_once.seen = {};
     if (ptr in _pthread_once.seen) return;
-    Runtime.dynCall('v', func);
+    Module['dynCall_v'](func);
     _pthread_once.seen[ptr] = 1;
   },
 
@@ -155,7 +155,7 @@ var LibraryPThreadStub = {
   },
 
   pthread_cleanup_push: function(routine, arg) {
-    __ATEXIT__.push(function() { Runtime.dynCall('vi', routine, [arg]) })
+    __ATEXIT__.push(function() { Module['dynCall_vi'](routine, arg) })
     _pthread_cleanup_push.level = __ATEXIT__.length;
   },
 
@@ -187,7 +187,8 @@ var LibraryPThreadStub = {
   pthread_spin_unlock: function() { return 0; },
 
   pthread_attr_setdetachstate: function() {},
-  pthread_att_setstacksize: function() {},
+  pthread_attr_setschedparam: function() {},
+  pthread_attr_setstacksize: function() {},
 
   pthread_create: function() {
     return {{{ cDefine('EAGAIN') }}};
