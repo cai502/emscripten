@@ -129,14 +129,17 @@ var LibraryManager = {
       'library_signals.js',
       'library_idbstore.js',
       'library_async.js',
+      'library_vr.js'
+    ]).concat(additionalLibraries);
+
+    libraries = libraries.concat([
       'library_xhr.js',
-      'library_vr.js',
       'library_font.js',
       'library_webview.js',
       'library_objc.js',
       'library_coreaudio.js',
       'library_dispatch.js'
-    ]).concat(additionalLibraries);
+    ]);
 
     if (BOOTSTRAPPING_STRUCT_INFO) libraries = ['library_bootstrap_structInfo.js', 'library_formatString.js'];
     if (ONLY_MY_CODE) {
