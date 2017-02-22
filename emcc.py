@@ -92,8 +92,6 @@ final = None
 target = None
 script_src = None # if set, we have a script to load with a src attribute
 script_inline = None # if set, we have the contents of a script to write inline in a script
-js_xhr_scripts = []
-js_xhr_resources = {}
 
 #
 # Main run() function
@@ -443,8 +441,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
     no_heap_copy = False
     use_preload_plugins = False
     proxy_to_worker = False
-    js_xhr_loading = False
-    js_manual_loading = False
     default_object_extension = '.o'
     valid_abspaths = []
     frameworks = []
@@ -688,12 +684,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
         newargs[i+1] = ''
       elif newargs[i] == '--proxy-to-worker':
         proxy_to_worker = True
-        newargs[i] = ''
-      elif newargs[i] == '--js-xhr-loading':
-        js_xhr_loading = True
-        newargs[i] = ''
-      elif newargs[i] == '--js-manual-loading':
-        js_manual_loading = True
         newargs[i] = ''
       elif newargs[i] == '--valid-abspath':
         valid_abspaths.append(newargs[i+1])
@@ -967,7 +957,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
           break
       if not found:
         logging.warning('emcc: cannot find framework "%s"', framework)
-    
+
     # If not compiling to JS, then we are compiling to an intermediate bitcode objects or library, so
     # ignore dynamic linking, since multiple dynamic linkings can interfere with each other
     if not filename_type_suffix(target) in JS_CONTAINING_SUFFIXES or ignore_dynamic_linking:
@@ -2047,14 +2037,12 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
     if final_suffix == 'html':
       logging.debug('generating HTML')
       shell = open(shell_path).read()
-      # assert '{{{ SCRIPT }}}' in shell, 'HTML shell must contain  {{{ SCRIPT }}}  , see src/shell.html for an example'
+      assert '{{{ SCRIPT }}}' in shell, 'HTML shell must contain  {{{ SCRIPT }}}  , see src/shell.html for an example'
       base_js_target = os.path.basename(js_target)
 
       def un_src(): # use this if you want to modify the script and need it to be inline
-        global script_src, script_inline, js_xhr_scripts
+        global script_src, script_inline
         if script_src is None: return
-        if js_xhr_loading:
-          js_xhr_scripts.append(script_src)
         script_inline = '''
           var script = document.createElement('script');
           script.src = "%s";
@@ -2065,7 +2053,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
       asm_mods = []
 
       if proxy_to_worker:
-        assert js_xhr_loading == False, 'Currlently not supported both js-xhr-loading and proxy-to-worker'
         child_js = shared.Settings.PROXY_TO_WORKER_FILENAME or target_basename
         script_inline = '''
   if ((',' + window.location.search.substr(1) + ',').indexOf(',noProxy,') < 0) {
@@ -2088,9 +2075,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 
       if shared.Settings.EMTERPRETIFY_FILE:
         # We need to load the emterpreter file before anything else, it has to be synchronously ready
-        if js_xhr_loading:
-          assert False, 'currently not supported empterpriter with js-xhr-loading'
-          js_xhr_resources['emterpreter_file'] = shared.Settings.EMTERPRETIFY_FILE
         un_src()
         script_inline = '''
           var xhr = new XMLHttpRequest();
@@ -2105,8 +2089,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 
       if memory_init_file:
         # start to load the memory init file in the HTML, in parallel with the JS
-        if js_xhr_loading:
-          js_xhr_resources['memory_init_file'] = os.path.basename(memfile)
         un_src()
         script_inline = ('''
           (function() {
@@ -2137,11 +2119,8 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
     };
     document.body.appendChild(script);
 ''' % (os.path.basename(asm_target), script_inline)
-          if js_xhr_loading:
-            js_xhr_scripts.insert(0, os.path.basename(asm_target))
         else:
           # may need to modify the asm code, load it as text, modify, and load asynchronously
-          assert js_xhr_loading == False, 'currently not supported asm_mods with js-xhr-loading'
           script_inline = '''
     var codeXHR = new XMLHttpRequest();
     codeXHR.open('GET', '%s', true);
@@ -2182,68 +2161,10 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 
       html = open(target, 'wb')
       assert (script_src or script_inline) and not (script_src and script_inline)
-      if js_xhr_loading:
-        script_replacement = '  <script>\n'
-        if js_xhr_resources['memory_init_file']:
-          script_replacement += '''
-      (function() {
-        var memoryInitializer = '%s';
-        if (typeof Module['locateFile'] === 'function') {
-          memoryInitializer = Module['locateFile'](memoryInitializer);
-        } else if (Module['memoryInitializerPrefixURL']) {
-          memoryInitializer = Module['memoryInitializerPrefixURL'] + memoryInitializer;
-        }
-        var xhr = Module['memoryInitializerRequest'] = new XMLHttpRequest();
-        xhr.open('GET', memoryInitializer, true);
-        xhr.responseType = 'arraybuffer';
-        xhr.send(null);
-      })();''' % js_xhr_resources['memory_init_file'];
-        script_files = '[' + (',').join(["'" + x + "'" for x in js_xhr_scripts]) + ']'
-        if js_manual_loading:
-          script_replacement += '''
-      function js_xhr_loading() {'''
-        else:
-          script_replacement += '''
-      (function() {'''
-        script_replacement += '''
-        var script_files = %s;
-        var last_run_index = 0;
-        var loaded_scripts = [];
-        var run_script = function() {
-          while(loaded_scripts[last_run_index]) {
-            var script = document.createElement("script");
-            script.text = loaded_scripts[last_run_index];
-            document.body.appendChild(script);
-            last_run_index++;
-          }
-        };
-        for(var i = 0; i < script_files.length; i++) {
-          (function(i) {
-            var file = script_files[i];
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', file, false);
-            xhr.onreadystatechange = function() {
-              if(xhr.readyState == 4) {
-                loaded_scripts[i] = xhr.responseText;
-                run_script();
-              }
-            };
-            xhr.send();
-          })(i);
-        }''' % script_files
-        if js_manual_loading:
-          script_replacement += '''
-      }
-      </script>'''
-        else:
-          script_replacement += '''
-      })();
-      </script>''';
+      if script_src:
+        script_replacement = '<script async type="text/javascript" src="%s"></script>' % script_src
       else:
-        if script_src:
-          script_replacement = '<script async type="text/javascript" src="%s"></script>' % script_src
-        else:
-          script_replacement = '<script>\n%s\n</script>' % script_inline
+        script_replacement = '<script>\n%s\n</script>' % script_inline
       html_contents = shell.replace('{{{ SCRIPT }}}', script_replacement)
       html_contents = tools.line_endings.convert_line_endings(html_contents, '\n', output_eol)
       html.write(html_contents)
