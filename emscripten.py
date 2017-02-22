@@ -121,8 +121,6 @@ def get_and_parse_backend(infile, settings, temp_files, DEBUG):
       if settings['RELOCATABLE']:
         backend_args += ['-emscripten-relocatable']
         backend_args += ['-emscripten-global-base=0']
-        if settings['COMPRESS_RELOCATION_TABLE']:
-          backend_args += ['-emscripten-compress-relocation-table']
       elif settings['GLOBAL_BASE'] >= 0:
         backend_args += ['-emscripten-global-base=%d' % settings['GLOBAL_BASE']]
       backend_args += ['-O' + str(settings['OPT_LEVEL'])]
@@ -439,7 +437,7 @@ for (var key in EMSCRIPTEN_OBJC_METADATA) {
 Module['objcMetaData'] = {};
 for (var key in EMSCRIPTEN_OBJC_METADATA) {
     var addr = EMSCRIPTEN_OBJC_METADATA[key];
-    
+
     Module['objcMetaData'][key] = [];
     for(var i = 0; i < addr.length; i++) {
         Module['objcMetaData'][key].push(%saddr[i]);
@@ -517,7 +515,7 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
           code += 'return %s' % shared.JS.make_initializer(sig[0], settings) + ';'
         return name, make_func(name, code, params, coercions)
       bad, bad_func = make_bad() # the default bad func
-      if settings['ASSERTIONS'] <= 1 and settings['COMPRESS_FUNCTION_TABLE'] == 0:
+      if settings['ASSERTIONS'] <= 1:
         Counter.pre = [bad_func]
       else:
         Counter.pre = []
@@ -545,8 +543,6 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
         Counter.j += 1
         newline = Counter.j % 30 == 29
         if item == '0':
-          if settings['COMPRESS_FUNCTION_TABLE'] == 1:
-            return ''
           if j > 0 and settings['EMULATE_FUNCTION_POINTER_CASTS'] and j in function_pointer_targets: # emulate all non-null pointer calls, if asked to
             proper_sig, proper_target = function_pointer_targets[j]
             if settings['EMULATED_FUNCTION_POINTERS']:
@@ -594,22 +590,12 @@ Module['objcMetaData'] = EMSCRIPTEN_OBJC_METADATA;
             code = 'return ' + shared.JS.make_coercion(code, sig[0], settings)
           code += ';'
           Counter.pre.append(make_func(clean_item + '__wrapper', code, params, coercions))
-          if settings['COMPRESS_FUNCTION_TABLE'] == 1:
-            "x%s[%s]=%s;" % (sig, j, item + '__wrapper')
-          else:
-            return clean_item + '__wrapper'
-        if settings['COMPRESS_FUNCTION_TABLE'] == 1:
-          return "x%s[%s]=%s;" % (sig, j, item)
-        else:
-          return item if not newline else (item + '\n')
+          return clean_item + '__wrapper'
+        return item if not newline else (item + '\n')
       if settings['ASSERTIONS'] >= 2:
         debug_tables[sig] = body
-      if settings['COMPRESS_FUNCTION_TABLE'] == 1:
-        body = ''.join(map(fix_item, body))
-        return ('\n'.join(Counter.pre), "%s(function(){var x%s=new Array(%s);%sreturn x%s;})();" % (raw[:start], sig, Counter.j, body, sig))
-      else:
-        body = ','.join(map(fix_item, body))
-        return ('\n'.join(Counter.pre), ''.join([raw[:start+1], body, raw[end:]]))
+      body = ','.join(map(fix_item, body))
+      return ('\n'.join(Counter.pre), ''.join([raw[:start+1], body, raw[end:]]))
 
     infos = [make_table(sig, raw) for sig, raw in last_forwarded_json['Functions']['tables'].iteritems()]
     Counter.pre = []
@@ -830,7 +816,7 @@ function ftCall_%s(%s) {%s
 }
 ''' % (sig, ', '.join(full_args), prelude, table_access, ', '.join(args))
         basic_funcs.append('ftCall_%s' % sig)
-        
+
         if settings.get('RELOCATABLE'):
           params = ','.join(['ptr'] + ['p%d' % p for p in range(len(sig)-1)])
           coerced_params = ','.join([shared.JS.make_coercion('ptr', 'i', settings)] + [shared.JS.make_coercion('p%d', unfloat(sig[p+1]), settings) % p for p in range(len(sig)-1)])
@@ -843,13 +829,13 @@ function ftCall_%s(%s) {%s
           else:
             body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
           funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
-    
+
     objc_message_funcs = []
     for msgFunc in metadata['objCMessageFuncs']:
       #function_tables.append(msgFunc)
-      
+
       (item, sig) = msgFunc.rsplit('_', 1)
-      
+
       # check args
       if item.find("stret") == -1:
         assert len(sig) >= 3
@@ -880,14 +866,14 @@ function ftCall_%s(%s) {%s
       if settings['OBJC_DEBUG']:
         func_prefix = "try{ " + func_prefix
         func_postfix = func_postfix + ";} catch(e) { Module.print('error sel:'+Pointer_stringify(sel)); throw e;}"
-      
+
       if settings['EMULATED_FUNCTION_POINTERS']:
         func = 'ftCall'
         basic_funcs.append(msgFunc)
       else:
         func = 'dynCall'
         function_tables.append(msgFunc)
-      
+
       if item == "_objc_msgSend":
         objc_message_funcs.append('''
   function %s(self,sel%s) {
