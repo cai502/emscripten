@@ -61,7 +61,7 @@ if ("${EMSCRIPTEN_ROOT_PATH}" STREQUAL "")
 	set(EMSCRIPTEN_ROOT_PATH "$ENV{EMSCRIPTEN}")
 endif()
 
-# Abort if not found. 
+# Abort if not found.
 if ("${EMSCRIPTEN_ROOT_PATH}" STREQUAL "")
 	message(FATAL_ERROR "Could not locate the Emscripten compiler toolchain directory! Either set the EMSCRIPTEN environment variable, or pass -DEMSCRIPTEN_ROOT_PATH=xxx to CMake to explicitly specify the location of the compiler!")
 endif()
@@ -133,7 +133,7 @@ set(CMAKE_SYSTEM_PREFIX_PATH "${EMSCRIPTEN_ROOT_PATH}/system/lib"
 #SET(CMAKE_STATIC_LIBRARY_SUFFIX ".bc")
 #SET(CMAKE_SHARED_LIBRARY_PREFIX "")
 #SET(CMAKE_SHARED_LIBRARY_SUFFIX ".bc")
-SET(CMAKE_EXECUTABLE_SUFFIX ".html")
+SET(CMAKE_EXECUTABLE_SUFFIX ".js")
 #SET(CMAKE_FIND_LIBRARY_PREFIXES "")
 #SET(CMAKE_FIND_LIBRARY_SUFFIXES ".bc")
 
@@ -210,7 +210,7 @@ function(em_add_tracked_link_flag target flagname)
 			# If the user edits the JS file, we want to relink the emscripten application, but unfortunately it is not possible to make a link step
 			# depend directly on a source file. Instead, we must make a dummy no-op build target on that source file, and make the project depend on
 			# that target.
-			
+
 			# Sanitate the source .js filename to a good symbol name to use as a dummy filename.
 			get_filename_component(jsname "${jsfile}" NAME)
 			string(REGEX REPLACE "[/:\\\\.\ ]" "_" dummy_js_target ${jsname})
