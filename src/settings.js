@@ -393,6 +393,7 @@ var EXPORTED_FUNCTIONS = ['_main'];
 
 var NATIVE_LIBDISPATCH = 1;
 var OBJC_DEBUG = 0;
+var LIBRARY_IMPLEMENTED_FUNCTIONS = [];
 
 var EXPORT_ALL = 0; // If true, we export all the symbols. Note that this does *not* affect LLVM, so it can
                     // still eliminate functions as dead. This just exports them on the Module object.
@@ -764,7 +765,4 @@ var OFFSCREENCANVAS_SUPPORT = 0; // If set to 1, enables support for transferrin
                                  // as well as explicit swap control for GL contexts. This needs browser support for the OffscreenCanvas
                                  // specification.
 
-var LIBRARY_IMPLEMENTED_FUNCTIONS = [];
-
-var COMPRESS_RELOCATION_TABLE = 0;
 // Reserved: variables containing POINTER_MASKING.
