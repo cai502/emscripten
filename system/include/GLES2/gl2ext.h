@@ -265,10 +265,6 @@ typedef void* GLeglImageOES;
 #define GL_TEXTURE_SAMPLES_IMG                                  0x9136
 
 #define GL_MAX_SAMPLES_APPLE                                    0x9135
-#define GL_READ_FRAMEBUFFER_APPLE         0x8CA8
-#define GL_DRAW_FRAMEBUFFER_APPLE         0x8CA9
-#define GL_DRAW_FRAMEBUFFER_BINDING_APPLE 0x8CA6
-#define GL_READ_FRAMEBUFFER_BINDING_APPLE 0x8CAA
 #endif
 
 /*------------------------------------------------------------------------*
@@ -679,8 +675,6 @@ typedef void (GL_APIENTRYP PFNGLMULTIDRAWELEMENTSEXTPROC) (GLenum mode, const GL
 #ifdef GL_GLEXT_PROTOTYPES
 GL_APICALL void GL_APIENTRY glRenderbufferStorageMultisampleIMG (GLenum, GLsizei, GLenum, GLsizei, GLsizei);
 GL_APICALL void GL_APIENTRY glFramebufferTexture2DMultisampleIMG (GLenum, GLenum, GLenum, GLuint, GLint, GLsizei);
-GL_APICALL void GL_APIENTRY glRenderbufferStorageMultisampleAPPLE (GLenum, GLsizei, GLenum, GLsizei, GLsizei);
-GL_APICALL void GL_APIENTRY glResolveMultisampleFramebufferAPPLE (void);
 #endif
 typedef void (GL_APIENTRYP PFNGLRENDERBUFFERSTORAGEMULTISAMPLEIMG) (GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height);
 typedef void (GL_APIENTRYP PFNGLCLIPPLANEXIMG) (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLsizei samples);
