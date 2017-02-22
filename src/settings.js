@@ -391,7 +391,6 @@ var EXPORTED_FUNCTIONS = ['_main'];
                                     // list (as _main is by default in this value, and if you override it
                                     // without keeping it there, you are in effect removing it).
 
-var NATIVE_LIBDISPATCH = 1;
 var OBJC_DEBUG = 0;
 var LIBRARY_IMPLEMENTED_FUNCTIONS = [];
 
