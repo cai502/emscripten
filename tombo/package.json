@@ -1,0 +1,26 @@
+{
+  "name": "tombopffs",
+  "version": "0.0.1",
+  "description": "A filesystem for emscripten syncing with a remote server",
+  "main": "tombopffs.js",
+  "scripts": {
+    "test": "testem ci",
+    "test-dev": "testem",
+    "build": "webpack",
+    "build-test": "webpack && webpack --config ./test/webpack.config.js",
+    "prepublish": "npm run build; NODE_ENV=production npm run build"
+  },
+  "author": "Tasuku SUENAGA",
+  "license": "MIT",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "babel-core": "^6.7.6",
+    "babel-loader": "^6.2.4",
+    "babel-plugin-transform-remove-console": "^6.5.0",
+    "babel-preset-es2015": "^6.4.0",
+    "uglifyjs": "^2.4.10",
+    "webpack": "^1.13.0",
+    "wrapper-webpack-plugin": "^0.1.7"
+  }
+}
