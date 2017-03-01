@@ -10,6 +10,7 @@ module.exports = {
   remote_entries: {},
   mount_point: null,
   websocket: null,
+  offline: false,
   sent_directories: 0,
   sent_files: 0,
   mount: function(mount) {
@@ -19,13 +20,11 @@ module.exports = {
     TOMBOPFFS.fetchAllRemoteEntries();
     return node;
   },
-  connectSocket: function(url) {
+  connectSocket: function() {
     return new Promise((resolve, reject) => {
-      if (TOMBOPFFS.websocket) {
-        return resolve(TOMBOPFFS.websocket);
-      }
-      let websocket = new TomboWebSocket(url);
-      TOMBOPFFS.websocket = websocket;
+      if (TOMBOPFFS.offline || !Module.remoteFileSystemURL) { return reject(null); }
+      if (TOMBOPFFS.websocket) { return resolve(TOMBOPFFS.websocket); }
+      let websocket = new TomboWebSocket(Module.remoteFileSystemURL);
       websocket.on('message', (message) => {
         TOMBOPFFS.onRemoteMessage(message);
       });
@@ -34,7 +33,12 @@ module.exports = {
       });
       websocket.on('error', (error) => {
         console.log(error);
+        // currently, erro recovery isn't implemented
+        alert('ERROR on the remote file system. Reload the page.');
+        TOMBOPFFS.offline = true;
+        reject(error);
       });
+      TOMBOPFFS.websocket = websocket;
     });
   },
   onRemoteMessage: function(message) {
@@ -172,7 +176,7 @@ module.exports = {
   fetchAllRemoteEntries: function() {
     TOMBOPFFS.sent_directories = 0;
     TOMBOPFFS.sent_files = 0;
-    return TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then((socket) => {
+    return TOMBOPFFS.connectSocket().then((socket) => {
       socket.send({
         type: 'fetch-all',
         request_id: 'fetch-all-dummy' // TODO: replace a proper id
@@ -235,9 +239,11 @@ module.exports = {
     });
   },
   reconcile: function(source, destination) {
+    // sync source and destination
     let total_entries = 0;
-
     let replace_entries = [];
+
+    // copy all the newer entries of source
     Object.keys(source.entries).forEach(function (key) {
       let e1 = source.entries[key];
       let e2 = destination.entries[key];
@@ -247,6 +253,7 @@ module.exports = {
       }
     });
 
+    // delete old entries of destination
     let delete_entries = [];
     Object.keys(destination.entries).forEach(function (key) {
       if (!source.entries[key]) {
@@ -255,9 +262,8 @@ module.exports = {
       }
     });
 
-    if (total_entries == 0) {
-      return Promise.resolve();
-    }
+    // nothing has changed
+    if (total_entries == 0) { return Promise.resolve(); }
 
     /*
     if (TOMBOPFFS.debug) {
@@ -272,12 +278,30 @@ module.exports = {
     }
     */
 
-    // TODO: set URL
-    return TOMBOPFFS.connectSocket('ws://127.0.0.1:8080').then((socket) => {
-      for (const key of replace_entries) {
-        if (destination.type === 'memfs') {
-          // TODO: implement
-        } else if (destination.type == 'remote') {
+
+    var updateMTime = function (key) {
+      if (destination.entries.hasOwnProperty(key)) {
+        destination.entries[key].mtime = source.entries[key].mtime;
+      } else {
+        destination.entries[key] = { mtime: source.entries[key].mtime };
+      }
+    };
+
+    // copy to local file system
+    if (destination.type === 'memfs') {
+      return new Promise((resolve, reject) => {
+        for (const key of replace_entries) {
+          // FIXME: implement
+          updateMTime(key);
+        }
+        for (const key of delete_entries) {
+          // FIXME: implement
+          destination.entries.delete(key);
+        }
+      });
+    } else if (destination.type === 'remote') {
+      return TOMBOPFFS.connectSocket().then((socket) => {
+        for (const key of replace_entries) {
           TOMBOPFFS.loadMEMFSEntry(key).then((entry) => {
             if (!key.startsWith(TOMBOPFFS.mount_point)) {
               return Promise.reject(new Error(`Invalid path ${key}`));
@@ -291,24 +315,19 @@ module.exports = {
               request_id: 'dummy' // TODO: replace a proper id
             });
           });
-        } else {
-          return new Promise.reject(new Error(`Invalid destination type ${destination.type}`));
+          updateMTime(key);
         }
-        if (destination.entries.hasOwnProperty(key)) {
-          destination.entries[key].mtime = source.entries[key].mtime;
-        } else {
-          destination.entries[key] = { mtime: source.entries[key].mtime };
+        for (const key of delete_entries) {
+          socket.send({
+            type: 'delete',
+            path: key,
+            request_id: 'dummy' // TODO: replace a proper id
+          });
+          destination.entries.delete(key);
         }
-      }
-
-      for (const key of delete_entries) {
-        socket.send({
-          type: 'delete',
-          path: key,
-          request_id: 'dummy' // TODO: replace a proper id
-        });
-        destination.entries.delete(key);
-      }
-    });
+      });
+    } else {
+      return new Promise.reject(new Error(`Invalid destination type ${destination.type}`));
+    }
   }
 };
