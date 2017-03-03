@@ -17,6 +17,7 @@ args = [
     '-s', 'DISABLE_EXCEPTION_CATCHING=0',
     '-s', 'STB_IMAGE=1',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
+    '-D_BSD_SOURCE',
 ]
 
 if not "SIDE_MODULE=1" in sys.argv:
