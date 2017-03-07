@@ -39,7 +39,7 @@ if (isProduction) {
 }
 
 module.exports = {
-  entry: ['./tombopffs.js'],
+  entry: ['./src/tombopffs.js'],
   output: {
     path: __dirname,
     filename: outputFileName,
