@@ -4,10 +4,7 @@
   "description": "A filesystem for emscripten syncing with a remote server",
   "main": "tombopffs.js",
   "scripts": {
-    "test": "testem ci",
-    "test-dev": "testem",
     "build": "webpack",
-    "build-test": "webpack && webpack --config ./test/webpack.config.js",
     "prepublish": "npm run build; NODE_ENV=production npm run build"
   },
   "author": "Tasuku SUENAGA",
