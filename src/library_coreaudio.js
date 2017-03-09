@@ -157,7 +157,7 @@ var LibraryCoreAudio = {
         source.buffer = player.buffer;
         source.connect(gain);
 
-        gain.gain.value = player.volume;
+        gain.gain.value = player.volume * CoreAudio.gainRatio;
         gain.connect(CoreAudio.context.destination);
 
         var beginAt = player.beginAt = CoreAudio.context.currentTime + delay;
