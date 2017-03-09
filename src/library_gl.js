@@ -7957,7 +7957,7 @@ keys(LibraryGL).forEach(function(x) {
   var func = LibraryGL[x];
   if(typeof func !== "function") return;
   funcString = func.toString();
-  funcString = funcString.replace('{','{Module.printErr("GLTRACE: '+x+'");');
+  funcString = funcString.replace('{','{Module.printErr("GLTRACE: '+x+' "+ Array.prototype.join.call(arguments, ","));');
   LibraryGL[x] = eval('(function() { return '+funcString+'})()');
 });
 #endif
