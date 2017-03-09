@@ -6,6 +6,7 @@ var LibraryCoreAudio = {
         audioBuffers: {},
         audioPlayers: {},
         playerIdCounter: 1,
+        gainRatio: 1,
         init: function() {
             if(typeof window === 'undefined') {
                 Module.printErr("CoreAudio is not available.");
@@ -13,11 +14,11 @@ var LibraryCoreAudio = {
             }
             window.AudioContext = window.AudioContext || window.webkitAudioContext;
             CoreAudio.context = new AudioContext();
-            
+
             // disable audio plugin and use mine
             Module["noAudioDecoding"] = true;
             Module["noImageDecoding"] = true;
-            
+
             if (!Module["preloadPlugins"]) Module["preloadPlugins"] = [];
             Module['preloadPlugins'].push({
                 canHandle: function(name) {
@@ -48,19 +49,29 @@ var LibraryCoreAudio = {
             }, false);
 
         },
-        
+
         calcPosition: function(now, begin, duration) {
             var pos = now - begin;
             while(pos >= duration) pos -= duration;
             return pos;
+        },
+
+        setGainRatio: function(gainRatio) {
+            CoreAudio.gainRatio = gainRatio;
+            Object.keys(CoreAudio.audioPlayers).forEach(function(key) {
+                var audioPlayer = CoreAudio.audioPlayers[key];
+                if (audioPlayer.gain) {
+                    audioPlayer.gain.gain.value = audioPlayer.volume * gainRatio;
+                }
+            });
         }
     },
-    
+
     // audipBuffer* are used from ExtAudioFile+ in AudioToolBox
     audioBuffer_sampleRate: function(name) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
-        
+
         if(!audioBuffer) {
             Module.printErr("audioBuffer not found");
             return 0.0;
@@ -70,7 +81,7 @@ var LibraryCoreAudio = {
     audioBuffer_length: function(name) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
-        
+
         if(!audioBuffer) {
             Module.printErr("audioBuffer not found");
             return 0;
@@ -80,7 +91,7 @@ var LibraryCoreAudio = {
     audioBuffer_numberOfChannels: function(name) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
-        
+
         if(!audioBuffer) {
             Module.printErr("audioBuffer not found");
             return 0;
@@ -90,16 +101,16 @@ var LibraryCoreAudio = {
     audioBuffer_read: function(name, channels, bytes, data) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
-        
+
         if(!audioBuffer) {
             Module.printErr("audioBuffer not found");
             return;
         }
-        
+
         var dat = [];
         for(var ch = 0; ch < channels; ch++)
             dat[ch] = audioBuffer.getChannelData(ch);
-        
+
         for (var i = 0; i < audioBuffer.length; i++) {
             for (var ch = 0; ch < channels; ch++) {
                 var val = dat[ch][i]; // [-1.0, 1.0]
@@ -117,17 +128,17 @@ var LibraryCoreAudio = {
             }
         }
     },
-    
+
     // audipPlayer* are used from AVAudioPlayer in AVFoundation
     audioPlayer_create: function(name) {
         var _name = Pointer_stringify(name);
         var audioBuffer = CoreAudio.audioBuffers[_name];
-        
+
         if(!audioBuffer) {
             Module.printErr("audioBuffer not found");
             return 0;
         }
-        
+
         var playerId = CoreAudio.playerIdCounter++;
         CoreAudio.audioPlayers[playerId] = {
             buffer: audioBuffer,
@@ -142,13 +153,13 @@ var LibraryCoreAudio = {
         var player = CoreAudio.audioPlayers[playerId];
         var source = player.source = CoreAudio.context.createBufferSource();
         var gain = player.gain = CoreAudio.context.createGain();
-        
+
         source.buffer = player.buffer;
         source.connect(gain);
-        
+
         gain.gain.value = player.volume;
         gain.connect(CoreAudio.context.destination);
-        
+
         var beginAt = player.beginAt = CoreAudio.context.currentTime + delay;
         var offset = player.offset;
         if(player.numberOfLoops > 0) {
@@ -179,7 +190,7 @@ var LibraryCoreAudio = {
         player.volume = volume;
         var gain = player.gain;
         if(gain) {
-            gain.gain.value = volume;
+            gain.gain.value = volume * CoreAudio.gainRatio;
         }
     },
     audioPlayer_setNumberOfLoops: function(playerId, numberOfLoops) {
@@ -203,8 +214,6 @@ var LibraryCoreAudio = {
         delete CoreAudio.audioPlayers[playerId];
     }
 };
-
-
 
 autoAddDeps(LibraryCoreAudio, '$CoreAudio');
 mergeInto(LibraryManager.library, LibraryCoreAudio);
