@@ -1,8 +1,4 @@
 
-var TOMBO_S_IFDIR = {{{ cDefine('S_IFDIR') }}};
-var TOMBO_S_IFLNK = {{{ cDefine('S_IFLNK') }}};
-var TOMBO_MAP_PRIVATE = {{{ cDefine('MAP_PRIVATE') }}};
-
 mergeInto(LibraryManager.library, {
   $TOMBOFS__deps: ['$FS', '$PATH'],
   $TOMBOFS: {
@@ -66,7 +62,7 @@ var tombofs =
 	module.exports = {
 	  ops_table: null,
 	  mount: function mount(_mount) {
-	    return TOMBOFS.createNode(null, '/', TOMBO_S_IFDIR | 511 /* 0777 */, 0);
+	    return TOMBOFS.createNode(null, '/', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, 0);
 	  },
 	  createNode: function createNode(parent, name, mode, dev) {
 	    if (FS.isBlkdev(mode) || FS.isFIFO(mode)) {
@@ -306,7 +302,7 @@ var tombofs =
 	      return entries;
 	    },
 	    symlink: function symlink(parent, newname, oldpath) {
-	      var node = TOMBOFS.createNode(parent, newname, 511 /* 0777 */ | TOMBO_S_IFLNK, 0);
+	      var node = TOMBOFS.createNode(parent, newname, 511 /* 0777 */ | {{{ cDefine('S_IFLNK') }}}, 0);
 	      node.link = oldpath;
 	      return node;
 	    },
@@ -404,7 +400,7 @@ var tombofs =
 	      var allocated;
 	      var contents = stream.node.contents;
 	      // Only make a new copy when MAP_PRIVATE is specified.
-	      if (!(flags & TOMBO_MAP_PRIVATE) && (contents.buffer === buffer || contents.buffer === buffer.buffer)) {
+	      if (!(flags & {{{ cDefine('MAP_PRIVATE') }}}) && (contents.buffer === buffer || contents.buffer === buffer.buffer)) {
 	        // We can't emulate MAP_SHARED when the file is not backed by the buffer
 	        // we're mapping to (e.g. the HEAP buffer).
 	        allocated = false;
@@ -431,7 +427,7 @@ var tombofs =
 	      if (!FS.isFile(stream.node.mode)) {
 	        throw new FS.ErrnoError(ERRNO_CODES.ENODEV);
 	      }
-	      if (mmapFlags & TOMBO_MAP_PRIVATE) {
+	      if (mmapFlags & {{{ cDefine('MAP_PRIVATE') }}}) {
 	        // MAP_PRIVATE calls need not to be synced back to underlying fs
 	        return 0;
 	      }

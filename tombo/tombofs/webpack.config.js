@@ -1,6 +1,6 @@
 const webpack = require('webpack');
 const WrapperPlugin = require('wrapper-webpack-plugin');
-const StringReplacePlugin = require('string-replace-webpack-plugin');
+const EmscriptenPreProcessorPlugin = require('./webpack-plugins/emscripten-pre-processor-plugin');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const outputFileName = '../../src/library_tombofs.js';
@@ -46,15 +46,8 @@ if (isProduction) {
   );
 }
 
-// emscripten replaceing strings because this is not supported in UglifyJS
 webpack_plugins.push(
-  new StringReplacePlugin.replace({
-    replacements: [{
-      pattern: /TOMBO_([_A-Z]+)/g,
-      replacement: function (match, p1, offset, string) {
-        return `{{{ cDefine('${p1}') }}}`;
-      }
-    }]
+  new EmscriptenPreProcessorPlugin({
   })
 );
 
