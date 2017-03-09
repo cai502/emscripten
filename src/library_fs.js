@@ -2,7 +2,6 @@ mergeInto(LibraryManager.library, {
   $FS__deps: ['$ERRNO_CODES', '$ERRNO_MESSAGES', '__setErrNo', '$PATH', '$TTY', '$MEMFS',
 #if __EMSCRIPTEN_HAS_idbfs_js__
     '$IDBFS',
-    '$TOMBOPFFS',
 #endif
 #if __EMSCRIPTEN_HAS_nodefs_js__
     '$NODEFS',
@@ -10,6 +9,7 @@ mergeInto(LibraryManager.library, {
 #if __EMSCRIPTEN_HAS_workerfs_js__
     '$WORKERFS',
 #endif
+    '$TOMBOFS',
     'stdin', 'stdout', 'stderr'],
   $FS__postset: 'FS.staticInit();' +
                 '__ATINIT__.unshift(function() { if (!Module["noFSInit"] && !FS.init.initialized) FS.init() });' +
@@ -1272,7 +1272,7 @@ mergeInto(LibraryManager.library, {
       FS.mkdir('/home/web_user/tmp');
       FS.mkdir('/a2o_application.app');
       if(ENVIRONMENT_IS_WEB) {
-        FS.mount(TOMBOPFFS, {}, '/home/web_user');
+        FS.mount(TOMBOFS, {}, '/home/web_user');
         addRunDependency('synchomefs');
         FS.syncfs(true, function (err) {
           if (err) throw err;
@@ -1420,7 +1420,6 @@ mergeInto(LibraryManager.library, {
         'MEMFS': MEMFS,
 #if __EMSCRIPTEN_HAS_idbfs_js__
         'IDBFS': IDBFS,
-        'TOMBOPFFS': TOMBOPFFS,
 #endif
 #if __EMSCRIPTEN_HAS_nodefs_js__
         'NODEFS': NODEFS,
@@ -1428,6 +1427,7 @@ mergeInto(LibraryManager.library, {
 #if __EMSCRIPTEN_HAS_workerfs_js__
         'WORKERFS': WORKERFS,
 #endif
+        'TOMBOFS': TOMBOFS,
       };
     },
     init: function(input, output, error) {

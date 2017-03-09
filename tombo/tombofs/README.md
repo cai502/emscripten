@@ -1,4 +1,4 @@
-# tombo
+# tombo file system
 
 ## setup
 
