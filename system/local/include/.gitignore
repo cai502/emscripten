@@ -12,3 +12,4 @@ freetype2
 ogg
 vorbis
 sqlite*.h
+libxml2
