@@ -302,7 +302,6 @@ class AsmModule():
       self.tables_js += 'var %s = %s;\n' % (table, data)
 
   def get_table_funcs(self):
-    print >> sys.stderr, self.tables.values()
     return set(itertools.chain.from_iterable(map(lambda x: map(lambda y: y.strip(), x[1:-1].split(',')), self.tables.values())))
 
   def get_funcs_map(self):
