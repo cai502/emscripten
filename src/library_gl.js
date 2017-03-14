@@ -6596,14 +6596,14 @@ var LibraryGL = {
       };
       {{{ updateExport('glGetTexEnvfv') }}}
 
-      var glTexImage2D = _glTexImage2D;
+      var glTexImage2D = (typeof(_glTexImage2D) != 'undefined') ? _glTexImage2D : function(){};
       _glTexImage2D = _emscripten_glTexImage2D = function _glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels) {
         GLImmediate.TexEnvJIT.hook_texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
         glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
       };
       {{{ updateExport('glTexImage2D') }}}
 
-      var glBindTexture = _glBindTexture;
+      var glBindTexture = (typeof(_glBindTexture) != 'undefined') ? _glBindTexture : function(){};
       _glBindTexture = _emscripten_glBindTexture = function _glBindTexture(target, texture) {
         GLImmediate.TexEnvJIT.hook_bindTexture(target, texture);
         glBindTexture(target, texture);
