@@ -22,8 +22,28 @@ class tombo(BrowserCore):
     print 'Running the browser tests. Make sure the browser allows popups from localhost.'
     print
 
-  def test_fs_tombofs_fsync(self):
-    args = ['-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1'];
-    for mode in [[], ['-s', 'MEMFS_APPEND_TO_TYPED_ARRAYS=1']]:
+  def test_fs_tombofs_sync(self):
+    for extra in [[], ['-DEXTRA_WORK']]:
       secret = str(time.time())
-      self.btest(path_from_root('tests', 'tombo', 'test_tombofs_fsync.c'), '1', force_c=True, args=args + mode + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main']'''])
+      self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=['-ltombofs.js', '-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
+      self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=['-ltombofs.js', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''] + extra)
+
+  def test_fs_tombofs_fsync(self):
+    # sync from persisted state into memory before main()
+    open(os.path.join(self.get_dir(), 'pre.js'), 'w').write('''
+      Module.preRun = function() {
+        addRunDependency('syncfs');
+
+        FS.mkdir('/working1');
+        FS.mount(TOMBOFS, {}, '/working1');
+        FS.syncfs(true, function (err) {
+          if (err) throw err;
+          removeRunDependency('syncfs');
+        });
+      };
+    ''')
+
+    args = ['--pre-js', 'pre.js', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-ltombofs.js']
+    secret = str(time.time())
+    self.btest(path_from_root('tests', 'tombo', 'test_tombofs_fsync.c'), '1', force_c=True, args=args + ['-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_success']'''])
+    self.btest(path_from_root('tests', 'tombo', 'test_tombofs_fsync.c'), '1', force_c=True, args=args + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_success']'''])
