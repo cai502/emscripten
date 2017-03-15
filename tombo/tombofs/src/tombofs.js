@@ -1,6 +1,7 @@
 'use strict';
 
 module.exports = {
+  // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
   ops_table: null,
   mount: function(mount) {
     return TOMBOFS.createNode(null, '/', EMSCRIPTEN_CDEFINE_S_IFDIR | 511 /* 0777 */, 0);
@@ -369,6 +370,7 @@ module.exports = {
   },
 
   // sync to IndexedDB
+  // NOTE: based on library_idbfs.js 0941e0187b4ae203a7d93d45b6aaf58f737b9614
   dbs: {},
   indexedDB: function() {
     if (typeof indexedDB !== 'undefined') return indexedDB;

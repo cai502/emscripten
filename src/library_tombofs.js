@@ -62,6 +62,7 @@ var tombofs =
 	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 	module.exports = {
+	  // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
 	  ops_table: null,
 	  mount: function mount(_mount) {
 	    return TOMBOFS.createNode(null, '/', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, 0);
@@ -441,6 +442,7 @@ var tombofs =
 	  },
 
 	  // sync to IndexedDB
+	  // NOTE: based on library_idbfs.js 0941e0187b4ae203a7d93d45b6aaf58f737b9614
 	  dbs: {},
 	  indexedDB: function (_indexedDB) {
 	    function indexedDB() {
