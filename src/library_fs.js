@@ -1269,6 +1269,7 @@ mergeInto(LibraryManager.library, {
       FS.mkdir('/home/web_user/Library');
       FS.mkdir('/home/web_user/Library/Cache');
       FS.mkdir('/home/web_user/tmp');
+      FS.mkdir('/a2o_application.app');
       if(ENVIRONMENT_IS_WEB) {
         FS.mount(IDBFS, {}, '/home/web_user');
         addRunDependency('synchomefs');
