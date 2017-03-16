@@ -60,6 +60,10 @@ module.exports = {
     libraryTarget: 'var'
   },
   module: {
+    noParse: [
+      // Stop the message 'This seems to be a pre-built javascript file.'
+      /aws\-sdk/
+    ],
     loaders: [
       {
         test: /\.js$/,
