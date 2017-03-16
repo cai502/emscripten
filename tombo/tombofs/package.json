@@ -5,11 +5,13 @@
   "main": "src/tombofs.js",
   "scripts": {
     "build": "webpack",
-    "prepublish": "npm run build; NODE_ENV=production npm run build"
+    "prepublish": "npm run build"
   },
   "author": "Tasuku SUENAGA",
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "aws-sdk": "^2.28.0"
+  },
   "devDependencies": {
     "babel-core": "^6.7.6",
     "babel-loader": "^6.2.4",

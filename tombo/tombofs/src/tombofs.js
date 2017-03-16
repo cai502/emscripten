@@ -1,5 +1,8 @@
 'use strict';
 
+import 'aws-sdk/dist/aws-sdk';
+const AWS = window.AWS;
+
 module.exports = {
   // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
   ops_table: null,
