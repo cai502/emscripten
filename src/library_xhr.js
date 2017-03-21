@@ -79,7 +79,13 @@ var LibraryXHR = {
         }
     },
     _xhr_clean: function(id) {
-        delete XHRWrapper.xhrs[id];
+        if(XHRWrapper.xhrs[id]) {
+            delete XHRWrapper.xhrs[id];
+        }
+    },
+    _xhr_abort: function(id) {
+        var xhr = XHRWrapper.xhrs[id];
+        xhr.abort();
     },
     _xhr_set_onload: function(id, queue, ctx, func) {
         var xhr = XHRWrapper.xhrs[id];
@@ -264,6 +270,7 @@ DEFAULT_LIBRARY_FUNCS_TO_INCLUDE.splice(-1,0,
 "_xhr_create",
 "_xhr_open",
 "_xhr_clean",
+"_xhr_abort",
 "_xhr_set_onload",
 "_xhr_set_onerror",
 "_xhr_set_request_header",
