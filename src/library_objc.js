@@ -10,18 +10,28 @@ var LibraryObjC = {
                 });
                 {{{ makeSetValue('__objc_msgForward_impcache', 0, 'addr', 'i32') }}};
             });
-            addOnInit(function(){
-                if(typeof __objc_init === 'function' && typeof ___CFInitialize === 'function' && typeof __objc_load_images === 'function') {
+            __ATINIT__.push(function(){
+                if(typeof __objc_init === 'function'
+                        && typeof ___CFInitialize === 'function'
+                        && typeof __objc_load_images === 'function'
+                        && typeof _NSBlockInitialize === 'function'
+                        && typeof _NSExceptionInitializer === 'function'
+                        && typeof _NSPlatformInitialize === 'function'
+                        && typeof _NSRunLoopModeFix === 'function') {
                     __objc_init();
                     ___CFInitialize();
                     __objc_load_images();
+                    _NSBlockInitialize();
+                    _NSExceptionInitializer();
+                    _NSPlatformInitialize();
+                    _NSRunLoopModeFix();
                 }
             });
         }
     },
-    
+
     _objc_msgForward_impcache: 'allocate(4, "i32*", ALLOC_STATIC)',
-    
+
     _getObjc2SelectorRefCount: function() {
         return Module['objcMetaData']["__objc_selrefs"].length;
     },
@@ -52,7 +62,7 @@ var LibraryObjC = {
     _getObjc2ProtocolRefCount: function() {
         return Module['objcMetaData']["__objc_protorefs"].length;
 	},
-    
+
     _getObjc2SelectorRef: function(idx) {
         return Module['objcMetaData']["__objc_selrefs"][idx];
 	},
@@ -83,11 +93,11 @@ var LibraryObjC = {
     _getObjc2ProtocolRef: function(idx) {
         return Module['objcMetaData']["__objc_protorefs"][idx];
 	},
-    
+
     _objc_msgSend_uncached_impcache: function() {
       throw "not implemented"
     },
-    
+
     _objc_msgForward__deps: ["___forwarding___"],
     _objc_msgForward: function() {
       var margs = allocate(arguments.length*4, 'i8', ALLOC_STACK);
@@ -97,12 +107,12 @@ var LibraryObjC = {
       var returnStorage = margs;
       ____forwarding___(margs, returnStorage);
     },
-    
+
     _objc_msgForward_stret__deps: ["___forwarding___"],
     _objc_msgForward_stret: function() {
       throw "not implemented";
     },
-    
+
     objc_msgSend: true,
     objc_msgSendSuper: true,
     objc_msgSendSuper2: true,
@@ -112,7 +122,7 @@ var LibraryObjC = {
     _objc_ignored_method: function() {},
     method_invoke: true,
     method_invoke_stret: true,
-    
+
     clang_arc_use: function() {
         // do nothing
     }
