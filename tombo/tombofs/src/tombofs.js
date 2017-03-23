@@ -1,12 +1,14 @@
 'use strict';
 
-import 'aws-sdk/dist/aws-sdk';
-const AWS = window.AWS;
+const TomboFSAWSClient = require('./tombofs-aws-client.js');
 
 module.exports = {
   // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
   ops_table: null,
   mount: function(mount) {
+    if (window.TomboUserName) {
+      this.AWSClient = new TomboFSAWSClient(window.TomboUserName);
+    }
     return TOMBOFS.createNode(null, '/', EMSCRIPTEN_CDEFINE_S_IFDIR | 511 /* 0777 */, 0);
   },
   createNode: function(parent, name, mode, dev) {

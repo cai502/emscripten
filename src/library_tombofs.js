@@ -61,14 +61,15 @@ var tombofs =
 
 	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
-	__webpack_require__(2);
-
-	var AWS = window.AWS;
+	var TomboFSAWSClient = __webpack_require__(2);
 
 	module.exports = {
 	  // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
 	  ops_table: null,
 	  mount: function mount(_mount) {
+	    if (window.TomboUserName) {
+	      this.AWSClient = new TomboFSAWSClient(window.TomboUserName);
+	    }
 	    return TOMBOFS.createNode(null, '/', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, 0);
 	  },
 	  createNode: function createNode(parent, name, mode, dev) {
@@ -753,6 +754,108 @@ var tombofs =
 
 /***/ },
 /* 2 */
+/***/ function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+	__webpack_require__(3);
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	var AWS = window.AWS;
+
+	var TomboFSAWSClient = function () {
+	  function TomboFSAWSClient(user_id) {
+	    _classCallCheck(this, TomboFSAWSClient);
+
+	    this.user_id = user_id;
+	    this.bucket = 'tombofs.development';
+	    AWS.config.region = 'us-west-2';
+	  }
+
+	  _createClass(TomboFSAWSClient, [{
+	    key: 'getCredential',
+	    value: function getCredential() {
+	      return new Promise(function (resolve, reject) {
+	        // FIXME: This method should be implemented by XHR
+	      });
+	    }
+	  }, {
+	    key: 'userPathPrefix',
+	    value: function userPathPrefix() {
+	      return this.user_id + '/';
+	    }
+	  }, {
+	    key: 'getObject',
+	    value: function getObject(key) {
+	      var _this = this;
+
+	      return new Promise(function (resolve, reject) {
+	        _this.s3.getObject({
+	          Bucket: _this.bucket,
+	          Key: _this.userPathPrefix() + key
+	        }, function (err, data) {
+	          if (err) {
+	            return reject(err);
+	          }
+	          resolve(data);
+	        });
+	      });
+	    }
+	  }, {
+	    key: 'putObject',
+	    value: function putObject(key, body) {
+	      var _this2 = this;
+
+	      return new Promise(function (resolve, reject) {
+	        _this2.s3.putObject({
+	          Bucket: _this2.bucket,
+	          Key: _this2.userPathPrefix() + key,
+	          Body: body
+	        }, function (err) {
+	          if (err) {
+	            return reject(err);
+	          }
+	          resolve();
+	        });
+	      });
+	    }
+	  }, {
+	    key: 'listObjects',
+	    value: function listObjects(prefix) {
+	      var _this3 = this;
+
+	      return new Promise(function (resolve, reject) {
+	        var params = {
+	          Bucket: _this3.bucket,
+	          Delimiter: '/',
+	          Prefix: _this3.userPathPrefix() + prefix
+	        };
+
+	        var contents = [];
+
+	        _this3.s3.listObjects(params).eachPage(function (err, data) {
+	          if (err) {
+	            return reject(err);
+	          }
+	          if (data === null) {
+	            return resolve(contents);
+	          }
+	          contents = contents.concat(data.Contents);
+	        });
+	      });
+	    }
+	  }]);
+
+	  return TomboFSAWSClient;
+	}();
+
+	module.exports = TomboFSAWSClient;
+
+/***/ },
+/* 3 */
 /***/ function(module, exports) {
 
 	// AWS SDK for JavaScript v2.28.0
