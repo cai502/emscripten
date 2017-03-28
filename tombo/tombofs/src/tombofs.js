@@ -65,7 +65,7 @@ module.exports = {
         }
       };
     }
-    var node = FS.createNode(parent, name, mode, dev);
+    let node = FS.createNode(parent, name, mode, dev);
     if (FS.isDir(node.mode)) {
       node.node_ops = TOMBOFS.ops_table.dir.node;
       node.stream_ops = TOMBOFS.ops_table.dir.stream;
@@ -96,8 +96,8 @@ module.exports = {
   // Given a file node, returns its file data converted to a regular JS array. You should treat this as read-only.
   getFileDataAsRegularArray: function(node) {
     if (node.contents && node.contents.subarray) {
-      var arr = [];
-      for (var i = 0; i < node.usedBytes; ++i) arr.push(node.contents[i]);
+      let arr = [];
+      for (let i = 0; i < node.usedBytes; ++i) arr.push(node.contents[i]);
       return arr; // Returns a copy of the original data.
     }
     return node.contents; // No-op, the file contents are already in a JS array. Return as-is.
@@ -115,15 +115,15 @@ module.exports = {
   // Never shrinks the storage.
   expandFileStorage: function(node, newCapacity) {
     if (!node.contents || node.contents.subarray) { // Keep using a typed array if creating a new storage, or if old one was a typed array as well.
-      var prevCapacity = node.contents ? node.contents.length : 0;
+      let prevCapacity = node.contents ? node.contents.length : 0;
       if (prevCapacity >= newCapacity) return; // No need to expand, the storage was already large enough.
       // Don't expand strictly to the given requested limit if it's only a very small increase, but instead geometrically grow capacity.
       // For small filesizes (<1MB), perform size*2 geometric increase, but for large sizes, do a much more conservative size*1.125 increase to
       // avoid overshooting the allocation cap by a very large margin.
-      var CAPACITY_DOUBLING_MAX = 1024 * 1024;
+      let CAPACITY_DOUBLING_MAX = 1024 * 1024;
       newCapacity = Math.max(newCapacity, (prevCapacity * (prevCapacity < CAPACITY_DOUBLING_MAX ? 2.0 : 1.125)) | 0);
       if (prevCapacity != 0) newCapacity = Math.max(newCapacity, 256); // At minimum allocate 256b for each file when expanding.
-      var oldContents = node.contents;
+      let oldContents = node.contents;
       node.contents = new Uint8Array(newCapacity); // Allocate new storage.
       if (node.usedBytes > 0) node.contents.set(oldContents.subarray(0, node.usedBytes), 0); // Copy old data over to the new storage.
       return;
@@ -142,7 +142,7 @@ module.exports = {
       return;
     }
     if (!node.contents || node.contents.subarray) { // Resize a typed array if that is being used as the backing store.
-      var oldContents = node.contents;
+      let oldContents = node.contents;
       node.contents = new Uint8Array(new ArrayBuffer(newSize)); // Allocate new storage.
       if (oldContents) {
         node.contents.set(oldContents.subarray(0, Math.min(newSize, node.usedBytes))); // Copy old data over to the new storage.
@@ -159,7 +159,7 @@ module.exports = {
 
   node_ops: {
     getattr: function(node) {
-      var attr = {};
+      let attr = {};
       // device numbers reuse inode numbers.
       attr.dev = FS.isChrdev(node.mode) ? node.id : 1;
       attr.ino = node.id;
@@ -207,13 +207,13 @@ module.exports = {
     rename: function(old_node, new_dir, new_name) {
       // if we're overwriting a directory at new_name, make sure it's empty.
       if (FS.isDir(old_node.mode)) {
-        var new_node;
+        let new_node;
         try {
           new_node = FS.lookupNode(new_dir, new_name);
         } catch (e) {
         }
         if (new_node) {
-          for (var i in new_node.contents) {
+          for (let i in new_node.contents) {
             throw new FS.ErrnoError(ERRNO_CODES.ENOTEMPTY);
           }
         }
@@ -228,15 +228,15 @@ module.exports = {
       delete parent.contents[name];
     },
     rmdir: function(parent, name) {
-      var node = FS.lookupNode(parent, name);
-      for (var i in node.contents) {
+      let node = FS.lookupNode(parent, name);
+      for (let i in node.contents) {
         throw new FS.ErrnoError(ERRNO_CODES.ENOTEMPTY);
       }
       delete parent.contents[name];
     },
     readdir: function(node) {
-      var entries = ['.', '..']
-      for (var key in node.contents) {
+      let entries = ['.', '..']
+      for (let key in node.contents) {
         if (!node.contents.hasOwnProperty(key)) {
           continue;
         }
@@ -245,7 +245,7 @@ module.exports = {
       return entries;
     },
     symlink: function(parent, newname, oldpath) {
-      var node = TOMBOFS.createNode(parent, newname, 511 /* 0777 */ | EMSCRIPTEN_CDEFINE_S_IFLNK, 0);
+      let node = TOMBOFS.createNode(parent, newname, 511 /* 0777 */ | EMSCRIPTEN_CDEFINE_S_IFLNK, 0);
       node.link = oldpath;
       return node;
     },
@@ -258,14 +258,14 @@ module.exports = {
   },
   stream_ops: {
     read: function(stream, buffer, offset, length, position) {
-      var contents = stream.node.contents;
+      let contents = stream.node.contents;
       if (position >= stream.node.usedBytes) return 0;
-      var size = Math.min(stream.node.usedBytes - position, length);
+      let size = Math.min(stream.node.usedBytes - position, length);
       assert(size >= 0);
       if (size > 8 && contents.subarray) { // non-trivial, and typed array
         buffer.set(contents.subarray(position, position + size), offset);
       } else {
-        for (var i = 0; i < size; i++) buffer[offset + i] = contents[position + i];
+        for (let i = 0; i < size; i++) buffer[offset + i] = contents[position + i];
       }
       return size;
     },
@@ -278,7 +278,7 @@ module.exports = {
     //         of bytes anymore since their contents now represent file data inside the filesystem.
     write: function(stream, buffer, offset, length, position, canOwn) {
       if (!length) return 0;
-      var node = stream.node;
+      let node = stream.node;
       node.timestamp = Date.now();
 
       if (buffer.subarray && (!node.contents || node.contents.subarray)) { // This write is from a typed array to a typed array?
@@ -301,7 +301,7 @@ module.exports = {
       TOMBOFS.expandFileStorage(node, position+length);
       if (node.contents.subarray && buffer.subarray) node.contents.set(buffer.subarray(offset, offset + length), position); // Use typed array write if available.
       else {
-        for (var i = 0; i < length; i++) {
+        for (let i = 0; i < length; i++) {
          node.contents[position + i] = buffer[offset + i]; // Or fall back to manual write if not.
         }
       }
@@ -310,7 +310,7 @@ module.exports = {
     },
 
     llseek: function(stream, offset, whence) {
-      var position = offset;
+      let position = offset;
       if (whence === 1) {  // SEEK_CUR.
         position += stream.position;
       } else if (whence === 2) {  // SEEK_END.
@@ -331,9 +331,9 @@ module.exports = {
       if (!FS.isFile(stream.node.mode)) {
         throw new FS.ErrnoError(ERRNO_CODES.ENODEV);
       }
-      var ptr;
-      var allocated;
-      var contents = stream.node.contents;
+      let ptr;
+      let allocated;
+      let contents = stream.node.contents;
       // Only make a new copy when MAP_PRIVATE is specified.
       if ( !(flags & EMSCRIPTEN_CDEFINE_MAP_PRIVATE) &&
             (contents.buffer === buffer || contents.buffer === buffer.buffer) ) {
@@ -368,7 +368,7 @@ module.exports = {
         return 0;
       }
 
-      var bytesWritten = TOMBOFS.stream_ops.write(stream, buffer, 0, length, offset, false);
+      let bytesWritten = TOMBOFS.stream_ops.write(stream, buffer, 0, length, offset, false);
       // should we check if bytesWritten and length are the same?
       return 0;
     }
@@ -379,7 +379,7 @@ module.exports = {
   dbs: {},
   indexedDB: function() {
     if (typeof indexedDB !== 'undefined') return indexedDB;
-    var ret = null;
+    let ret = null;
     if (typeof window === 'object') ret = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
     assert(ret, 'TOMBOFS used, but indexedDB not supported');
     return ret;
@@ -393,8 +393,8 @@ module.exports = {
       TOMBOFS.getRemoteSet(mount, function(err, remote) {
         if (err) return callback(err);
 
-        var src = populate ? remote : local;
-        var dst = populate ? local : remote;
+        let src = populate ? remote : local;
+        let dst = populate ? local : remote;
 
         TOMBOFS.reconcile(src, dst, callback);
       });
@@ -402,12 +402,12 @@ module.exports = {
   },
   getDB: function(name, callback) {
     // check the cache first
-    var db = TOMBOFS.dbs[name];
+    let db = TOMBOFS.dbs[name];
     if (db) {
       return callback(null, db);
     }
 
-    var req;
+    let req;
     try {
       req = TOMBOFS.indexedDB().open(name, TOMBOFS.DB_VERSION);
     } catch (e) {
@@ -417,10 +417,10 @@ module.exports = {
       return callback("Unable to connect to IndexedDB");
     }
     req.onupgradeneeded = function(e) {
-      var db = e.target.result;
-      var transaction = e.target.transaction;
+      let db = e.target.result;
+      let transaction = e.target.transaction;
 
-      var fileStore;
+      let fileStore;
 
       if (db.objectStoreNames.contains(TOMBOFS.DB_STORE_NAME)) {
         fileStore = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
@@ -445,7 +445,7 @@ module.exports = {
     };
   },
   getLocalSet: function(mount, callback) {
-    var entries = {};
+    let entries = {};
 
     function isRealDir(p) {
       return p !== '.' && p !== '..';
@@ -456,11 +456,11 @@ module.exports = {
       }
     };
 
-    var check = FS.readdir(mount.mountpoint).filter(isRealDir).map(toAbsolute(mount.mountpoint));
+    let check = FS.readdir(mount.mountpoint).filter(isRealDir).map(toAbsolute(mount.mountpoint));
 
     while (check.length) {
-      var path = check.pop();
-      var stat;
+      let path = check.pop();
+      let stat;
 
       try {
         stat = FS.stat(path);
@@ -478,22 +478,22 @@ module.exports = {
     return callback(null, { type: 'local', entries: entries });
   },
   getRemoteSet: function(mount, callback) {
-    var entries = {};
+    let entries = {};
 
     TOMBOFS.getDB(mount.mountpoint, function(err, db) {
       if (err) return callback(err);
 
-      var transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readonly');
+      let transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readonly');
       transaction.onerror = function(e) {
         callback(this.error);
         e.preventDefault();
       };
 
-      var store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
-      var index = store.index('timestamp');
+      let store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
+      let index = store.index('timestamp');
 
       index.openKeyCursor().onsuccess = function(event) {
-        var cursor = event.target.result;
+        let cursor = event.target.result;
 
         if (!cursor) {
           return callback(null, { type: 'remote', db: db, entries: entries });
@@ -506,10 +506,10 @@ module.exports = {
     });
   },
   loadLocalEntry: function(path, callback) {
-    var stat, node;
+    let stat, node;
 
     try {
-      var lookup = FS.lookupPath(path);
+      let lookup = FS.lookupPath(path);
       node = lookup.node;
       stat = FS.stat(path);
     } catch (e) {
@@ -547,8 +547,8 @@ module.exports = {
   },
   removeLocalEntry: function(path, callback) {
     try {
-      var lookup = FS.lookupPath(path);
-      var stat = FS.stat(path);
+      let lookup = FS.lookupPath(path);
+      let stat = FS.stat(path);
 
       if (FS.isDir(stat.mode)) {
         FS.rmdir(path);
@@ -562,7 +562,7 @@ module.exports = {
     callback(null);
   },
   loadRemoteEntry: function(store, path, callback) {
-    var req = store.get(path);
+    let req = store.get(path);
     req.onsuccess = function(event) { callback(null, event.target.result); };
     req.onerror = function(e) {
       callback(this.error);
@@ -570,7 +570,7 @@ module.exports = {
     };
   },
   storeRemoteEntry: function(store, path, entry, callback) {
-    var req = store.put(entry, path);
+    let req = store.put(entry, path);
     req.onsuccess = function() { callback(null); };
     req.onerror = function(e) {
       callback(this.error);
@@ -578,7 +578,7 @@ module.exports = {
     };
   },
   removeRemoteEntry: function(store, path, callback) {
-    var req = store.delete(path);
+    let req = store.delete(path);
     req.onsuccess = function() { callback(null); };
     req.onerror = function(e) {
       callback(this.error);
@@ -586,22 +586,22 @@ module.exports = {
     };
   },
   reconcile: function(src, dst, callback) {
-    var total = 0;
+    let total = 0;
 
-    var create = [];
+    let create = [];
     Object.keys(src.entries).forEach(function (key) {
-      var e = src.entries[key];
-      var e2 = dst.entries[key];
+      let e = src.entries[key];
+      let e2 = dst.entries[key];
       if (!e2 || e.timestamp > e2.timestamp) {
         create.push(key);
         total++;
       }
     });
 
-    var remove = [];
+    let remove = [];
     Object.keys(dst.entries).forEach(function (key) {
-      var e = dst.entries[key];
-      var e2 = src.entries[key];
+      let e = dst.entries[key];
+      let e2 = src.entries[key];
       if (!e2) {
         remove.push(key);
         total++;
@@ -612,11 +612,11 @@ module.exports = {
       return callback(null);
     }
 
-    var errored = false;
-    var completed = 0;
-    var db = src.type === 'remote' ? src.db : dst.db;
-    var transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
-    var store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
+    let errored = false;
+    let completed = 0;
+    let db = src.type === 'remote' ? src.db : dst.db;
+    let transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
+    let store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
 
     function done(err) {
       if (err) {
