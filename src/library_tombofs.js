@@ -68,7 +68,7 @@ var tombofs =
 	  ops_table: null,
 	  mount: function mount(_mount) {
 	    if (window.TomboUserName) {
-	      this.AWSClient = new TomboFSAWSClient(window.TomboUserName);
+	      TOMBOFS.AWSClient = new TomboFSAWSClient(window.TomboUserName);
 	    }
 	    return TOMBOFS.createNode(null, '/', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, 0);
 	  },
@@ -273,7 +273,7 @@ var tombofs =
 	    rename: function rename(old_node, new_dir, new_name) {
 	      // if we're overwriting a directory at new_name, make sure it's empty.
 	      if (FS.isDir(old_node.mode)) {
-	        var new_node;
+	        var new_node = void 0;
 	        try {
 	          new_node = FS.lookupNode(new_dir, new_name);
 	        } catch (e) {}
@@ -404,8 +404,8 @@ var tombofs =
 	      if (!FS.isFile(stream.node.mode)) {
 	        throw new FS.ErrnoError(ERRNO_CODES.ENODEV);
 	      }
-	      var ptr;
-	      var allocated;
+	      var ptr = void 0;
+	      var allocated = void 0;
 	      var contents = stream.node.contents;
 	      // Only make a new copy when MAP_PRIVATE is specified.
 	      if (!(flags & {{{ cDefine('MAP_PRIVATE') }}}) && (contents.buffer === buffer || contents.buffer === buffer.buffer)) {
@@ -475,10 +475,31 @@ var tombofs =
 	      TOMBOFS.getRemoteSet(mount, function (err, remote) {
 	        if (err) return callback(err);
 
-	        var src = populate ? remote : local;
-	        var dst = populate ? local : remote;
-
-	        TOMBOFS.reconcile(src, dst, callback);
+	        if (TOMBOFS.AWSClient) {
+	          TOMBOFS.getTomboSet(mount).then(function (tombo) {
+	            if (populate) {
+	              TOMBOFS.reconcile(tombo, remote, function (err) {
+	                if (err) {
+	                  return callback(err);
+	                }
+	                TOMBOFS.reconcile(remote, local, callback);
+	              });
+	            } else {
+	              TOMBOFS.reconcile(local, remote, function (err) {
+	                if (err) {
+	                  return callback(err);
+	                }
+	                TOMBOFS.reconcile(remote, tombo, callback);
+	              });
+	            }
+	          }).catch(callback);
+	        } else {
+	          if (populate) {
+	            TOMBOFS.reconcile(remote, local, callback);
+	          } else {
+	            TOMBOFS.reconcile(local, remote, callback);
+	          }
+	        }
 	      });
 	    });
 	  },
@@ -489,7 +510,7 @@ var tombofs =
 	      return callback(null, db);
 	    }
 
-	    var req;
+	    var req = void 0;
 	    try {
 	      req = TOMBOFS.indexedDB().open(name, TOMBOFS.DB_VERSION);
 	    } catch (e) {
@@ -502,7 +523,7 @@ var tombofs =
 	      var db = e.target.result;
 	      var transaction = e.target.transaction;
 
-	      var fileStore;
+	      var fileStore = void 0;
 
 	      if (db.objectStoreNames.contains(TOMBOFS.DB_STORE_NAME)) {
 	        fileStore = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
@@ -542,7 +563,7 @@ var tombofs =
 
 	    while (check.length) {
 	      var path = check.pop();
-	      var stat;
+	      var stat = void 0;
 
 	      try {
 	        stat = FS.stat(path);
@@ -587,8 +608,33 @@ var tombofs =
 	      };
 	    });
 	  },
+	  getTomboSet: function getTomboSet(mount) {
+	    if (!TOMBOFS.AWSClient) {
+	      return Promise.reject(new Error('AWSClient is null'));
+	    }
+
+	    return TOMBOFS.AWSClient.getManifest().then(function (data) {
+	      var entries = {};
+	      var dataOnMountpoint = data.mountpoints[mount.mountpoint];
+
+	      if (dataOnMountpoint) {
+	        for (var path in Object.keys(dataOnMountpoint.entries)) {
+	          var value = data.entries[path];
+
+	          entries[path] = {
+	            timestamp: value.timestamp
+	          };
+	        }
+	      }
+	      return {
+	        type: 'tombo',
+	        entries: entries
+	      };
+	    });
+	  },
 	  loadLocalEntry: function loadLocalEntry(path, callback) {
-	    var stat, node;
+	    var stat = void 0,
+	        node = void 0;
 
 	    try {
 	      var lookup = FS.lookupPath(path);
@@ -673,6 +719,24 @@ var tombofs =
 	      e.preventDefault();
 	    };
 	  },
+	  loadTomboEntry: function loadTomboEntry(path) {
+	    return new Promise(function (resolve, reject) {
+	      // FIXME: implement
+	      resolve({});
+	    });
+	  },
+	  storeTomboEntry: function storeTomboEntry(path, entry) {
+	    return new Promise(function (resolve, reject) {
+	      // FIXME: implement
+	      resolve();
+	    });
+	  },
+	  removeTomboEntry: function removeTomboEntry(path) {
+	    return new Promise(function (resolve, reject) {
+	      // FIXME: implement
+	      resolve();
+	    });
+	  },
 	  reconcile: function reconcile(src, dst, callback) {
 	    var total = 0;
 
@@ -702,9 +766,14 @@ var tombofs =
 
 	    var errored = false;
 	    var completed = 0;
-	    var db = src.type === 'remote' ? src.db : dst.db;
-	    var transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
-	    var store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
+	    var db = void 0,
+	        transaction = void 0,
+	        store = void 0;
+	    if (src.type === 'remote') {
+	      db = src.db;
+	    } else if (dst.type === 'remote') {
+	      db = dst.db;
+	    }
 
 	    function done(err) {
 	      if (err) {
@@ -719,34 +788,92 @@ var tombofs =
 	      }
 	    };
 
-	    transaction.onerror = function (e) {
-	      done(this.error);
-	      e.preventDefault();
-	    };
+	    if (db) {
+	      transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
+	      store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
+
+	      transaction.onerror = function (e) {
+	        done(this.error);
+	        e.preventDefault();
+	      };
+	    }
 
 	    // sort paths in ascending order so directory entries are created
 	    // before the files inside them
 	    create.sort().forEach(function (path) {
-	      if (dst.type === 'local') {
-	        TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
-	          if (err) return done(err);
-	          TOMBOFS.storeLocalEntry(path, entry, done);
-	        });
-	      } else {
-	        TOMBOFS.loadLocalEntry(path, function (err, entry) {
-	          if (err) return done(err);
-	          TOMBOFS.storeRemoteEntry(store, path, entry, done);
-	        });
+	      switch (dst.type) {
+	        case 'local':
+	          switch (src.type) {
+	            case 'remote':
+	              TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
+	                if (err) return done(err);
+	                TOMBOFS.storeLocalEntry(path, entry, done);
+	              });
+	              break;
+	            case 'tombo':
+	              TOMBOFS.loadTomboEntry(store, path).then(function (err, entry) {
+	                TOMBOFS.storeLocalEntry(path, entry, done);
+	              });
+	              break;
+	            default:
+	              console.log('reconcile() doesn\'t support ' + src.type + ' into ' + dst.type);
+	          }
+	          break;
+	        case 'remote':
+	          switch (src.type) {
+	            case 'local':
+	              TOMBOFS.loadLocalEntry(path, function (err, entry) {
+	                if (err) return done(err);
+	                TOMBOFS.storeRemoteEntry(store, path, entry, done);
+	              });
+	              break;
+	            case 'tombo':
+	              TOMBOFS.loadTomboEntry(store, path).then(function (err, entry) {
+	                TOMBOFS.storeRemoteEntry(path, entry, done);
+	              });
+	              break;
+	            default:
+	              console.log('reconcile() doesn\'t support ' + src.type + ' into ' + dst.type);
+	          }
+	          break;
+	        case 'tombo':
+	          switch (src.type) {
+	            case 'local':
+	              TOMBOFS.loadLocalEntry(path, function (err, entry) {
+	                if (err) return done(err);
+	                TOMBOFS.storeTomboEntry(path, entry).then(function (data) {
+	                  done(data);
+	                }).catch(done);
+	              });
+	              break;
+	            case 'remote':
+	              TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
+	                if (err) return done(err);
+	                TOMBOFS.storeTomboEntry(path, entry).then(function (data) {
+	                  done(data);
+	                }).catch(done);
+	              });
+	              break;
+	            default:
+	              console.log('reconcile() doesn\'t support ' + src.type + ' into ' + dst.type);
+	          }
+	          break;
 	      }
 	    });
 
 	    // sort paths in descending order so files are deleted before their
 	    // parent directories
 	    remove.sort().reverse().forEach(function (path) {
-	      if (dst.type === 'local') {
-	        TOMBOFS.removeLocalEntry(path, done);
-	      } else {
-	        TOMBOFS.removeRemoteEntry(store, path, done);
+	      switch (dst.type) {
+	        case 'local':
+	          TOMBOFS.removeLocalEntry(path, done);
+	          break;
+	        case 'remote':
+	          TOMBOFS.removeRemoteEntry(store, path, done);
+	          break;
+	        case 'tombo':
+	          TOMBOFS.removeTomboEntry(path, done);
+	          break;
 	      }
 	    });
 	  }
@@ -845,6 +972,15 @@ var tombofs =
 	          }
 	          contents = contents.concat(data.Contents);
 	        });
+	      });
+	    }
+	  }, {
+	    key: 'getManifest',
+	    value: function getManifest() {
+	      // This manifest file contains entries per mountpoint
+	      // FIXME: handle 404
+	      getObject('tombofs.manifest').then(function (data) {
+	        return JSON.parse(data);
 	      });
 	    }
 	  }]);
