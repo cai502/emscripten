@@ -82,7 +82,7 @@ var LibraryGL = {
       // For functions such as glDrawBuffers, glInvalidateFramebuffer and glInvalidateSubFramebuffer that need to pass a short array to the WebGL API,
       // create a set of short fixed-length arrays to avoid having to generate any garbage when calling those functions.
       for (var i = 0; i < 32; i++) {
-        GL.tempFixedLengthArray.push(new Array(i).fill(0));
+        GL.tempFixedLengthArray.push(new Array(i));
       }
     },
 
@@ -435,6 +435,15 @@ var LibraryGL = {
       try {
         canvas.addEventListener('webglcontextcreationerror', onContextCreationError, false);
         try {
+#if GL_PREINITIALIZED_CONTEXT
+          // If WebGL context has already been preinitialized for the page on the JS side, reuse that context instead. This is useful for example when
+          // the main page precompiles shaders for the application, in which case the WebGL context is created already before any Emscripten compiled
+          // code has been downloaded.
+          if (Module['preinitializedWebGLContext']) {
+            ctx = Module['preinitializedWebGLContext'];
+            webGLContextAttributes['majorVersion'] = (typeof WebGL2RenderingContext !== 'undefined' && ctx instanceof WebGL2RenderingContext) ? 2 : 1;
+          } else
+#endif
           if (webGLContextAttributes['majorVersion'] == 1 && webGLContextAttributes['minorVersion'] == 0) {
             ctx = canvas.getContext("webgl", webGLContextAttributes) || canvas.getContext("experimental-webgl", webGLContextAttributes);
           } else if (webGLContextAttributes['majorVersion'] == 2 && webGLContextAttributes['minorVersion'] == 0) {
@@ -719,16 +728,19 @@ var LibraryGL = {
         // only store the string 'colors' in utable, and 'colors[0]', 'colors[1]' and 'colors[2]' will be parsed as 'colors'+i.
         // Note that for the GL.uniforms table, we still need to fetch the all WebGLUniformLocations for all the indices.
         var loc = GLctx.getUniformLocation(p, name);
-        var id = GL.getNewId(GL.uniforms);
-        utable[name] = [u.size, id];
-        GL.uniforms[id] = loc;
-
-        for (var j = 1; j < u.size; ++j) {
-          var n = name + '['+j+']';
-          loc = GLctx.getUniformLocation(p, n);
-          id = GL.getNewId(GL.uniforms);
-
+        if (loc != null)
+        {
+          var id = GL.getNewId(GL.uniforms);
+          utable[name] = [u.size, id];
           GL.uniforms[id] = loc;
+
+          for (var j = 1; j < u.size; ++j) {
+            var n = name + '['+j+']';
+            loc = GLctx.getUniformLocation(p, n);
+            id = GL.getNewId(GL.uniforms);
+
+            GL.uniforms[id] = loc;
+          }
         }
       }
     }
@@ -770,7 +782,7 @@ var LibraryGL = {
       case 0x1F03 /* GL_EXTENSIONS */:
         var exts = GLctx.getSupportedExtensions();
         var gl_exts = [];
-        for (var i in exts) {
+        for (var i = 0; i < exts.length; ++i) {
           gl_exts.push(exts[i]);
           gl_exts.push("GL_" + exts[i]);
         }
@@ -974,7 +986,7 @@ var LibraryGL = {
         var exts = GLctx.getSupportedExtensions();
         var gl_exts = [];
         // each extension is duplicated, first in unprefixed WebGL form, and then a second time with "GL_" prefix.
-        for (var i in exts) {
+        for (var i = 0; i < exts.length; ++i) {
           gl_exts.push(allocate(intArrayFromString(exts[i]), 'i8', ALLOC_NORMAL));
           gl_exts.push(allocate(intArrayFromString("GL_" + exts[i]), 'i8', ALLOC_NORMAL));
         }
@@ -1335,7 +1347,7 @@ var LibraryGL = {
       }
     }
 #endif
-    if (GL.currentContext.supportsWebGL2EntryPoints >= 2) {
+    if (GL.currentContext.supportsWebGL2EntryPoints) {
       // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
       if (GLctx.currentPixelUnpackBufferBinding) {
         GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
@@ -1369,7 +1381,7 @@ var LibraryGL = {
       if (type == 0x8d61/*GL_HALF_FLOAT_OES*/) type = 0x140B /*GL_HALF_FLOAT*/;
     }
 #endif
-    if (GL.currentContext.supportsWebGL2EntryPoints >= 2) {
+    if (GL.currentContext.supportsWebGL2EntryPoints) {
       // WebGL 2 provides new garbage-free entry points to call to WebGL. Use those always when possible.
       if (GLctx.currentPixelUnpackBufferBinding) {
         GLctx.texSubImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
@@ -3711,7 +3723,7 @@ var LibraryGL = {
         ptable.maxUniformBlockNameLength = 0;
         for (var i = 0; i < numBlocks; ++i) {
           var activeBlockName = GLctx.getActiveUniformBlockName(program, i);
-          ptable.maxUniformBlockNameLength = Math.max(ptable.maxAttributeLength, activeBlockName.length+1);
+          ptable.maxUniformBlockNameLength = Math.max(ptable.maxUniformBlockNameLength, activeBlockName.length+1);
         }
       }
       {{{ makeSetValue('p', '0', 'ptable.maxUniformBlockNameLength', 'i32') }}};

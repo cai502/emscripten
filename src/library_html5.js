@@ -1,4 +1,5 @@
 var LibraryJSEvents = {
+  $JSEvents__postset: 'JSEvents.staticInit();',
   $JSEvents: {
     // pointers to structs malloc()ed to Emscripten HEAP for JS->C interop.
     keyEvent: 0,
@@ -19,6 +20,7 @@ var LibraryJSEvents = {
     // state.
     lastGamepadState: null,
     lastGamepadStateFrame: null, // The integer value of Browser.mainLoop.currentFrameNumber of when the last gamepad state was produced.
+    numGamepadsConnected: 0, // Keep track of how many gamepads are connected, to optimize to not poll gamepads when none are connected.
 
     // When we transition from fullscreen to windowed mode, we remember here the element that was just in fullscreen mode
     // so that we can report information about that element in the event message.
@@ -32,6 +34,13 @@ var LibraryJSEvents = {
     // When the C runtime exits via exit(), we unregister all event handlers added by this library to be nice and clean.
     // Track in this field whether we have yet registered that __ATEXIT__ handler.
     removeEventListenersRegistered: false, 
+
+    staticInit: function() {
+      if (typeof window !== 'undefined') {
+        window.addEventListener("gamepadconnected", function() { ++JSEvents.numGamepadsConnected; });
+        window.addEventListener("gamepaddisconnected", function() { --JSEvents.numGamepadsConnected; });
+      }
+    },
 
     registerRemoveEventListeners: function() {
       if (!JSEvents.removeEventListenersRegistered) {
@@ -254,8 +263,13 @@ var LibraryJSEvents = {
         {{{ makeSetValue('eventStruct', C_STRUCTS.EmscriptenMouseEvent.targetX, '0', 'i32') }}};
         {{{ makeSetValue('eventStruct', C_STRUCTS.EmscriptenMouseEvent.targetY, '0', 'i32') }}};
       }
-      JSEvents.previousScreenX = e.screenX;
-      JSEvents.previousScreenY = e.screenY;
+      // wheel and mousewheel events contain wrong screenX/screenY on chrome/opera
+      // https://github.com/kripken/emscripten/pull/4997
+      // https://bugs.chromium.org/p/chromium/issues/detail?id=699956
+      if (e.type !== 'wheel' && e.type !== 'mousewheel') {
+        JSEvents.previousScreenX = e.screenX;
+        JSEvents.previousScreenY = e.screenY;
+      }
     },
     
     registerMouseEventCallback: function(target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString) {
@@ -1705,6 +1719,9 @@ var LibraryJSEvents = {
  },
   
   _emscripten_sample_gamepad_data: function() {
+    // Polling gamepads generates garbage, so don't do it when we know there are no gamepads connected.
+    if (!JSEvents.numGamepadsConnected) return;
+
     // Produce a new Gamepad API sample if we are ticking a new game frame, or if not using emscripten_set_main_loop() at all to drive animation.
     if (Browser.mainLoop.currentFrameNumber !== JSEvents.lastGamepadStateFrame || !Browser.mainLoop.currentFrameNumber) {
       JSEvents.lastGamepadState = navigator.getGamepads ? navigator.getGamepads() : (navigator.webkitGetGamepads ? navigator.webkitGetGamepads : null);
@@ -1714,6 +1731,9 @@ var LibraryJSEvents = {
 
   emscripten_get_num_gamepads__deps: ['_emscripten_sample_gamepad_data'],
   emscripten_get_num_gamepads: function() {
+    // Polling gamepads generates garbage, so don't do it when we know there are no gamepads connected.
+    if (!JSEvents.numGamepadsConnected) return 0;
+
     __emscripten_sample_gamepad_data();
     if (!JSEvents.lastGamepadState) return {{{ cDefine('EMSCRIPTEN_RESULT_NOT_SUPPORTED') }}};
     return JSEvents.lastGamepadState.length;
