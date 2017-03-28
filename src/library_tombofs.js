@@ -469,38 +469,35 @@ var tombofs =
 	  DB_VERSION: 21,
 	  DB_STORE_NAME: 'FILE_DATA',
 	  syncfs: function syncfs(mount, populate, callback) {
-	    TOMBOFS.getLocalSet(mount, function (err, local) {
-	      if (err) return callback(err);
+	    var promises = [TOMBOFS.getLocalSet(mount), TOMBOFS.getRemoteSet(mount)];
+	    if (TOMBOFS.AWSClient) {
+	      promises.push(TOMBOFS.getTomboSet(mount));
+	    }
 
-	      TOMBOFS.getRemoteSet(mount, function (err, remote) {
-	        if (err) return callback(err);
-
+	    Promise.all(promises).then(function (values) {
+	      if (populate) {
 	        if (TOMBOFS.AWSClient) {
-	          TOMBOFS.getTomboSet(mount).then(function (tombo) {
-	            if (populate) {
-	              TOMBOFS.reconcile(tombo, remote, function (err) {
-	                if (err) {
-	                  return callback(err);
-	                }
-	                TOMBOFS.reconcile(remote, local, callback);
-	              });
-	            } else {
-	              TOMBOFS.reconcile(local, remote, function (err) {
-	                if (err) {
-	                  return callback(err);
-	                }
-	                TOMBOFS.reconcile(remote, tombo, callback);
-	              });
+	          TOMBOFS.reconcile(values[2], values[1], function (err) {
+	            if (err) {
+	              return callback(err);
 	            }
-	          }).catch(callback);
+	            TOMBOFS.reconcile(values[1], values[0], callback);
+	          });
 	        } else {
-	          if (populate) {
-	            TOMBOFS.reconcile(remote, local, callback);
-	          } else {
-	            TOMBOFS.reconcile(local, remote, callback);
-	          }
+	          TOMBOFS.reconcile(values[1], values[0], callback);
 	        }
-	      });
+	      } else {
+	        TOMBOFS.reconcile(values[0], values[1], function (err) {
+	          if (err) {
+	            return callback(err);
+	          }
+	          if (TOMBOFS.AWSClient) {
+	            TOMBOFS.reconcile(values[1], values[2], callback);
+	          } else {
+	            callback();
+	          }
+	        });
+	      }
 	    });
 	  },
 	  getDB: function getDB(name, callback) {
@@ -547,7 +544,7 @@ var tombofs =
 	      e.preventDefault();
 	    };
 	  },
-	  getLocalSet: function getLocalSet(mount, callback) {
+	  getLocalSet: function getLocalSet(mount) {
 	    var entries = {};
 
 	    function isRealDir(p) {
@@ -561,51 +558,51 @@ var tombofs =
 
 	    var check = FS.readdir(mount.mountpoint).filter(isRealDir).map(toAbsolute(mount.mountpoint));
 
-	    while (check.length) {
-	      var path = check.pop();
-	      var stat = void 0;
+	    return new Promise(function (resolve, reject) {
+	      while (check.length) {
+	        var path = check.pop();
+	        var stat = void 0;
 
-	      try {
 	        stat = FS.stat(path);
-	      } catch (e) {
-	        return callback(e);
-	      }
 
-	      if (FS.isDir(stat.mode)) {
-	        check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
-	      }
-
-	      entries[path] = { timestamp: stat.mtime };
-	    }
-
-	    return callback(null, { type: 'local', entries: entries });
-	  },
-	  getRemoteSet: function getRemoteSet(mount, callback) {
-	    var entries = {};
-
-	    TOMBOFS.getDB(mount.mountpoint, function (err, db) {
-	      if (err) return callback(err);
-
-	      var transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readonly');
-	      transaction.onerror = function (e) {
-	        callback(this.error);
-	        e.preventDefault();
-	      };
-
-	      var store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
-	      var index = store.index('timestamp');
-
-	      index.openKeyCursor().onsuccess = function (event) {
-	        var cursor = event.target.result;
-
-	        if (!cursor) {
-	          return callback(null, { type: 'remote', db: db, entries: entries });
+	        if (FS.isDir(stat.mode)) {
+	          check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
 	        }
 
-	        entries[cursor.primaryKey] = { timestamp: cursor.key };
+	        entries[path] = { timestamp: stat.mtime };
+	      }
 
-	        cursor.continue();
-	      };
+	      resolve({ type: 'local', entries: entries });
+	    });
+	  },
+	  getRemoteSet: function getRemoteSet(mount) {
+	    var entries = {};
+
+	    return new Promise(function (resolve, reject) {
+	      TOMBOFS.getDB(mount.mountpoint, function (err, db) {
+	        if (err) return reject(err);
+
+	        var transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readonly');
+	        transaction.onerror = function (e) {
+	          reject(this.error);
+	          e.preventDefault();
+	        };
+
+	        var store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
+	        var index = store.index('timestamp');
+
+	        index.openKeyCursor().onsuccess = function (event) {
+	          var cursor = event.target.result;
+
+	          if (!cursor) {
+	            return resolve({ type: 'remote', db: db, entries: entries });
+	          }
+
+	          entries[cursor.primaryKey] = { timestamp: cursor.key };
+
+	          cursor.continue();
+	        };
+	      });
 	    });
 	  },
 	  getTomboSet: function getTomboSet(mount) {

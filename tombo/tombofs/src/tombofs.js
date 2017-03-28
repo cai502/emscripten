@@ -387,34 +387,34 @@ module.exports = {
   DB_VERSION: 21,
   DB_STORE_NAME: 'FILE_DATA',
   syncfs: function(mount, populate, callback) {
-    TOMBOFS.getLocalSet(mount, function(err, local) {
-      if (err) return callback(err);
+    var promises = [
+      TOMBOFS.getLocalSet(mount),
+      TOMBOFS.getRemoteSet(mount),
+    ];
+    if (TOMBOFS.AWSClient) {
+      promises.push(TOMBOFS.getTomboSet(mount));
+    }
 
-      TOMBOFS.getRemoteSet(mount, function(err, remote) {
-        if (err) return callback(err);
-
+    Promise.all(promises).then((values) => {
+      if (populate) {
         if (TOMBOFS.AWSClient) {
-          TOMBOFS.getTomboSet(mount).then((tombo) => {
-            if (populate) {
-              TOMBOFS.reconcile(tombo, remote, (err) => {
-                if (err) { return callback(err); }
-                TOMBOFS.reconcile(remote, local, callback);
-              });
-            } else {
-              TOMBOFS.reconcile(local, remote, (err) => {
-                if (err) { return callback(err); }
-                TOMBOFS.reconcile(remote, tombo, callback);
-              });
-            }
-          }).catch(callback);
+          TOMBOFS.reconcile(values[2], values[1], (err) => {
+            if (err) { return callback(err); }
+            TOMBOFS.reconcile(values[1], values[0], callback);
+          });
         } else {
-          if (populate) {
-            TOMBOFS.reconcile(remote, local, callback);
-          } else {
-            TOMBOFS.reconcile(local, remote, callback);
-          }
+          TOMBOFS.reconcile(values[1], values[0], callback);
         }
-      });
+      } else {
+        TOMBOFS.reconcile(values[0], values[1], (err) => {
+          if (err) { return callback(err); }
+          if (TOMBOFS.AWSClient) {
+            TOMBOFS.reconcile(values[1], values[2], callback);
+          } else {
+            callback();
+          }
+        });
+      }
     });
   },
   getDB: function(name, callback) {
@@ -461,7 +461,7 @@ module.exports = {
       e.preventDefault();
     };
   },
-  getLocalSet: function(mount, callback) {
+  getLocalSet: function(mount) {
     let entries = {};
 
     function isRealDir(p) {
@@ -475,51 +475,51 @@ module.exports = {
 
     let check = FS.readdir(mount.mountpoint).filter(isRealDir).map(toAbsolute(mount.mountpoint));
 
-    while (check.length) {
-      let path = check.pop();
-      let stat;
+    return new Promise((resolve, reject) => {
+      while (check.length) {
+        let path = check.pop();
+        let stat;
 
-      try {
         stat = FS.stat(path);
-      } catch (e) {
-        return callback(e);
-      }
 
-      if (FS.isDir(stat.mode)) {
-        check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
-      }
-
-      entries[path] = { timestamp: stat.mtime };
-    }
-
-    return callback(null, { type: 'local', entries: entries });
-  },
-  getRemoteSet: function(mount, callback) {
-    let entries = {};
-
-    TOMBOFS.getDB(mount.mountpoint, function(err, db) {
-      if (err) return callback(err);
-
-      let transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readonly');
-      transaction.onerror = function(e) {
-        callback(this.error);
-        e.preventDefault();
-      };
-
-      let store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
-      let index = store.index('timestamp');
-
-      index.openKeyCursor().onsuccess = function(event) {
-        let cursor = event.target.result;
-
-        if (!cursor) {
-          return callback(null, { type: 'remote', db: db, entries: entries });
+        if (FS.isDir(stat.mode)) {
+          check.push.apply(check, FS.readdir(path).filter(isRealDir).map(toAbsolute(path)));
         }
 
-        entries[cursor.primaryKey] = { timestamp: cursor.key };
+        entries[path] = { timestamp: stat.mtime };
+      }
 
-        cursor.continue();
-      };
+      resolve({ type: 'local', entries: entries });
+    });
+  },
+  getRemoteSet: function(mount) {
+    let entries = {};
+
+    return new Promise((resolve, reject) => {
+      TOMBOFS.getDB(mount.mountpoint, function(err, db) {
+        if (err) return reject(err);
+
+        let transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readonly');
+        transaction.onerror = function(e) {
+          reject(this.error);
+          e.preventDefault();
+        };
+
+        let store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
+        let index = store.index('timestamp');
+
+        index.openKeyCursor().onsuccess = function(event) {
+          let cursor = event.target.result;
+
+          if (!cursor) {
+            return resolve({ type: 'remote', db: db, entries: entries });
+          }
+
+          entries[cursor.primaryKey] = { timestamp: cursor.key };
+
+          cursor.continue();
+        };
+      });
     });
   },
   getTomboSet: function(mount) {
