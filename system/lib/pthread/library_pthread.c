@@ -150,7 +150,7 @@ static void do_sleep(double msecs)
 	}
 #ifdef __EMSCRIPTEN__
 	emscripten_conditional_set_current_thread_status(EM_THREAD_STATUS_SLEEPING, EM_THREAD_STATUS_RUNNING);
-#endif	
+#endif
 }
 
 int nanosleep(const struct timespec *req, struct timespec *rem)
@@ -202,7 +202,6 @@ static void _do_call(em_queued_call *q)
 		case EM_PROXIED_PUTENV: q->returnValue.i = putenv(q->args[0].cp); break;
 		case EM_PROXIED_TZSET: tzset(); break;
 		case EM_PROXIED_PTHREAD_CREATE: q->returnValue.i = pthread_create(q->args[0].vp, q->args[1].vp, q->args[2].vp, q->args[3].vp); break;
-		case EM_PROXIED_GETDELIM: q->returnValue.i = getdelim(q->args[0].vp, q->args[1].vp, q->args[2].i, q->args[3].vp); break;
 		case EM_PROXIED_SYSCALL: q->returnValue.i = emscripten_syscall(q->args[0].i, q->args[1].vp); break;
 		case EM_FUNC_SIG_V: ((em_func_v)q->functionPtr)(); break;
 		case EM_FUNC_SIG_VI: ((em_func_vi)q->functionPtr)(q->args[0].i); break;

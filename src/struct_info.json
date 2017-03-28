@@ -1505,7 +1505,6 @@
             "EM_PROXIED_FPATHCONF",
             "EM_PROXIED_CONFSTR",
             "EM_PROXIED_SYSCONF",
-            "EM_PROXIED_GETDELIM",
             "EM_PROXIED_ATEXIT",
             "EM_PROXIED_GETENV",
             "EM_PROXIED_CLEARENV",
