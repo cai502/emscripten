@@ -515,15 +515,17 @@ module.exports = {
   getTomboSet: function(mount) {
     if (!this.AWSClient) { return Promise.reject(new Error('AWSClient is null')); }
 
-    // FIXME: Get a manifest file per mount.mountpoint
-
     return this.AWSClient.getManifest().then((data) => {
       let entries = {};
-      for (const path in Object.keys(data.entries)) {
-        const value = data.entries[path];
+      const dataOnMountpoint = data.mountpoints[mount.mountpoint];
 
-        entries[path] = {
-          timestamp: value.timestamp
+      if (dataOnMountpoint) {
+        for (const path in Object.keys(dataOnMountpoint.entries)) {
+          const value = data.entries[path];
+
+          entries[path] = {
+            timestamp: value.timestamp
+          }
         }
       }
       return {
