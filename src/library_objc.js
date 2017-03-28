@@ -113,15 +113,15 @@ var LibraryObjC = {
       throw "not implemented";
     },
 
-    objc_msgSend: true,
-    objc_msgSendSuper: true,
-    objc_msgSendSuper2: true,
-    objc_msgSend_stret: true,
-    objc_msgSendSuper_stret: true,
-    objc_msgSendSuper2_stret: true,
+    objc_msgSend: function() {},
+    objc_msgSendSuper: function() {},
+    objc_msgSendSuper2: function() {},
+    objc_msgSend_stret: function() {},
+    objc_msgSendSuper_stret: function() {},
+    objc_msgSendSuper2_stret: function() {},
     _objc_ignored_method: function() {},
-    method_invoke: true,
-    method_invoke_stret: true,
+    method_invoke: function() {},
+    method_invoke_stret: function() {},
 
     clang_arc_use: function() {
         // do nothing
