@@ -397,6 +397,13 @@ module.exports = {
         let dst = populate ? local : remote;
 
         TOMBOFS.reconcile(src, dst, callback);
+
+        TOMBOFS.getTomboSet(mount).then((tombo) => {
+          src = populate ? tombo : remote;
+          dst = populate ? remote : tombo;
+
+          TOMBOFS.reconcile(src, dst, callback);
+        }).catch(callback);
       });
     });
   },
@@ -502,6 +509,26 @@ module.exports = {
         entries[cursor.primaryKey] = { timestamp: cursor.key };
 
         cursor.continue();
+      };
+    });
+  },
+  getTomboSet: function(mount) {
+    if (!this.AWSClient) { return Promise.reject(new Error('AWSClient is null')); }
+
+    // FIXME: Get a manifest file per mount.mountpoint
+
+    return this.AWSClient.getManifest().then((data) => {
+      let entries = {};
+      for (const path in Object.keys(data.entries)) {
+        const value = data.entries[path];
+
+        entries[path] = {
+          timestamp: value.timestamp
+        }
+      }
+      return {
+        type: 'tombo',
+        entries: entries
       };
     });
   },

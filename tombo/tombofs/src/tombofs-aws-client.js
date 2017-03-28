@@ -60,6 +60,12 @@ class TomboFSAWSClient {
       });
     });
   }
+
+  getManifest() {
+    getObject('tombofs.manifest').then((data) => {
+      return JSON.parse(data);
+    });
+  }
 }
 
 module.exports = TomboFSAWSClient;
