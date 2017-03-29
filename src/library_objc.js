@@ -10,23 +10,6 @@ var LibraryObjC = {
                 });
                 {{{ makeSetValue('__objc_msgForward_impcache', 0, 'addr', 'i32') }}};
             });
-            __ATINIT__.push(function(){
-                if(typeof __objc_init === 'function'
-                        && typeof ___CFInitialize === 'function'
-                        && typeof __objc_load_images === 'function'
-                        && typeof _NSBlockInitialize === 'function'
-                        && typeof _NSExceptionInitializer === 'function'
-                        && typeof _NSPlatformInitialize === 'function'
-                        && typeof _NSRunLoopModeFix === 'function') {
-                    __objc_init();
-                    ___CFInitialize();
-                    __objc_load_images();
-                    _NSBlockInitialize();
-                    _NSExceptionInitializer();
-                    _NSPlatformInitialize();
-                    _NSRunLoopModeFix();
-                }
-            });
         }
     },
 
