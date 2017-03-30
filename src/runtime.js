@@ -320,32 +320,37 @@ var Runtime = {
   loadedDynamicLibraries: [],
 
   loadDynamicLibrary: function(lib) {
+    var exportModule = function(libModule) {
+      // add symbols into global namespace TODO: weak linking etc.
+      for (var sym in libModule) {
+        if (!Module.hasOwnProperty(sym)) {
+          Module[sym] = libModule[sym];
+        }
+#if ASSERTIONS == 2
+        else if (sym[0] === '_') {
+          var curr = Module[sym], next = libModule[sym];
+          // don't warn on functions - might be odr, linkonce_odr, etc.
+          if (!(typeof curr === 'function' && typeof next === 'function')) {
+            Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+          }
+        }
+#endif
+      }
+      Runtime.loadedDynamicLibraries.push(libModule);
+    };
 #if BINARYEN
-    var bin = Module['readBinary'](lib);
-    var libModule = Runtime.loadWebAssemblyModule(bin);
+    Module['readAsync'](lib, function(bin) {
+      var libModule = Runtime.loadWebAssemblyModule(new Uint8Array(bin));
+      exportModule(libModule);
+    }, function(){});
 #else
     var src = Module['read'](lib);
     var libModule = eval(src)(
       Runtime.alignFunctionTables(),
       Module
     );
+    exportModule(libModule);
 #endif
-    // add symbols into global namespace TODO: weak linking etc.
-    for (var sym in libModule) {
-      if (!Module.hasOwnProperty(sym)) {
-        Module[sym] = libModule[sym];
-      }
-#if ASSERTIONS == 2
-      else if (sym[0] === '_') {
-        var curr = Module[sym], next = libModule[sym];
-        // don't warn on functions - might be odr, linkonce_odr, etc.
-        if (!(typeof curr === 'function' && typeof next === 'function')) {
-          Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
-        }
-      }
-#endif
-    }
-    Runtime.loadedDynamicLibraries.push(libModule);
   },
 
 #if BINARYEN
@@ -627,4 +632,3 @@ if (RETAIN_COMPILER_SETTINGS) {
     } catch(e){}
   }
 }
-
