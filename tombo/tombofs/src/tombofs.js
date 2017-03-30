@@ -626,7 +626,7 @@ module.exports = {
     };
   },
   loadTomboEntry: function(manifest, path) {
-    TOMBOFS.AWSClient.getObject(path).then((data) => {
+    return TOMBOFS.AWSClient.getObject(path).then((data) => {
       const mTime = new Date(manifest.entries[path].mtime);
 
       return {
@@ -637,13 +637,10 @@ module.exports = {
     });
   },
   storeTomboEntry: function(path, entry) {
-    TOMBOFS.AWSClient.putObject(path, entry.contents);
+    return TOMBOFS.AWSClient.putObject(path, entry.contents);
   },
-  removeTomboEntries: function(path) {
-    return new Promise((resolve, reject) => {
-      // FIXME: implement
-      resolve();
-    });
+  removeTomboEntries: function(paths) {
+    return TOMBOFS.AWSClient.deleteObjects(paths);
   },
   reconcile: function(src, dst, callback) {
     let total = 0;
@@ -753,7 +750,7 @@ module.exports = {
           TOMBOFS.loadLocalEntry(path, function (err, entry) {
             if (err) return done(err);
             TOMBOFS.storeTomboEntry(manifest, path, entry).then((data) => {
-              done(data);
+              done(null);
             }).catch(done);
           });
           break;
@@ -761,7 +758,7 @@ module.exports = {
           TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
             if (err) return done(err);
             TOMBOFS.storeTomboEntry(manifest, path, entry).then((data) => {
-              done(data);
+              done(null);
             }).catch(done);
           });
           break;
@@ -774,18 +771,23 @@ module.exports = {
 
     // sort paths in descending order so files are deleted before their
     // parent directories
-    remove.sort().reverse().forEach(function(path) {
-      switch (dst.type) {
-      case 'local':
+    const pathsToBeRemoved = remove.sort().reverse();
+    switch (dst.type) {
+    case 'local':
+      pathsToBeRemoved.forEach(function(path) {
         TOMBOFS.removeLocalEntry(path, done);
-        break;
-      case 'remote':
+      });
+      break;
+    case 'remote':
+      pathsToBeRemoved.forEach(function(path) {
         TOMBOFS.removeRemoteEntry(store, path, done);
-        break;
-      case 'tombo':
-        TOMBOFS.removeTomboEntry(manifest, path, done);
-        break;
-      }
-    });
+      });
+      break;
+    case 'tombo':
+      TOMBOFS.removeTomboEntres(pathsToBeRemoved).then((data) => {
+        done(null);
+      });
+      break;
+    }
   }
 }
