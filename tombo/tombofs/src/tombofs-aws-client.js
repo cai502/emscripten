@@ -41,7 +41,7 @@ class TomboFSAWSClient {
         Bucket: this.bucket,
         Key: this.appPathPrefix() + key,
         Body: body
-      }, (err) => {
+      }, (err, data) => {
         if (err) { return reject(err); }
         resolve();
       });
