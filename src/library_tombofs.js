@@ -625,6 +625,7 @@ var tombofs =
 	      }
 	      return {
 	        type: 'tombo',
+	        manifest: dataOnMountPoint,
 	        entries: entries
 	      };
 	    });
@@ -716,19 +717,21 @@ var tombofs =
 	      e.preventDefault();
 	    };
 	  },
-	  loadTomboEntry: function loadTomboEntry(path) {
-	    return new Promise(function (resolve, reject) {
-	      // FIXME: implement
-	      resolve({});
+	  loadTomboEntry: function loadTomboEntry(manifest, path) {
+	    TOMBOFS.AWSClient.getObject(path).then(function (data) {
+	      var mTime = new Date(manifest.entries[path].mtime);
+
+	      return {
+	        contents: new Uint8Array(data.Body),
+	        mode: manifest.entries[path].mode,
+	        timestamp: mTime
+	      };
 	    });
 	  },
-	  storeTomboEntry: function storeTomboEntry(path, entry) {
-	    return new Promise(function (resolve, reject) {
-	      // FIXME: implement
-	      resolve();
-	    });
+	  storeTomboEntry: function storeTomboEntry(_manifest, path, entry) {
+	    TOMBOFS.AWSClient.putObject(path, entry.contents);
 	  },
-	  removeTomboEntry: function removeTomboEntry(path) {
+	  removeTomboEntry: function removeTomboEntry(_manifest, path) {
 	    return new Promise(function (resolve, reject) {
 	      // FIXME: implement
 	      resolve();
@@ -765,11 +768,17 @@ var tombofs =
 	    var completed = 0;
 	    var db = void 0,
 	        transaction = void 0,
-	        store = void 0;
+	        store = void 0,
+	        manifest = void 0;
 	    if (src.type === 'remote') {
 	      db = src.db;
 	    } else if (dst.type === 'remote') {
 	      db = dst.db;
+	    }
+	    if (src.type === 'tombo') {
+	      manifest = src.manifest;
+	    } else if (dst.type === 'tombo') {
+	      manifest = dst.manifest;
 	    }
 
 	    function done(err) {
@@ -825,7 +834,7 @@ var tombofs =
 	              });
 	              break;
 	            case 'tombo':
-	              TOMBOFS.loadTomboEntry(store, path).then(function (err, entry) {
+	              TOMBOFS.loadTomboEntry(manifest, store, path).then(function (err, entry) {
 	                TOMBOFS.storeRemoteEntry(path, entry, done);
 	              });
 	              break;
@@ -838,7 +847,7 @@ var tombofs =
 	            case 'local':
 	              TOMBOFS.loadLocalEntry(path, function (err, entry) {
 	                if (err) return done(err);
-	                TOMBOFS.storeTomboEntry(path, entry).then(function (data) {
+	                TOMBOFS.storeTomboEntry(manifest, path, entry).then(function (data) {
 	                  done(data);
 	                }).catch(done);
 	              });
@@ -846,7 +855,7 @@ var tombofs =
 	            case 'remote':
 	              TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
 	                if (err) return done(err);
-	                TOMBOFS.storeTomboEntry(path, entry).then(function (data) {
+	                TOMBOFS.storeTomboEntry(manifest, path, entry).then(function (data) {
 	                  done(data);
 	                }).catch(done);
 	              });
@@ -869,7 +878,7 @@ var tombofs =
 	          TOMBOFS.removeRemoteEntry(store, path, done);
 	          break;
 	        case 'tombo':
-	          TOMBOFS.removeTomboEntry(path, done);
+	          TOMBOFS.removeTomboEntry(manifest, path, done);
 	          break;
 	      }
 	    });

@@ -540,6 +540,7 @@ module.exports = {
       }
       return {
         type: 'tombo',
+        manifest: dataOnMountPoint,
         entries: entries
       };
     });
@@ -624,19 +625,21 @@ module.exports = {
       e.preventDefault();
     };
   },
-  loadTomboEntry: function(path) {
-    return new Promise((resolve, reject) => {
-      // FIXME: implement
-      resolve({});
+  loadTomboEntry: function(manifest, path) {
+    TOMBOFS.AWSClient.getObject(path).then((data) => {
+      const mTime = new Date(manifest.entries[path].mtime);
+
+      return {
+        contents: new Uint8Array(data.Body),
+        mode: manifest.entries[path].mode,
+        timestamp: mTime
+      };
     });
   },
-  storeTomboEntry: function(path, entry) {
-    return new Promise((resolve, reject) => {
-      // FIXME: implement
-      resolve();
-    });
+  storeTomboEntry: function(_manifest, path, entry) {
+    TOMBOFS.AWSClient.putObject(path, entry.contents);
   },
-  removeTomboEntry: function(path) {
+  removeTomboEntry: function(_manifest, path) {
     return new Promise((resolve, reject) => {
       // FIXME: implement
       resolve();
@@ -671,11 +674,16 @@ module.exports = {
 
     let errored = false;
     let completed = 0;
-    let db, transaction, store;
+    let db, transaction, store, manifest;
     if (src.type === 'remote') {
       db = src.db
     } else if (dst.type === 'remote') {
       db = dst.db
+    }
+    if (src.type === 'tombo') {
+      manifest = src.manifest;
+    } else if (dst.type === 'tombo') {
+      manifest = dst.manifest;
     }
 
     function done(err) {
@@ -731,7 +739,7 @@ module.exports = {
           });
           break;
         case 'tombo':
-          TOMBOFS.loadTomboEntry(store, path).then((err, entry) => {
+          TOMBOFS.loadTomboEntry(manifest, store, path).then((err, entry) => {
             TOMBOFS.storeRemoteEntry(path, entry, done);
           });
           break;
@@ -744,7 +752,7 @@ module.exports = {
         case 'local':
           TOMBOFS.loadLocalEntry(path, function (err, entry) {
             if (err) return done(err);
-            TOMBOFS.storeTomboEntry(path, entry).then((data) => {
+            TOMBOFS.storeTomboEntry(manifest, path, entry).then((data) => {
               done(data);
             }).catch(done);
           });
@@ -752,7 +760,7 @@ module.exports = {
         case 'remote':
           TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
             if (err) return done(err);
-            TOMBOFS.storeTomboEntry(path, entry).then((data) => {
+            TOMBOFS.storeTomboEntry(manifest, path, entry).then((data) => {
               done(data);
             }).catch(done);
           });
@@ -775,7 +783,7 @@ module.exports = {
         TOMBOFS.removeRemoteEntry(store, path, done);
         break;
       case 'tombo':
-        TOMBOFS.removeTomboEntry(path, done);
+        TOMBOFS.removeTomboEntry(manifest, path, done);
         break;
       }
     });
