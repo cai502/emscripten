@@ -67,8 +67,8 @@ var tombofs =
 	  // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
 	  ops_table: null,
 	  mount: function mount(_mount) {
-	    if (window.TomboUserName) {
-	      TOMBOFS.AWSClient = new TomboFSAWSClient(window.TomboUserName);
+	    if (window.TomboUserId && window.TomboAppId) {
+	      TOMBOFS.AWSClient = new TomboFSAWSClient(window.TomboUserId, window.TomboAppId);
 	    }
 	    return TOMBOFS.createNode(null, '/', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, 0);
 	  },
@@ -891,10 +891,11 @@ var tombofs =
 	var AWS = window.AWS;
 
 	var TomboFSAWSClient = function () {
-	  function TomboFSAWSClient(user_id) {
+	  function TomboFSAWSClient(userId, appId) {
 	    _classCallCheck(this, TomboFSAWSClient);
 
-	    this.user_id = user_id;
+	    this.userId = userId;
+	    this.appId = appId;
 	    this.bucket = 'tombofs.development';
 	    AWS.config.region = 'us-west-2';
 	  }
@@ -909,7 +910,12 @@ var tombofs =
 	  }, {
 	    key: 'userPathPrefix',
 	    value: function userPathPrefix() {
-	      return this.user_id + '/';
+	      return this.userId + '/';
+	    }
+	  }, {
+	    key: 'appPathPrefix',
+	    value: function appPathPrefix() {
+	      return '' + this.userPathPrefix() + this.appId + '/';
 	    }
 	  }, {
 	    key: 'getObject',
@@ -919,7 +925,7 @@ var tombofs =
 	      return new Promise(function (resolve, reject) {
 	        _this.s3.getObject({
 	          Bucket: _this.bucket,
-	          Key: _this.userPathPrefix() + key
+	          Key: _this.appPathPrefix() + key
 	        }, function (err, data) {
 	          if (err) {
 	            return reject(err);
@@ -936,7 +942,7 @@ var tombofs =
 	      return new Promise(function (resolve, reject) {
 	        _this2.s3.putObject({
 	          Bucket: _this2.bucket,
-	          Key: _this2.userPathPrefix() + key,
+	          Key: _this2.appPathPrefix() + key,
 	          Body: body
 	        }, function (err) {
 	          if (err) {
@@ -955,7 +961,7 @@ var tombofs =
 	        var params = {
 	          Bucket: _this3.bucket,
 	          Delimiter: '/',
-	          Prefix: _this3.userPathPrefix() + prefix
+	          Prefix: _this3.appPathPrefix() + prefix
 	        };
 
 	        var contents = [];

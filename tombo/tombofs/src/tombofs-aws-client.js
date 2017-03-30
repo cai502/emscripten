@@ -2,8 +2,9 @@ import 'aws-sdk/dist/aws-sdk';
 const AWS = window.AWS;
 
 class TomboFSAWSClient {
-  constructor(user_id) {
-    this.user_id = user_id;
+  constructor(userId, appId) {
+    this.userId = userId;
+    this.appId = appId;
     this.bucket = 'tombofs.development';
     AWS.config.region = 'us-west-2';
   }
@@ -15,14 +16,18 @@ class TomboFSAWSClient {
   }
 
   userPathPrefix() {
-    return `${this.user_id}/`;
+    return `${this.userId}/`;
+  }
+
+  appPathPrefix() {
+    return `${this.userPathPrefix()}${this.appId}/`;
   }
 
   getObject(key) {
     return new Promise((resolve, reject) => {
       this.s3.getObject({
         Bucket: this.bucket,
-        Key: this.userPathPrefix() + key,
+        Key: this.appPathPrefix() + key,
       }, (err, data) => {
         if (err) { return reject(err); }
         resolve(data);
@@ -34,7 +39,7 @@ class TomboFSAWSClient {
     return new Promise((resolve, reject) => {
       this.s3.putObject({
         Bucket: this.bucket,
-        Key: this.userPathPrefix() + key,
+        Key: this.appPathPrefix() + key,
         Body: body
       }, (err) => {
         if (err) { return reject(err); }
@@ -48,7 +53,7 @@ class TomboFSAWSClient {
       let params = {
         Bucket: this.bucket,
         Delimiter: '/',
-        Prefix: this.userPathPrefix() + prefix
+        Prefix: this.appPathPrefix() + prefix
       };
 
       let contents = [];
