@@ -924,9 +924,13 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    if(imp >= 0) {
+      %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    } else {
+      %s__objc_msgForward(self|0,sel|0%s)%s;
+    }
   }
-''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
       elif item == "_objc_msgSend_stret":
         objc_message_funcs.append('''
   function %s(staddr,self,sel%s) {
@@ -938,9 +942,13 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
     }
-    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    if(imp >= 0) {
+      %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    } else {
+      %s__objc_msgForward_stret(self|0,sel|0%s)%s;
+    }
   }
-''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper":
         objc_message_funcs.append('''
   function %s(objcSuper,sel%s) {
@@ -952,9 +960,13 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    if(imp >= 0) {
+      %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    } else {
+      %s__objc_msgForward(self|0,sel|0%s)%s;
+    }
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper_stret":
         objc_message_funcs.append('''
   function %s(staddr,objcSuper,sel%s) {
@@ -966,9 +978,13 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    if(imp >= 0) {
+      %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    } else {
+      %s__objc_msgForward(self|0,sel|0%s)%s;
+    }
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper2":
         objc_message_funcs.append('''
   function %s(objcSuper,sel%s) {
@@ -981,9 +997,13 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    if(imp >= 0) {
+      %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    } else {
+      %s__objc_msgForward(self|0,sel|0%s)%s;
+    }
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
       elif item == "_objc_msgSendSuper2_stret":
         objc_message_funcs.append('''
   function %s(staddr,objcSuper,sel%s) {
@@ -996,9 +1016,13 @@ function ftCall_%s(%s) {%s
     if(!imp) {
       imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
     }
-    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    if(imp >= 0) {
+      %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    } else {
+      %s__objc_msgForward_stret(self|0,sel|0%s)%s;
+    }
   }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
+''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
       elif item == "_method_invoke":
         objc_message_funcs.append('''
   function %s(self,method%s) {
