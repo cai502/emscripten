@@ -728,10 +728,10 @@ var tombofs =
 	      };
 	    });
 	  },
-	  storeTomboEntry: function storeTomboEntry(_manifest, path, entry) {
+	  storeTomboEntry: function storeTomboEntry(path, entry) {
 	    TOMBOFS.AWSClient.putObject(path, entry.contents);
 	  },
-	  removeTomboEntry: function removeTomboEntry(_manifest, path) {
+	  removeTomboEntries: function removeTomboEntries(path) {
 	    return new Promise(function (resolve, reject) {
 	      // FIXME: implement
 	      resolve();
@@ -953,29 +953,72 @@ var tombofs =
 	          Bucket: _this2.bucket,
 	          Key: _this2.appPathPrefix() + key,
 	          Body: body
-	        }, function (err) {
+	        }, function (err, data) {
 	          if (err) {
 	            return reject(err);
 	          }
-	          resolve();
+	          resolve(data);
+	        });
+	      });
+	    }
+	  }, {
+	    key: 'deleteObject',
+	    value: function deleteObject(key) {
+	      var _this3 = this;
+
+	      return new Promise(function (resolve, reject) {
+	        _this3.s3.deleteObject({
+	          Bucket: _this3.bucket,
+	          Key: _this3.appPathPrefix() + key
+	          // TODO: Support VersionId
+	        }, function (err, data) {
+	          if (err) {
+	            return reject(err);
+	          }
+	          resolve(data);
+	        });
+	      });
+	    }
+	  }, {
+	    key: 'deleteObjects',
+	    value: function deleteObjects(keys) {
+	      var _this4 = this;
+
+	      return new Promise(function (resolve, reject) {
+	        var objects = keys.map(function (key) {
+	          return {
+	            Key: _this4.appPathPrefix() + key
+	            // TODO: Support VersionId
+	          };
+	        });
+	        _this4.s3.deleteObjects({
+	          Bucket: _this4.bucket,
+	          Delete: {
+	            Objects: objects
+	          }
+	        }, function (err, data) {
+	          if (err) {
+	            return reject(err);
+	          }
+	          resolve(data);
 	        });
 	      });
 	    }
 	  }, {
 	    key: 'listObjects',
 	    value: function listObjects(prefix) {
-	      var _this3 = this;
+	      var _this5 = this;
 
 	      return new Promise(function (resolve, reject) {
 	        var params = {
-	          Bucket: _this3.bucket,
+	          Bucket: _this5.bucket,
 	          Delimiter: '/',
-	          Prefix: _this3.appPathPrefix() + prefix
+	          Prefix: _this5.appPathPrefix() + prefix
 	        };
 
 	        var contents = [];
 
-	        _this3.s3.listObjects(params).eachPage(function (err, data) {
+	        _this5.s3.listObjects(params).eachPage(function (err, data) {
 	          if (err) {
 	            return reject(err);
 	          }

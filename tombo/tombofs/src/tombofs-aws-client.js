@@ -43,7 +43,40 @@ class TomboFSAWSClient {
         Body: body
       }, (err, data) => {
         if (err) { return reject(err); }
-        resolve();
+        resolve(data);
+      });
+    });
+  }
+
+  deleteObject(key) {
+    return new Promise((resolve, reject) => {
+      this.s3.deleteObject({
+        Bucket: this.bucket,
+        Key: this.appPathPrefix() + key
+        // TODO: Support VersionId
+      }, (err, data) => {
+        if (err) { return reject(err); }
+        resolve(data);
+      });
+    });
+  }
+
+  deleteObjects(keys) {
+    return new Promise((resolve, reject) => {
+      const objects = keys.map((key) => {
+        return {
+          Key: this.appPathPrefix() + key
+          // TODO: Support VersionId
+        };
+      });
+      this.s3.deleteObjects({
+        Bucket: this.bucket,
+        Delete: {
+          Objects: objects
+        }
+      }, (err, data) => {
+        if (err) { return reject(err); }
+        resolve(data);
       });
     });
   }

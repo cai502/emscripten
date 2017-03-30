@@ -636,10 +636,10 @@ module.exports = {
       };
     });
   },
-  storeTomboEntry: function(_manifest, path, entry) {
+  storeTomboEntry: function(path, entry) {
     TOMBOFS.AWSClient.putObject(path, entry.contents);
   },
-  removeTomboEntry: function(_manifest, path) {
+  removeTomboEntries: function(path) {
     return new Promise((resolve, reject) => {
       // FIXME: implement
       resolve();
