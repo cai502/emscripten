@@ -527,20 +527,24 @@ module.exports = {
 
     return TOMBOFS.AWSClient.getManifest().then((data) => {
       let entries = {};
-      const dataOnMountpoint = data.mountpoints[mount.mountpoint];
+      let dataOnMountpoint = data.mountpoints[mount.mountpoint];
 
       if (dataOnMountpoint) {
         for (const path in Object.keys(dataOnMountpoint.entries)) {
-          const value = data.entries[path];
+          const value = dataOnMountpoint.entries[path];
 
           entries[path] = {
             timestamp: value.timestamp
           }
         }
+      } else {
+        dataOnMountpoint = {
+          entries: {}
+        };
       }
       return {
         type: 'tombo',
-        manifest: dataOnMountPoint,
+        manifest: dataOnMountpoint,
         entries: entries
       };
     });
@@ -800,8 +804,8 @@ module.exports = {
       });
       break;
     case 'tombo':
-      TOMBOFS.removeTomboEntres(pathsToBeRemoved).then((data) => {
-        done(null);
+      TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then((data) => {
+        done();
       });
       break;
     }

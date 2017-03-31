@@ -9,10 +9,9 @@ class TomboFSAWSClient {
     AWS.config.region = 'us-west-2';
   }
 
-  getCredential() {
-    return new Promise((resolve, reject) => {
-      // FIXME: This method should be implemented by XHR
-    });
+  getClient() {
+    // FIXME: This method should be implemented by XHR
+    return new Promise((resolve, reject) => { resolve(null); });
   }
 
   userPathPrefix() {
@@ -24,8 +23,8 @@ class TomboFSAWSClient {
   }
 
   getObject(key) {
-    return new Promise((resolve, reject) => {
-      this.s3.getObject({
+    return this.getClient((client) => {
+      client.getObject({
         Bucket: this.bucket,
         Key: this.appPathPrefix() + key,
       }, (err, data) => {
@@ -36,8 +35,8 @@ class TomboFSAWSClient {
   }
 
   putObject(key, body) {
-    return new Promise((resolve, reject) => {
-      this.s3.putObject({
+    return this.getClient((client) => {
+      client.putObject({
         Bucket: this.bucket,
         Key: this.appPathPrefix() + key,
         Body: body
@@ -49,8 +48,8 @@ class TomboFSAWSClient {
   }
 
   deleteObject(key) {
-    return new Promise((resolve, reject) => {
-      this.s3.deleteObject({
+    return this.getClient((client) => {
+      client.deleteObject({
         Bucket: this.bucket,
         Key: this.appPathPrefix() + key
         // TODO: Support VersionId
@@ -62,14 +61,14 @@ class TomboFSAWSClient {
   }
 
   deleteObjects(keys) {
-    return new Promise((resolve, reject) => {
+    return this.getClient((client) => {
       const objects = keys.map((key) => {
         return {
           Key: this.appPathPrefix() + key
           // TODO: Support VersionId
         };
       });
-      this.s3.deleteObjects({
+      client.deleteObjects({
         Bucket: this.bucket,
         Delete: {
           Objects: objects
@@ -82,7 +81,7 @@ class TomboFSAWSClient {
   }
 
   listObjects(prefix) {
-    return new Promise((resolve, reject) => {
+    return this.getClient((client) => {
       let params = {
         Bucket: this.bucket,
         Delimiter: '/',
@@ -91,7 +90,7 @@ class TomboFSAWSClient {
 
       let contents = [];
 
-      this.s3.listObjects(params).eachPage((err, data) => {
+      client.listObjects(params).eachPage((err, data) => {
         if (err) { return reject(err); }
         if (data === null) { return resolve(contents); }
         contents = contents.concat(data.Contents);
@@ -104,21 +103,27 @@ class TomboFSAWSClient {
   }
 
   getFile(path) {
-    return getObject(this.pathToKey(path));
+    return this.getObject(this.pathToKey(path));
   }
 
   putFile(path, content) {
-    return putObject(this.pathToKey(path), content);
+    return this.putObject(this.pathToKey(path), content);
   }
 
   deleteFiles(paths) {
-    return deleteObjects(paths.map(this.pathToKey));
+    return this.deleteObjects(paths.map(this.pathToKey));
   }
 
   getManifest() {
     // This manifest file contains entries per mountpoint
-    return getObject('tombofs.manifest').then((data) => {
-      return JSON.parse(data);
+    return this.getObject('tombofs.manifest').then((data) => {
+      if (data.Body) {
+        return JSON.parse(data.Body);
+      } else {
+        return {
+          mountpoints: {}
+        };
+      }
     }).catch((err) => {
       // FIXME: handle 404
       console.log(err);
@@ -126,8 +131,8 @@ class TomboFSAWSClient {
   }
 
   putManifest(content) {
-    return putObject('tombofs.manifest', JSON.stringify(content)).then((data) => {
-      return JSON.parse(data);
+    return this.putObject('tombofs.manifest', JSON.stringify(content)).then((data) => {
+      return data;
     });
   }
 }

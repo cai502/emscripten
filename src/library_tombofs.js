@@ -616,16 +616,20 @@ var tombofs =
 
 	      if (dataOnMountpoint) {
 	        for (var path in Object.keys(dataOnMountpoint.entries)) {
-	          var value = data.entries[path];
+	          var value = dataOnMountpoint.entries[path];
 
 	          entries[path] = {
 	            timestamp: value.timestamp
 	          };
 	        }
+	      } else {
+	        dataOnMountpoint = {
+	          entries: {}
+	        };
 	      }
 	      return {
 	        type: 'tombo',
-	        manifest: dataOnMountPoint,
+	        manifest: dataOnMountpoint,
 	        entries: entries
 	      };
 	    });
@@ -895,8 +899,8 @@ var tombofs =
 	        });
 	        break;
 	      case 'tombo':
-	        TOMBOFS.removeTomboEntres(pathsToBeRemoved).then(function (data) {
-	          done(null);
+	        TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then(function (data) {
+	          done();
 	        });
 	        break;
 	    }
@@ -932,10 +936,11 @@ var tombofs =
 	  }
 
 	  _createClass(TomboFSAWSClient, [{
-	    key: 'getCredential',
-	    value: function getCredential() {
+	    key: 'getClient',
+	    value: function getClient() {
+	      // FIXME: This method should be implemented by XHR
 	      return new Promise(function (resolve, reject) {
-	        // FIXME: This method should be implemented by XHR
+	        resolve(null);
 	      });
 	    }
 	  }, {
@@ -953,11 +958,13 @@ var tombofs =
 	    value: function getObject(key) {
 	      var _this = this;
 
-	      return new Promise(function (resolve, reject) {
-	        _this.s3.getObject({
+	      return this.getClient(function (client) {
+	        client.getObject({
 	          Bucket: _this.bucket,
 	          Key: _this.appPathPrefix() + key
 	        }, function (err, data) {
+	          console.log('assasasa');
+	          console.log(data);
 	          if (err) {
 	            return reject(err);
 	          }
@@ -970,8 +977,8 @@ var tombofs =
 	    value: function putObject(key, body) {
 	      var _this2 = this;
 
-	      return new Promise(function (resolve, reject) {
-	        _this2.s3.putObject({
+	      return this.getClient(function (client) {
+	        client.putObject({
 	          Bucket: _this2.bucket,
 	          Key: _this2.appPathPrefix() + key,
 	          Body: body
@@ -988,8 +995,8 @@ var tombofs =
 	    value: function deleteObject(key) {
 	      var _this3 = this;
 
-	      return new Promise(function (resolve, reject) {
-	        _this3.s3.deleteObject({
+	      return this.getClient(function (client) {
+	        client.deleteObject({
 	          Bucket: _this3.bucket,
 	          Key: _this3.appPathPrefix() + key
 	          // TODO: Support VersionId
@@ -1006,14 +1013,14 @@ var tombofs =
 	    value: function deleteObjects(keys) {
 	      var _this4 = this;
 
-	      return new Promise(function (resolve, reject) {
+	      return this.getClient(function (client) {
 	        var objects = keys.map(function (key) {
 	          return {
 	            Key: _this4.appPathPrefix() + key
 	            // TODO: Support VersionId
 	          };
 	        });
-	        _this4.s3.deleteObjects({
+	        client.deleteObjects({
 	          Bucket: _this4.bucket,
 	          Delete: {
 	            Objects: objects
@@ -1031,7 +1038,7 @@ var tombofs =
 	    value: function listObjects(prefix) {
 	      var _this5 = this;
 
-	      return new Promise(function (resolve, reject) {
+	      return this.getClient(function (client) {
 	        var params = {
 	          Bucket: _this5.bucket,
 	          Delimiter: '/',
@@ -1040,7 +1047,7 @@ var tombofs =
 
 	        var contents = [];
 
-	        _this5.s3.listObjects(params).eachPage(function (err, data) {
+	        client.listObjects(params).eachPage(function (err, data) {
 	          if (err) {
 	            return reject(err);
 	          }
@@ -1059,24 +1066,30 @@ var tombofs =
 	  }, {
 	    key: 'getFile',
 	    value: function getFile(path) {
-	      return getObject(this.pathToKey(path));
+	      return this.getObject(this.pathToKey(path));
 	    }
 	  }, {
 	    key: 'putFile',
 	    value: function putFile(path, content) {
-	      return putObject(this.pathToKey(path), content);
+	      return this.putObject(this.pathToKey(path), content);
 	    }
 	  }, {
 	    key: 'deleteFiles',
 	    value: function deleteFiles(paths) {
-	      return deleteObjects(paths.map(this.pathToKey));
+	      return this.deleteObjects(paths.map(this.pathToKey));
 	    }
 	  }, {
 	    key: 'getManifest',
 	    value: function getManifest() {
 	      // This manifest file contains entries per mountpoint
-	      return getObject('tombofs.manifest').then(function (data) {
-	        return JSON.parse(data);
+	      return this.getObject('tombofs.manifest').then(function (data) {
+	        if (data.Body) {
+	          return JSON.parse(data.Body);
+	        } else {
+	          return {
+	            mountpoints: {}
+	          };
+	        }
 	      }).catch(function (err) {
 	        // FIXME: handle 404
 	        console.log(err);
@@ -1085,8 +1098,8 @@ var tombofs =
 	  }, {
 	    key: 'putManifest',
 	    value: function putManifest(content) {
-	      return putObject('tombofs.manifest', JSON.stringify(content)).then(function (data) {
-	        return JSON.parse(data);
+	      return this.putObject('tombofs.manifest', JSON.stringify(content)).then(function (data) {
+	        return data;
 	      });
 	    }
 	  }]);
