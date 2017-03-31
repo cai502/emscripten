@@ -117,9 +117,11 @@ class TomboFSAWSClient {
 
   getManifest() {
     // This manifest file contains entries per mountpoint
-    // FIXME: handle 404
     return getObject('tombofs.manifest').then((data) => {
       return JSON.parse(data);
+    }).catch((err) => {
+      // FIXME: handle 404
+      console.log(err);
     });
   }
 

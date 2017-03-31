@@ -636,11 +636,20 @@ module.exports = {
       };
     });
   },
-  storeTomboEntry: function(path, entry) {
-    return TOMBOFS.AWSClient.putFile(path, entry.contents);
+  storeTomboEntry: function(manifest, path, entry) {
+    return TOMBOFS.AWSClient.putFile(path, entry.contents).then((data) => {
+      manifest.entries[path] = {
+        mode: entry.mode,
+        mtime: entry.timestamp
+      };
+    });
   },
-  removeTomboEntries: function(paths) {
-    return TOMBOFS.AWSClient.deleteFiles(paths);
+  removeTomboEntries: function(manifest, paths) {
+    return TOMBOFS.AWSClient.deleteFiles(paths).then((data) => {
+      paths.forEach((path) => {
+        manifest.entries.delete(path);
+      });
+    });
   },
   updateTomboManifest: function(manifest) {
     return TOMBOFS.AWSClient.putManifest(manifest);

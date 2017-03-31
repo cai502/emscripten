@@ -728,11 +728,20 @@ var tombofs =
 	      };
 	    });
 	  },
-	  storeTomboEntry: function storeTomboEntry(path, entry) {
-	    return TOMBOFS.AWSClient.putFile(path, entry.contents);
+	  storeTomboEntry: function storeTomboEntry(manifest, path, entry) {
+	    return TOMBOFS.AWSClient.putFile(path, entry.contents).then(function (data) {
+	      manifest.entries[path] = {
+	        mode: entry.mode,
+	        mtime: entry.timestamp
+	      };
+	    });
 	  },
-	  removeTomboEntries: function removeTomboEntries(paths) {
-	    return TOMBOFS.AWSClient.deleteFiles(paths);
+	  removeTomboEntries: function removeTomboEntries(manifest, paths) {
+	    return TOMBOFS.AWSClient.deleteFiles(paths).then(function (data) {
+	      paths.forEach(function (path) {
+	        manifest.entries.delete(path);
+	      });
+	    });
 	  },
 	  updateTomboManifest: function updateTomboManifest(manifest) {
 	    return TOMBOFS.AWSClient.putManifest(manifest);
@@ -1066,9 +1075,11 @@ var tombofs =
 	    key: 'getManifest',
 	    value: function getManifest() {
 	      // This manifest file contains entries per mountpoint
-	      // FIXME: handle 404
 	      return getObject('tombofs.manifest').then(function (data) {
 	        return JSON.parse(data);
+	      }).catch(function (err) {
+	        // FIXME: handle 404
+	        console.log(err);
 	      });
 	    }
 	  }, {
