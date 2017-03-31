@@ -405,7 +405,11 @@ var Runtime = {
       }
     }
     var info = {
-      global: Module['asmGlobalArg'],
+      global: {
+        'NaN': NaN,
+        'Infinity': Infinity
+      },
+      "global.Math": Math,
       env: env
     };
 #if ASSERTIONS
