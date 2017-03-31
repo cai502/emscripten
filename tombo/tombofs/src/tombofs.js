@@ -545,48 +545,44 @@ module.exports = {
       };
     });
   },
-  loadLocalEntry: function(path, callback) {
-    let stat, node;
+  loadLocalEntry: function(path) {
+    return new Promise((resolve, reject) => {
+      let stat, node;
 
-    try {
       let lookup = FS.lookupPath(path);
       node = lookup.node;
       stat = FS.stat(path);
-    } catch (e) {
-      return callback(e);
-    }
 
-    if (FS.isDir(stat.mode)) {
-      return callback(null, { timestamp: stat.mtime, mode: stat.mode });
-    } else if (FS.isFile(stat.mode)) {
-      // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
-      // Therefore always convert the file contents to a typed array first before writing the data to IndexedDB.
-      node.contents = MEMFS.getFileDataAsTypedArray(node);
-      return callback(null, { timestamp: stat.mtime, mode: stat.mode, contents: node.contents });
-    } else {
-      return callback(new Error('node type not supported'));
-    }
+      if (FS.isDir(stat.mode)) {
+        return resolve({ timestamp: stat.mtime, mode: stat.mode });
+      } else if (FS.isFile(stat.mode)) {
+        // Performance consideration: storing a normal JavaScript array to a IndexedDB is much slower than storing a typed array.
+        // Therefore always convert the file contents to a typed array first before writing the data to IndexedDB.
+        node.contents = MEMFS.getFileDataAsTypedArray(node);
+        return resolve({ timestamp: stat.mtime, mode: stat.mode, contents: node.contents });
+      } else {
+        return reject(new Error('node type not supported'));
+      }
+    });
   },
-  storeLocalEntry: function(path, entry, callback) {
-    try {
+  storeLocalEntry: function(path, entry) {
+    return new Promise((resolve, reject) => {
       if (FS.isDir(entry.mode)) {
         FS.mkdir(path, entry.mode);
       } else if (FS.isFile(entry.mode)) {
         FS.writeFile(path, entry.contents, { encoding: 'binary', canOwn: true });
       } else {
-        return callback(new Error('node type not supported'));
+        return reject(new Error('node type not supported'));
       }
 
       FS.chmod(path, entry.mode);
       FS.utime(path, entry.timestamp, entry.timestamp);
-    } catch (e) {
-      return callback(e);
-    }
 
-    callback(null);
+      resolve();
+    });
   },
-  removeLocalEntry: function(path, callback) {
-    try {
+  removeLocalEntry: function(path) {
+    return new Promise((resolve, reject) => {
       let lookup = FS.lookupPath(path);
       let stat = FS.stat(path);
 
@@ -595,35 +591,39 @@ module.exports = {
       } else if (FS.isFile(stat.mode)) {
         FS.unlink(path);
       }
-    } catch (e) {
-      return callback(e);
-    }
 
-    callback(null);
+      resolve();
+    });
   },
-  loadRemoteEntry: function(store, path, callback) {
-    let req = store.get(path);
-    req.onsuccess = function(event) { callback(null, event.target.result); };
-    req.onerror = function(e) {
-      callback(this.error);
-      e.preventDefault();
-    };
+  loadRemoteEntry: function(store, path) {
+    return new Promise((resolve, reject) => {
+      let req = store.get(path);
+      req.onsuccess = function(event) { resolve(event.target.result); };
+      req.onerror = function(e) {
+        reject(this.error);
+        e.preventDefault();
+      };
+    });
   },
-  storeRemoteEntry: function(store, path, entry, callback) {
-    let req = store.put(entry, path);
-    req.onsuccess = function() { callback(null); };
-    req.onerror = function(e) {
-      callback(this.error);
-      e.preventDefault();
-    };
+  storeRemoteEntry: function(store, path, entry) {
+    return new Promise((resolve, reject) => {
+      let req = store.put(entry, path);
+      req.onsuccess = function() { resolve(); };
+      req.onerror = function(e) {
+        reject(this.error);
+        e.preventDefault();
+      };
+    });
   },
-  removeRemoteEntry: function(store, path, callback) {
-    let req = store.delete(path);
-    req.onsuccess = function() { callback(null); };
-    req.onerror = function(e) {
-      callback(this.error);
-      e.preventDefault();
-    };
+  removeRemoteEntry: function(store, path) {
+    return new Promise((resolve, reject) => {
+      let req = store.delete(path);
+      req.onsuccess = function() { resolve(); };
+      req.onerror = function(e) {
+        reject(this.error);
+        e.preventDefault();
+      };
+    });
   },
   loadTomboEntry: function(manifest, path) {
     return TOMBOFS.AWSClient.getFile(path).then((data) => {
@@ -716,14 +716,17 @@ module.exports = {
       case 'local':
         switch (src.type) {
         case 'remote':
-          TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
-            if (err) return done(err);
-            TOMBOFS.storeLocalEntry(path, entry, done);
+          TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
+            return TOMBOFS.storeLocalEntry(path, entry);
+          }).then(() => {
+            done();
           });
           break;
         case 'tombo':
-          TOMBOFS.loadTomboEntry(store, path).then((err, entry) => {
-            TOMBOFS.storeLocalEntry(path, entry, done);
+          TOMBOFS.loadTomboEntry(store, path).then((entry) => {
+            TOMBOFS.storeLocalEntry(path, entry);
+          }).then(() => {
+            done();
           });
           break;
         default:
@@ -733,14 +736,17 @@ module.exports = {
       case 'remote':
         switch (src.type) {
         case 'local':
-          TOMBOFS.loadLocalEntry(path, function (err, entry) {
-            if (err) return done(err);
-            TOMBOFS.storeRemoteEntry(store, path, entry, done);
+          TOMBOFS.loadLocalEntry(path).then((entry) => {
+            return TOMBOFS.storeRemoteEntry(store, path, entry);
+          }).then(() => {
+            done();
           });
           break;
         case 'tombo':
-          TOMBOFS.loadTomboEntry(manifest, store, path).then((err, entry) => {
-            TOMBOFS.storeRemoteEntry(path, entry, done);
+          TOMBOFS.loadTomboEntry(manifest, store, path).then((entry) => {
+            TOMBOFS.storeRemoteEntry(path, entry);
+          }).then(() => {
+            done();
           });
           break;
         default:
@@ -750,19 +756,17 @@ module.exports = {
       case 'tombo':
         switch (src.type) {
         case 'local':
-          TOMBOFS.loadLocalEntry(path, function (err, entry) {
-            if (err) return done(err);
-            TOMBOFS.storeTomboEntry(manifest, path, entry).then((data) => {
-              done(null);
-            }).catch(done);
+          TOMBOFS.loadLocalEntry(path).then((entry) => {
+            return TOMBOFS.storeTomboEntry(manifest, path, entry);
+          }).then(() => {
+            done();
           });
           break;
         case 'remote':
-          TOMBOFS.loadRemoteEntry(store, path, function (err, entry) {
-            if (err) return done(err);
-            TOMBOFS.storeTomboEntry(manifest, path, entry).then((data) => {
-              done(null);
-            }).catch(done);
+          TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
+            return TOMBOFS.storeTomboEntry(manifest, path, entry);
+          }).then(() => {
+            done();
           });
           break;
         default:
