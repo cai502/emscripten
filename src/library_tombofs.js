@@ -718,7 +718,7 @@ var tombofs =
 	    };
 	  },
 	  loadTomboEntry: function loadTomboEntry(manifest, path) {
-	    return TOMBOFS.AWSClient.getObject(path).then(function (data) {
+	    return TOMBOFS.AWSClient.getFile(path).then(function (data) {
 	      var mTime = new Date(manifest.entries[path].mtime);
 
 	      return {
@@ -729,10 +729,13 @@ var tombofs =
 	    });
 	  },
 	  storeTomboEntry: function storeTomboEntry(path, entry) {
-	    return TOMBOFS.AWSClient.putObject(path, entry.contents);
+	    return TOMBOFS.AWSClient.putFile(path, entry.contents);
 	  },
 	  removeTomboEntries: function removeTomboEntries(paths) {
-	    return TOMBOFS.AWSClient.deleteObjects(paths);
+	    return TOMBOFS.AWSClient.deleteFiles(paths);
+	  },
+	  updateTomboManifest: function updateTomboManifest(manifest) {
+	    return TOMBOFS.AWSClient.putManifest(manifest);
 	  },
 	  reconcile: function reconcile(src, dst, callback) {
 	    var total = 0;
@@ -884,6 +887,10 @@ var tombofs =
 	        });
 	        break;
 	    }
+
+	    if (dst.type === 'tombo') {
+	      TOMBOFS.updateTomboManifest(manifest);
+	    }
 	  }
 	};
 
@@ -1032,11 +1039,38 @@ var tombofs =
 	      });
 	    }
 	  }, {
+	    key: 'pathToKey',
+	    value: function pathToKey(path) {
+	      return 'entries' + path;
+	    }
+	  }, {
+	    key: 'getFile',
+	    value: function getFile(path) {
+	      return getObject(this.pathToKey(path));
+	    }
+	  }, {
+	    key: 'putFile',
+	    value: function putFile(path, content) {
+	      return putObject(this.pathToKey(path), content);
+	    }
+	  }, {
+	    key: 'deleteFiles',
+	    value: function deleteFiles(paths) {
+	      return deleteObjects(paths.map(this.pathToKey));
+	    }
+	  }, {
 	    key: 'getManifest',
 	    value: function getManifest() {
 	      // This manifest file contains entries per mountpoint
 	      // FIXME: handle 404
-	      getObject('tombofs.manifest').then(function (data) {
+	      return getObject('tombofs.manifest').then(function (data) {
+	        return JSON.parse(data);
+	      });
+	    }
+	  }, {
+	    key: 'putManifest',
+	    value: function putManifest(content) {
+	      return putObject('tombofs.manifest', JSON.stringify(content)).then(function (data) {
 	        return JSON.parse(data);
 	      });
 	    }

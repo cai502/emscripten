@@ -626,7 +626,7 @@ module.exports = {
     };
   },
   loadTomboEntry: function(manifest, path) {
-    return TOMBOFS.AWSClient.getObject(path).then((data) => {
+    return TOMBOFS.AWSClient.getFile(path).then((data) => {
       const mTime = new Date(manifest.entries[path].mtime);
 
       return {
@@ -637,10 +637,13 @@ module.exports = {
     });
   },
   storeTomboEntry: function(path, entry) {
-    return TOMBOFS.AWSClient.putObject(path, entry.contents);
+    return TOMBOFS.AWSClient.putFile(path, entry.contents);
   },
   removeTomboEntries: function(paths) {
-    return TOMBOFS.AWSClient.deleteObjects(paths);
+    return TOMBOFS.AWSClient.deleteFiles(paths);
+  },
+  updateTomboManifest: function(manifest) {
+    return TOMBOFS.AWSClient.putManifest(manifest);
   },
   reconcile: function(src, dst, callback) {
     let total = 0;
@@ -788,6 +791,10 @@ module.exports = {
         done(null);
       });
       break;
+    }
+
+    if (dst.type === 'tombo') {
+      TOMBOFS.updateTomboManifest(manifest);
     }
   }
 }

@@ -99,10 +99,32 @@ class TomboFSAWSClient {
     });
   }
 
+  pathToKey(path) {
+    return `entries${path}`;
+  }
+
+  getFile(path) {
+    return getObject(this.pathToKey(path));
+  }
+
+  putFile(path, content) {
+    return putObject(this.pathToKey(path), content);
+  }
+
+  deleteFiles(paths) {
+    return deleteObjects(paths.map(this.pathToKey));
+  }
+
   getManifest() {
     // This manifest file contains entries per mountpoint
     // FIXME: handle 404
-    getObject('tombofs.manifest').then((data) => {
+    return getObject('tombofs.manifest').then((data) => {
+      return JSON.parse(data);
+    });
+  }
+
+  putManifest(content) {
+    return putObject('tombofs.manifest', JSON.stringify(content)).then((data) => {
       return JSON.parse(data);
     });
   }
