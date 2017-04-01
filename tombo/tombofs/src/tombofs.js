@@ -398,21 +398,25 @@ module.exports = {
     Promise.all(promises).then((values) => {
       if (populate) {
         if (TOMBOFS.AWSClient) {
-          TOMBOFS.reconcile(values[2], values[1], (err) => {
-            if (err) { return callback(err); }
-            TOMBOFS.reconcile(values[1], values[0], callback);
+          TOMBOFS.reconcile(values[2], values[1]).then(() => {
+            return TOMBOFS.reconcile(values[1], values[0]);
+          }).then(() => {
+            callback(null);
           });
         } else {
-          TOMBOFS.reconcile(values[1], values[0], callback);
+          TOMBOFS.reconcile(values[1], values[0]).then(() => {
+            callback(null);
+          });
         }
       } else {
-        TOMBOFS.reconcile(values[0], values[1], (err) => {
-          if (err) { return callback(err); }
+        TOMBOFS.reconcile(values[0], values[1]).then(() => {
           if (TOMBOFS.AWSClient) {
-            TOMBOFS.reconcile(values[1], values[2], callback);
+            return TOMBOFS.reconcile(values[1], values[2], callback);
           } else {
-            callback();
+            return null;
           }
+        }).then(() => {
+          callback(null);
         });
       }
     });
@@ -658,7 +662,7 @@ module.exports = {
   updateTomboManifest: function(manifest) {
     return TOMBOFS.AWSClient.putManifest(manifest);
   },
-  reconcile: function(src, dst, callback) {
+  reconcile: function(src, dst) {
     let total = 0;
 
     let create = [];
@@ -681,137 +685,139 @@ module.exports = {
       }
     });
 
-    if (!total) {
-      return callback(null);
-    }
+    return new Promise((resolve, reject) => {
+      if (!total) {
+        return resolve();
+      }
 
-    let errored = false;
-    let completed = 0;
-    let db, transaction, store, manifest;
-    if (src.type === 'remote') {
-      db = src.db
-    } else if (dst.type === 'remote') {
-      db = dst.db
-    }
-    if (src.type === 'tombo') {
-      manifest = src.manifest;
-    } else if (dst.type === 'tombo') {
-      manifest = dst.manifest;
-    }
+      let errored = false;
+      let completed = 0;
+      let db, transaction, store, manifest;
+      if (src.type === 'remote') {
+        db = src.db
+      } else if (dst.type === 'remote') {
+        db = dst.db
+      }
+      if (src.type === 'tombo') {
+        manifest = src.manifest;
+      } else if (dst.type === 'tombo') {
+        manifest = dst.manifest;
+      }
 
-    function done(err) {
-      if (err) {
-        if (!done.errored) {
-          done.errored = true;
-          return callback(err);
+      if (db) {
+        transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
+        store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
+
+        transaction.onerror = function(e) {
+          done(this.error);
+          e.preventDefault();
+        };
+      }
+
+      function done(err) {
+        if (err) {
+          if (!done.errored) {
+            done.errored = true;
+            return reject(err);
+          }
+          return;
         }
-        return;
-      }
-      if (++completed >= total) {
-        return callback(null);
-      }
-    };
-
-    if (db) {
-      transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
-      store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
-
-      transaction.onerror = function(e) {
-        done(this.error);
-        e.preventDefault();
+        if (++completed >= total) {
+          return resolve();
+        }
       };
-    }
 
-    // sort paths in ascending order so directory entries are created
-    // before the files inside them
-    create.sort().forEach(function (path) {
+      // sort paths in ascending order so directory entries are created
+      // before the files inside them
+      create.sort().forEach(function (path) {
+        switch (dst.type) {
+        case 'local':
+          switch (src.type) {
+          case 'remote':
+            TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
+              return TOMBOFS.storeLocalEntry(path, entry);
+            }).then(() => {
+              done();
+            });
+            break;
+          case 'tombo':
+            TOMBOFS.loadTomboEntry(store, path).then((entry) => {
+              TOMBOFS.storeLocalEntry(path, entry);
+            }).then(() => {
+              done();
+            });
+            break;
+          default:
+            console.log(`reconcile() doesn't support ${src.type} into ${dst.type}`);
+          }
+          break;
+        case 'remote':
+          switch (src.type) {
+          case 'local':
+            TOMBOFS.loadLocalEntry(path).then((entry) => {
+              return TOMBOFS.storeRemoteEntry(store, path, entry);
+            }).then(() => {
+              done();
+            });
+            break;
+          case 'tombo':
+            TOMBOFS.loadTomboEntry(manifest, store, path).then((entry) => {
+              TOMBOFS.storeRemoteEntry(path, entry);
+            }).then(() => {
+              done();
+            });
+            break;
+          default:
+            console.log(`reconcile() doesn't support ${src.type} into ${dst.type}`);
+          }
+          break;
+        case 'tombo':
+          switch (src.type) {
+          case 'local':
+            TOMBOFS.loadLocalEntry(path).then((entry) => {
+              return TOMBOFS.storeTomboEntry(manifest, path, entry);
+            }).then(() => {
+              done();
+            });
+            break;
+          case 'remote':
+            TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
+              return TOMBOFS.storeTomboEntry(manifest, path, entry);
+            }).then(() => {
+              done();
+            });
+            break;
+          default:
+            console.log(`reconcile() doesn't support ${src.type} into ${dst.type}`);
+          }
+          break;
+        }
+      });
+
+      // sort paths in descending order so files are deleted before their
+      // parent directories
+      const pathsToBeRemoved = remove.sort().reverse();
       switch (dst.type) {
       case 'local':
-        switch (src.type) {
-        case 'remote':
-          TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
-            return TOMBOFS.storeLocalEntry(path, entry);
-          }).then(() => {
-            done();
-          });
-          break;
-        case 'tombo':
-          TOMBOFS.loadTomboEntry(store, path).then((entry) => {
-            TOMBOFS.storeLocalEntry(path, entry);
-          }).then(() => {
-            done();
-          });
-          break;
-        default:
-          console.log(`reconcile() doesn't support ${src.type} into ${dst.type}`);
-        }
+        pathsToBeRemoved.forEach(function(path) {
+          TOMBOFS.removeLocalEntry(path, done);
+        });
         break;
       case 'remote':
-        switch (src.type) {
-        case 'local':
-          TOMBOFS.loadLocalEntry(path).then((entry) => {
-            return TOMBOFS.storeRemoteEntry(store, path, entry);
-          }).then(() => {
-            done();
-          });
-          break;
-        case 'tombo':
-          TOMBOFS.loadTomboEntry(manifest, store, path).then((entry) => {
-            TOMBOFS.storeRemoteEntry(path, entry);
-          }).then(() => {
-            done();
-          });
-          break;
-        default:
-          console.log(`reconcile() doesn't support ${src.type} into ${dst.type}`);
-        }
+        pathsToBeRemoved.forEach(function(path) {
+          TOMBOFS.removeRemoteEntry(store, path, done);
+        });
         break;
       case 'tombo':
-        switch (src.type) {
-        case 'local':
-          TOMBOFS.loadLocalEntry(path).then((entry) => {
-            return TOMBOFS.storeTomboEntry(manifest, path, entry);
-          }).then(() => {
-            done();
-          });
-          break;
-        case 'remote':
-          TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
-            return TOMBOFS.storeTomboEntry(manifest, path, entry);
-          }).then(() => {
-            done();
-          });
-          break;
-        default:
-          console.log(`reconcile() doesn't support ${src.type} into ${dst.type}`);
-        }
+        TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then((data) => {
+          done();
+        });
         break;
       }
+
+      if (dst.type === 'tombo') {
+        TOMBOFS.updateTomboManifest(manifest);
+      }
     });
-
-    // sort paths in descending order so files are deleted before their
-    // parent directories
-    const pathsToBeRemoved = remove.sort().reverse();
-    switch (dst.type) {
-    case 'local':
-      pathsToBeRemoved.forEach(function(path) {
-        TOMBOFS.removeLocalEntry(path, done);
-      });
-      break;
-    case 'remote':
-      pathsToBeRemoved.forEach(function(path) {
-        TOMBOFS.removeRemoteEntry(store, path, done);
-      });
-      break;
-    case 'tombo':
-      TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then((data) => {
-        done();
-      });
-      break;
-    }
-
-    if (dst.type === 'tombo') {
-      TOMBOFS.updateTomboManifest(manifest);
-    }
   }
 }
