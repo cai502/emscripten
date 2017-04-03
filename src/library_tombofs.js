@@ -900,17 +900,23 @@ var tombofs =
 	      switch (dst.type) {
 	        case 'local':
 	          pathsToBeRemoved.forEach(function (path) {
-	            TOMBOFS.removeLocalEntry(path, done);
+	            TOMBOFS.removeLocalEntry(path).then(function () {
+	              done();
+	            });
 	          });
 	          break;
 	        case 'remote':
 	          pathsToBeRemoved.forEach(function (path) {
-	            TOMBOFS.removeRemoteEntry(store, path, done);
+	            TOMBOFS.removeRemoteEntry(store, path).then(function () {
+	              done();
+	            });
 	          });
 	          break;
 	        case 'tombo':
-	          TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then(function (data) {
-	            done();
+	          TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then(function () {
+	            pathsToBeRemoved.forEach(function () {
+	              done();
+	            });
 	          });
 	          break;
 	      }

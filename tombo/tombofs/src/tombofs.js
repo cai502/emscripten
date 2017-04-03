@@ -738,7 +738,7 @@ module.exports = {
 
       // sort paths in ascending order so directory entries are created
       // before the files inside them
-      create.sort().forEach(function (path) {
+      create.sort().forEach((path) => {
         switch (dst.type) {
         case 'local':
           switch (src.type) {
@@ -808,18 +808,24 @@ module.exports = {
       const pathsToBeRemoved = remove.sort().reverse();
       switch (dst.type) {
       case 'local':
-        pathsToBeRemoved.forEach(function(path) {
-          TOMBOFS.removeLocalEntry(path, done);
+        pathsToBeRemoved.forEach((path) => {
+          TOMBOFS.removeLocalEntry(path).then(() => {
+            done();
+          });
         });
         break;
       case 'remote':
-        pathsToBeRemoved.forEach(function(path) {
-          TOMBOFS.removeRemoteEntry(store, path, done);
+        pathsToBeRemoved.forEach((path) => {
+          TOMBOFS.removeRemoteEntry(store, path).then(() => {
+            done();
+          });
         });
         break;
       case 'tombo':
-        TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then((data) => {
-          done();
+        TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then(() => {
+          pathsToBeRemoved.forEach(() => {
+            done();
+          });
         });
         break;
       }
