@@ -387,6 +387,7 @@ module.exports = {
   DB_VERSION: 21,
   DB_STORE_NAME: 'FILE_DATA',
   syncfs: function(mount, populate, callback) {
+    console.log(`syncfs: ${mount.mountpoint} ${populate}`);
     var promises = [
       TOMBOFS.getLocalSet(mount),
       TOMBOFS.getRemoteSet(mount),
@@ -397,22 +398,24 @@ module.exports = {
 
     Promise.all(promises).then((values) => {
       if (populate) {
-        // Tombo => IndexedDB => Memory
         if (TOMBOFS.AWSClient) {
+          // Tombo => IndexedDB => Memory
           TOMBOFS.reconcile(values[2], values[1]).then(() => {
             return TOMBOFS.reconcile(values[1], values[0]);
           }).then(() => {
             callback(null);
           });
         } else {
+          // IndexedDB => Memory
           TOMBOFS.reconcile(values[1], values[0]).then(() => {
             callback(null);
           });
         }
       } else {
-        // Memory => IndexedDB => Tombo
+        // Memory => IndexedDB
         TOMBOFS.reconcile(values[0], values[1]).then(() => {
           if (TOMBOFS.AWSClient) {
+            // IndexedDB => Tombo
             return TOMBOFS.reconcile(values[1], values[2], callback);
           } else {
             return null;

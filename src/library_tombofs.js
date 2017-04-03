@@ -469,6 +469,7 @@ var tombofs =
 	  DB_VERSION: 21,
 	  DB_STORE_NAME: 'FILE_DATA',
 	  syncfs: function syncfs(mount, populate, callback) {
+	    console.log('syncfs: ' + mount.mountpoint + ' ' + populate);
 	    var promises = [TOMBOFS.getLocalSet(mount), TOMBOFS.getRemoteSet(mount)];
 	    if (TOMBOFS.AWSClient) {
 	      promises.push(TOMBOFS.getTomboSet(mount));
@@ -476,22 +477,24 @@ var tombofs =
 
 	    Promise.all(promises).then(function (values) {
 	      if (populate) {
-	        // Tombo => IndexedDB => Memory
 	        if (TOMBOFS.AWSClient) {
+	          // Tombo => IndexedDB => Memory
 	          TOMBOFS.reconcile(values[2], values[1]).then(function () {
 	            return TOMBOFS.reconcile(values[1], values[0]);
 	          }).then(function () {
 	            callback(null);
 	          });
 	        } else {
+	          // IndexedDB => Memory
 	          TOMBOFS.reconcile(values[1], values[0]).then(function () {
 	            callback(null);
 	          });
 	        }
 	      } else {
-	        // Memory => IndexedDB => Tombo
+	        // Memory => IndexedDB
 	        TOMBOFS.reconcile(values[0], values[1]).then(function () {
 	          if (TOMBOFS.AWSClient) {
+	            // IndexedDB => Tombo
 	            return TOMBOFS.reconcile(values[1], values[2], callback);
 	          } else {
 	            return null;
