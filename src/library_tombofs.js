@@ -476,6 +476,7 @@ var tombofs =
 
 	    Promise.all(promises).then(function (values) {
 	      if (populate) {
+	        // Tombo => IndexedDB => Memory
 	        if (TOMBOFS.AWSClient) {
 	          TOMBOFS.reconcile(values[2], values[1]).then(function () {
 	            return TOMBOFS.reconcile(values[1], values[0]);
@@ -488,6 +489,7 @@ var tombofs =
 	          });
 	        }
 	      } else {
+	        // Memory => IndexedDB => Tombo
 	        TOMBOFS.reconcile(values[0], values[1]).then(function () {
 	          if (TOMBOFS.AWSClient) {
 	            return TOMBOFS.reconcile(values[1], values[2], callback);
@@ -722,6 +724,7 @@ var tombofs =
 	    });
 	  },
 	  loadTomboEntry: function loadTomboEntry(manifest, path) {
+	    console.log('loadTomboEntry: ' + path);
 	    return TOMBOFS.AWSClient.getFile(path).then(function (data) {
 	      var mTime = new Date(manifest.entries[path].mtime);
 
@@ -733,6 +736,7 @@ var tombofs =
 	    });
 	  },
 	  storeTomboEntry: function storeTomboEntry(manifest, path, entry) {
+	    console.log('storeTomboEntry: ' + path);
 	    return TOMBOFS.AWSClient.putFile(path, entry.contents).then(function (data) {
 	      manifest.entries[path] = {
 	        mode: entry.mode,
@@ -741,6 +745,7 @@ var tombofs =
 	    });
 	  },
 	  removeTomboEntries: function removeTomboEntries(manifest, paths) {
+	    console.log('removeTomboEntries:');
 	    return TOMBOFS.AWSClient.deleteFiles(paths).then(function (data) {
 	      paths.forEach(function (path) {
 	        manifest.entries.delete(path);
@@ -748,9 +753,13 @@ var tombofs =
 	    });
 	  },
 	  updateTomboManifest: function updateTomboManifest(manifest) {
+	    console.log('updateTomboManifest:');
+	    console.log(manifest);
 	    return TOMBOFS.AWSClient.putManifest(manifest);
 	  },
 	  reconcile: function reconcile(src, dst) {
+	    console.log('reconcile: from ' + src.type + ' to ' + dst.type);
+
 	    var total = 0;
 
 	    var create = [];
