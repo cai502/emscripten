@@ -871,7 +871,6 @@ function ftCall_%s(%s) {%s
 
     objc_message_funcs = []
     for msgFunc in metadata['objCMessageFuncs']:
-      #function_tables.append(msgFunc)
 
       if settings['EMULATED_FUNCTION_POINTERS']:
         func = 'ftCall'
@@ -881,6 +880,12 @@ function ftCall_%s(%s) {%s
         function_tables.append(msgFunc)
 
       objc_message_funcs.append(shared.JS.make_objc_msgSend(msgFunc, func, settings))
+
+    if settings['EXPORT_OBJC_MSG_FUNCTION_NAMES']:
+      msg_func_name_file_name = outfile.name + '.msgfuncs'
+      with open(msg_func_name_file_name, 'w') as msg_func_name_file:
+        for msgFunc in metadata['objCMessageFuncs']:
+          msg_func_name_file.write(msgFunc + '\n')
 
     # calculate exports
     exported_implemented_functions = list(exported_implemented_functions) + metadata['initializers']

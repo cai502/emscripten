@@ -1711,6 +1711,10 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
         cd_target = final + '.cd'
         shutil.move(cd_target, target + '.cd')
 
+      if shared.Settings.EXPORT_OBJC_MSG_FUNCTION_NAMES:
+        msg_func_name_file_name = final + '.msgfuncs'
+        shutil.move(msg_func_name_file_name, os.path.splitext(target)[0] + '.msgfuncs')
+
     # exit block 'emscript'
     log_time('emscript (llvm => executable code)')
 
