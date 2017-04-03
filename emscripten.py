@@ -869,8 +869,10 @@ function ftCall_%s(%s) {%s
             body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
           funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
 
+    objc_message_func_names = metadata['objCMessageFuncs'] + settings['GENERATE_OBJC_MSG_FUNCTIONS']
     objc_message_funcs = []
-    for msgFunc in metadata['objCMessageFuncs']:
+    for msgFunc in objc_message_func_names:
+      logging.debug("msgFunc: "+msgFunc)
 
       if settings['EMULATED_FUNCTION_POINTERS']:
         func = 'ftCall'
@@ -884,7 +886,7 @@ function ftCall_%s(%s) {%s
     if settings['EXPORT_OBJC_MSG_FUNCTION_NAMES']:
       msg_func_name_file_name = outfile.name + '.msgfuncs'
       with open(msg_func_name_file_name, 'w') as msg_func_name_file:
-        for msgFunc in metadata['objCMessageFuncs']:
+        for msgFunc in objc_message_func_names:
           msg_func_name_file.write(msgFunc + '\n')
 
     # calculate exports

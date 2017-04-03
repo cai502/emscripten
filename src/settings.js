@@ -421,6 +421,7 @@ var EXPORTED_FUNCTIONS = ['_main'];
 var OBJC_DEBUG = 0;
 var LIBRARY_IMPLEMENTED_FUNCTIONS = [];
 var EXPORT_OBJC_MSG_FUNCTION_NAMES = 0;
+var GENERATE_OBJC_MSG_FUNCTIONS = [];
 
 var EXPORT_ALL = 0; // If true, we export all the symbols. Note that this does *not* affect LLVM, so it can
                     // still eliminate functions as dead. This just exports them on the Module object.
