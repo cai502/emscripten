@@ -901,6 +901,8 @@ var tombofs =
 	            }
 	            break;
 	        }
+	        // add entries for continuous reconcile
+	        dst.entries[path] = src.entries[path];
 	      });
 
 	      // sort paths in descending order so files are deleted before their
@@ -910,6 +912,8 @@ var tombofs =
 	        case 'local':
 	          pathsToBeRemoved.forEach(function (path) {
 	            TOMBOFS.removeLocalEntry(path).then(function () {
+	              // delete entries for continuous reconcile
+	              delete dst.entries[path];
 	              done();
 	            });
 	          });
@@ -917,13 +921,17 @@ var tombofs =
 	        case 'remote':
 	          pathsToBeRemoved.forEach(function (path) {
 	            TOMBOFS.removeRemoteEntry(store, path).then(function () {
+	              // delete entries for continuous reconcile
+	              delete dst.entries[path];
 	              done();
 	            });
 	          });
 	          break;
 	        case 'tombo':
 	          TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then(function () {
-	            pathsToBeRemoved.forEach(function () {
+	            pathsToBeRemoved.forEach(function (path) {
+	              // delete entries for continuous reconcile
+	              delete dst.entries[path];
 	              done();
 	            });
 	          });

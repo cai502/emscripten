@@ -810,6 +810,8 @@ module.exports = {
           }
           break;
         }
+        // add entries for continuous reconcile
+        dst.entries[path] = src.entries[path];
       });
 
       // sort paths in descending order so files are deleted before their
@@ -819,6 +821,8 @@ module.exports = {
       case 'local':
         pathsToBeRemoved.forEach((path) => {
           TOMBOFS.removeLocalEntry(path).then(() => {
+            // delete entries for continuous reconcile
+            delete dst.entries[path];
             done();
           });
         });
@@ -826,13 +830,17 @@ module.exports = {
       case 'remote':
         pathsToBeRemoved.forEach((path) => {
           TOMBOFS.removeRemoteEntry(store, path).then(() => {
+            // delete entries for continuous reconcile
+            delete dst.entries[path];
             done();
           });
         });
         break;
       case 'tombo':
         TOMBOFS.removeTomboEntries(manifest, pathsToBeRemoved).then(() => {
-          pathsToBeRemoved.forEach(() => {
+          pathsToBeRemoved.forEach((path) => {
+            // delete entries for continuous reconcile
+            delete dst.entries[path];
             done();
           });
         });
