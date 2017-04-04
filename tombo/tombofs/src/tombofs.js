@@ -735,7 +735,13 @@ module.exports = {
           return;
         }
         if (++completed >= total) {
-          return resolve();
+          if (dst.type === 'tombo') {
+            TOMBOFS.updateTomboManifest(manifest).then(() => {
+              resolve();
+            });
+          } else {
+            resolve();
+          }
         }
       };
 
@@ -831,10 +837,6 @@ module.exports = {
           });
         });
         break;
-      }
-
-      if (dst.type === 'tombo') {
-        TOMBOFS.updateTomboManifest(manifest);
       }
     });
   }

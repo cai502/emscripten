@@ -826,7 +826,13 @@ var tombofs =
 	          return;
 	        }
 	        if (++completed >= total) {
-	          return resolve();
+	          if (dst.type === 'tombo') {
+	            TOMBOFS.updateTomboManifest(manifest).then(function () {
+	              resolve();
+	            });
+	          } else {
+	            resolve();
+	          }
 	        }
 	      };
 
@@ -922,10 +928,6 @@ var tombofs =
 	            });
 	          });
 	          break;
-	      }
-
-	      if (dst.type === 'tombo') {
-	        TOMBOFS.updateTomboManifest(manifest);
 	      }
 	    });
 	  }
