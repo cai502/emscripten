@@ -730,7 +730,13 @@ module.exports = {
         if (err) {
           if (!done.errored) {
             done.errored = true;
-            return reject(err);
+            if (dst.type === 'tombo') {
+              return TOMBOFS.updateTomboManifest(manifest).then(() => {
+                reject(err);
+              });
+            } else {
+              return reject(err);
+            }
           }
           return;
         }
