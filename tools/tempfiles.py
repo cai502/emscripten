@@ -49,14 +49,18 @@ class TempFiles:
     semantics for being used via a construct 'with TempFiles.get_file(..) as filename:'. The file will be
     deleted immediately once the 'with' block is exited."""
     class TempFileObject:
+      def __init__(self, save_debug_files=False):
+        self.save_debug_files = save_debug_files
+
       def __enter__(self_):
         self_.file = tempfile.NamedTemporaryFile(dir=self.tmp, suffix=suffix, delete=False)
         self_.file.close() # NamedTemporaryFile passes out open file handles, but callers prefer filenames (and open their own handles manually if needed)
         return self_.file.name
 
       def __exit__(self_, type, value, traceback):
-        try_delete(self_.file.name)
-    return TempFileObject()
+        if not self.save_debug_files:
+          try_delete(self_.file.name)
+    return TempFileObject(self.save_debug_files)
 
   def get_dir(self):
     """Returns a named temp directory with the given prefix."""
