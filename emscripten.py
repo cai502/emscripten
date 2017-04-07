@@ -883,11 +883,22 @@ function ftCall_%s(%s) {%s
 
       objc_message_funcs.append(shared.JS.make_objc_msgSend(msgFunc, func, settings))
 
-    if settings['EXPORT_OBJC_MSG_FUNCTION_NAMES']:
-      msg_func_name_file_name = outfile.name + '.msgfuncs'
-      with open(msg_func_name_file_name, 'w') as msg_func_name_file:
+    if settings['EXPORT_EXTERNAL_SYMBOL_NAMES']:
+      external_symbol_file_name = outfile.name + '.externals'
+      with open(external_symbol_file_name, 'w') as external_symbol_file:
+        # YAML
+        external_symbol_file.write('msgFuncs:\n')
         for msgFunc in objc_message_func_names:
-          msg_func_name_file.write(msgFunc + '\n')
+          external_symbol_file.write('  - ' + msgFunc + '\n')
+        external_symbol_file.write('declares:\n')
+        for declare in metadata['declares']:
+          external_symbol_file.write('  - _' + declare + '\n')
+        external_symbol_file.write('externs:\n')
+        for extern in metadata['externsOriginal']:
+          external_symbol_file.write('  - _' + extern + '\n')
+        external_symbol_file.write('exports:\n')
+        for export in exported_implemented_functions:
+          external_symbol_file.write('  - ' + export + '\n')
 
     # calculate exports
     exported_implemented_functions = list(exported_implemented_functions) + metadata['initializers']
