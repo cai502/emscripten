@@ -262,6 +262,7 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
 
     # Use sanitized name after here
     settings['EXPORTED_FUNCTIONS'] = map(lambda x: re.sub(r'\W', '_', x), settings['EXPORTED_FUNCTIONS'])
+    settings['EXPORTED_VARIABLES'] = map(lambda x: re.sub(r'\W', '_', x), settings['EXPORTED_VARIABLES'])
 
     # Integrate info from backend
     if settings['SIDE_MODULE']:
@@ -273,9 +274,9 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
     ) + map(lambda x: x[1:], metadata['externs'])
     if settings['MAIN_MODULE'] == 2:
       settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'] += set(map(lambda x: x[1:], settings['EXPORTED_FUNCTIONS'])).difference(
-          map(lambda x: x[1:], metadata['implementedFunctions'])
+        map(lambda x: x[1:], metadata['implementedFunctions'])
       ).difference(
-          [k[1:] for k, v in metadata['namedGlobals'].iteritems()]
+        map(lambda x: x[1:], settings['GENERATE_OBJC_MSG_FUNCTIONS'])
       )
     if metadata['simd']:
       settings['SIMD'] = 1
@@ -941,12 +942,13 @@ function ftCall_%s(%s) {%s
       global_vars = [] # linkable code accesses globals through function calls
     global_funcs = list(set([key for key, value in forwarded_json['Functions']['libraryFunctions'].iteritems() if value != 2]).difference(set(global_vars)).difference(implemented_functions))
     if settings['RELOCATABLE']:
-      global_funcs += ['g$' + extern for extern in metadata['externs']]
+      externs = metadata['externs'] + settings['EXPORTED_VARIABLES']
+      global_funcs += ['g$' + extern for extern in externs]
       side = 'parent' if settings['SIDE_MODULE'] else ''
       def check(extern):
         if settings['ASSERTIONS']: return 'assert(' + side + 'Module["' + extern + '"], "external function \'' + extern + '\' is missing. perhaps a side module was not linked in? if this symbol was expected to arrive from a system library, try to build the MAIN_MODULE with EMCC_FORCE_STDLIBS=1 in the environment");'
         return ''
-      for extern in metadata['externs']:
+      for extern in externs:
         asm_setup += 'var g$' + extern + ' = function() { ' + check(extern) + ' return ' + side + 'Module["' + extern + '"] };\n'
     def math_fix(g):
       return g if not g.startswith('Math_') else g.split('_')[1]

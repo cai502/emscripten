@@ -1996,7 +1996,7 @@ class Building:
   def get_safe_internalize():
     if not Building.can_build_standalone(): return [] # do not internalize anything
 
-    exps = expand_response(Settings.EXPORTED_FUNCTIONS)
+    exps = expand_response(Settings.EXPORTED_FUNCTIONS) + expand_response(Settings.EXPORTED_VARIABLES)
     internalize_public_api = '-internalize-public-api-'
     internalize_list = ','.join(map(lambda exp: exp[1:], exps))
 
