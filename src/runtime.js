@@ -404,12 +404,36 @@ var Runtime = {
         env[x] = Module[x];
       }
     }
+    var asm2wasmImports = { // special asm2wasm imports
+      "f64-rem": function(x, y) {
+        return x % y;
+      },
+      "f64-to-int": function(x) {
+        return x | 0;
+      },
+      "i32s-div": function(x, y) {
+        return ((x | 0) / (y | 0)) | 0;
+      },
+      "i32u-div": function(x, y) {
+        return ((x >>> 0) / (y >>> 0)) >>> 0;
+      },
+      "i32s-rem": function(x, y) {
+        return ((x | 0) % (y | 0)) | 0;
+      },
+      "i32u-rem": function(x, y) {
+        return ((x >>> 0) % (y >>> 0)) >>> 0;
+      },
+      "debugger": function() {
+        debugger;
+      },
+    };
     var info = {
       global: {
         'NaN': NaN,
         'Infinity': Infinity
       },
       "global.Math": Math,
+      asm2wasm: asm2wasmImports,
       env: env
     };
 #if ASSERTIONS
