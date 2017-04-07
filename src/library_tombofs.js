@@ -728,19 +728,19 @@ var tombofs =
 	  },
 	  loadTomboEntry: function loadTomboEntry(manifest, path) {
 	    console.log('loadTomboEntry: ' + path);
-	    return TOMBOFS.AWSClient.getFile(path).then(function (data) {
-	      var mTime = new Date(manifest.entries[path].mtime);
-
+	    var manifestEntry = manifest.entries[path];
+	    return TOMBOFS.AWSClient.getFile(path, manifestEntry).then(function (data) {
+	      // TODO: Check data.Body with manifestEntry.size or hash
 	      return {
 	        contents: new Uint8Array(data.Body),
-	        mode: manifest.entries[path].mode,
-	        timestamp: mTime
+	        mode: manifestEntry.mode,
+	        timestamp: manifestEntry.mtime
 	      };
 	    });
 	  },
 	  storeTomboEntry: function storeTomboEntry(manifest, path, entry) {
 	    console.log('storeTomboEntry: ' + path);
-	    return TOMBOFS.AWSClient.putFile(path, entry.contents).then(function (data) {
+	    return TOMBOFS.AWSClient.putFile(path, entry).then(function (data) {
 	      manifest.entries[path] = {
 	        mode: entry.mode,
 	        mtime: entry.timestamp
@@ -822,9 +822,9 @@ var tombofs =
 	          if (!done.errored) {
 	            done.errored = true;
 	            if (dst.type === 'tombo') {
-	              return TOMBOFS.updateTomboManifest(manifest).then(function () {
-	                reject(err);
-	              });
+	              // NOTE: In this case, there are some garbages in S3.
+	              // TODO: Delete these garbages
+	              return reject(err);
 	            } else {
 	              return reject(err);
 	            }
@@ -833,6 +833,8 @@ var tombofs =
 	        }
 	        if (++completed >= total) {
 	          if (dst.type === 'tombo') {
+	            // NOTE: manifest entries are already updated to refer a new path,
+	            // so all we have to do is update the manifest file itself.
 	            TOMBOFS.updateTomboManifest(manifest).then(function () {
 	              resolve();
 	            });
@@ -1093,24 +1095,34 @@ var tombofs =
 	      });
 	    }
 	  }, {
-	    key: 'pathToKey',
-	    value: function pathToKey(path) {
-	      return 'entries' + path;
+	    key: 'pathToKeyPrefix',
+	    value: function pathToKeyPrefix(path) {
+	      // NOTE: for deletion
+	      // TODO: Handle directory correctly
+	      return 'entries' + path + '/';
+	    }
+	  }, {
+	    key: 'pathAndEntryToKey',
+	    value: function pathAndEntryToKey(path, entry) {
+	      // NOTE: Is the timestamp on a second basis is enough?
+	      return 'entries' + path + '/' + entry.mtime;
 	    }
 	  }, {
 	    key: 'getFile',
-	    value: function getFile(path) {
-	      return this.getObject(this.pathToKey(path));
+	    value: function getFile(path, entry) {
+	      return this.getObject(this.pathAndEntryToKey(path, entry));
 	    }
 	  }, {
 	    key: 'putFile',
-	    value: function putFile(path, content) {
-	      return this.putObject(this.pathToKey(path), content);
+	    value: function putFile(path, entry) {
+	      return this.putObject(this.pathAndEntryToKey(path, entry), entry.content);
 	    }
 	  }, {
 	    key: 'deleteFiles',
 	    value: function deleteFiles(paths) {
-	      return this.deleteObjects(paths.map(this.pathToKey));
+	      // NOTE: paths is enough for deletion because all the file versions
+	      // under the path will be deleted.
+	      return this.deleteObjects(paths.map(this.pathToKeyPrefix));
 	    }
 	  }, {
 	    key: 'getManifest',

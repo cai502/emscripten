@@ -98,20 +98,29 @@ class TomboFSAWSClient {
     });
   }
 
-  pathToKey(path) {
-    return `entries${path}`;
+  pathToKeyPrefix(path) {
+    // NOTE: for deletion
+    // TODO: Handle directory correctly
+    return `entries${path}/`;
   }
 
-  getFile(path) {
-    return this.getObject(this.pathToKey(path));
+  pathAndEntryToKey(path, entry) {
+    // NOTE: Is the timestamp on a second basis is enough?
+    return `entries${path}/${entry.mtime}`;
   }
 
-  putFile(path, content) {
-    return this.putObject(this.pathToKey(path), content);
+  getFile(path, entry) {
+    return this.getObject(this.pathAndEntryToKey(path, entry));
+  }
+
+  putFile(path, entry) {
+    return this.putObject(this.pathAndEntryToKey(path, entry), entry.content);
   }
 
   deleteFiles(paths) {
-    return this.deleteObjects(paths.map(this.pathToKey));
+    // NOTE: paths is enough for deletion because all the file versions
+    // under the path will be deleted.
+    return this.deleteObjects(paths.map(this.pathToKeyPrefix));
   }
 
   getManifest() {

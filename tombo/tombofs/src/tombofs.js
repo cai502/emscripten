@@ -640,19 +640,19 @@ module.exports = {
   },
   loadTomboEntry: function(manifest, path) {
     console.log(`loadTomboEntry: ${path}`);
-    return TOMBOFS.AWSClient.getFile(path).then((data) => {
-      const mTime = new Date(manifest.entries[path].mtime);
-
+    const manifestEntry = manifest.entries[path];
+    return TOMBOFS.AWSClient.getFile(path, manifestEntry).then((data) => {
+      // TODO: Check data.Body with manifestEntry.size or hash
       return {
         contents: new Uint8Array(data.Body),
-        mode: manifest.entries[path].mode,
-        timestamp: mTime
+        mode: manifestEntry.mode,
+        timestamp: manifestEntry.mtime
       };
     });
   },
   storeTomboEntry: function(manifest, path, entry) {
     console.log(`storeTomboEntry: ${path}`);
-    return TOMBOFS.AWSClient.putFile(path, entry.contents).then((data) => {
+    return TOMBOFS.AWSClient.putFile(path, entry).then((data) => {
       manifest.entries[path] = {
         mode: entry.mode,
         mtime: entry.timestamp
@@ -731,9 +731,9 @@ module.exports = {
           if (!done.errored) {
             done.errored = true;
             if (dst.type === 'tombo') {
-              return TOMBOFS.updateTomboManifest(manifest).then(() => {
-                reject(err);
-              });
+              // NOTE: In this case, there are some garbages in S3.
+              // TODO: Delete these garbages
+              return reject(err);
             } else {
               return reject(err);
             }
@@ -742,6 +742,8 @@ module.exports = {
         }
         if (++completed >= total) {
           if (dst.type === 'tombo') {
+            // NOTE: manifest entries are already updated to refer a new path,
+            // so all we have to do is update the manifest file itself.
             TOMBOFS.updateTomboManifest(manifest).then(() => {
               resolve();
             });
