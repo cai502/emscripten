@@ -536,21 +536,29 @@ module.exports = {
 
     return TOMBOFS.AWSClient.getManifest().then((data) => {
       let entries = {};
-      let dataOnMountpoint = data.mountpoints[mount.mountpoint];
+      let dataOnMountpoint;
+      if (data && data.mountpoints) {
+        dataOnMountpoint = data.mountpoints[mount.mountpoint];
 
-      if (dataOnMountpoint) {
-        for (const path in Object.keys(dataOnMountpoint.entries)) {
-          const value = dataOnMountpoint.entries[path];
+        if (dataOnMountpoint) {
+          for (const path in Object.keys(dataOnMountpoint.entries)) {
+            const value = dataOnMountpoint.entries[path];
 
-          entries[path] = {
-            timestamp: value.timestamp
+            entries[path] = {
+              timestamp: value.timestamp
+            }
           }
         }
-      } else {
+      }
+
+      // if empty, initialize
+      // FIXME: DO NOT initialize when error occurs
+      if (dataOnMountpoint) {
         dataOnMountpoint = {
           entries: {}
         };
       }
+
       return {
         type: 'tombo',
         manifest: dataOnMountpoint,

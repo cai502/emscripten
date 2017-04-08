@@ -617,21 +617,29 @@ var tombofs =
 
 	    return TOMBOFS.AWSClient.getManifest().then(function (data) {
 	      var entries = {};
-	      var dataOnMountpoint = data.mountpoints[mount.mountpoint];
+	      var dataOnMountpoint = void 0;
+	      if (data && data.mountpoints) {
+	        dataOnMountpoint = data.mountpoints[mount.mountpoint];
 
-	      if (dataOnMountpoint) {
-	        for (var path in Object.keys(dataOnMountpoint.entries)) {
-	          var value = dataOnMountpoint.entries[path];
+	        if (dataOnMountpoint) {
+	          for (var path in Object.keys(dataOnMountpoint.entries)) {
+	            var value = dataOnMountpoint.entries[path];
 
-	          entries[path] = {
-	            timestamp: value.timestamp
-	          };
+	            entries[path] = {
+	              timestamp: value.timestamp
+	            };
+	          }
 	        }
-	      } else {
+	      }
+
+	      // if empty, initialize
+	      // FIXME: DO NOT initialize when error occurs
+	      if (dataOnMountpoint) {
 	        dataOnMountpoint = {
 	          entries: {}
 	        };
 	      }
+
 	      return {
 	        type: 'tombo',
 	        manifest: dataOnMountpoint,
