@@ -1014,11 +1014,17 @@ var tombofs =
 	  }, {
 	    key: 'userPathPrefix',
 	    value: function userPathPrefix() {
+	      if (!this.userId) {
+	        throw new Error('AWS userPathPrefix(): empty userId');
+	      }
 	      return this.userId + '/';
 	    }
 	  }, {
 	    key: 'appPathPrefix',
 	    value: function appPathPrefix() {
+	      if (!this.appId) {
+	        throw new Error('AWS appPathPrefix(): empty appId');
+	      }
 	      return '' + this.userPathPrefix() + this.appId + '/';
 	    }
 	  }, {
@@ -1026,15 +1032,21 @@ var tombofs =
 	    value: function getObject(key) {
 	      var _this = this;
 
-	      return this.getClient(function (client) {
-	        client.getObject({
-	          Bucket: _this.bucket,
-	          Key: _this.appPathPrefix() + key
-	        }, function (err, data) {
-	          if (err) {
-	            return reject(err);
-	          }
-	          resolve(data);
+	      return this.getClient().then(function (client) {
+	        var actualKey = _this.appPathPrefix() + key;
+
+	        console.log('AWS getObject(' + key + '): ' + actualKey);
+
+	        return new Promise(function (resolve, reject) {
+	          client.getObject({
+	            Bucket: _this.bucket,
+	            Key: actualKey
+	          }, function (err, data) {
+	            if (err) {
+	              return reject(err);
+	            }
+	            resolve(data);
+	          });
 	        });
 	      });
 	    }
@@ -1043,16 +1055,24 @@ var tombofs =
 	    value: function putObject(key, body) {
 	      var _this2 = this;
 
-	      return this.getClient(function (client) {
-	        client.putObject({
-	          Bucket: _this2.bucket,
-	          Key: _this2.appPathPrefix() + key,
-	          Body: body
-	        }, function (err, data) {
-	          if (err) {
-	            return reject(err);
-	          }
-	          resolve(data);
+	      return this.getClient().then(function (client) {
+	        var actualKey = _this2.appPathPrefix() + key;
+
+	        console.groupCollapsed('AWS putObject(' + key + ', body): ' + actualKey);
+	        console.log(body);
+	        console.groupEnd();
+
+	        return new Promise(function (resolve, reject) {
+	          client.putObject({
+	            Bucket: _this2.bucket,
+	            Key: actualKey,
+	            Body: body
+	          }, function (err, data) {
+	            if (err) {
+	              return reject(err);
+	            }
+	            resolve(data);
+	          });
 	        });
 	      });
 	    }
@@ -1061,16 +1081,22 @@ var tombofs =
 	    value: function deleteObject(key) {
 	      var _this3 = this;
 
-	      return this.getClient(function (client) {
-	        client.deleteObject({
-	          Bucket: _this3.bucket,
-	          Key: _this3.appPathPrefix() + key
-	          // TODO: Support VersionId
-	        }, function (err, data) {
-	          if (err) {
-	            return reject(err);
-	          }
-	          resolve(data);
+	      return this.getClient().then(function (client) {
+	        var actualKey = _this3.appPathPrefix() + key;
+
+	        console.log('AWS deleteObject(' + key + '): ' + actualKey);
+
+	        return new Promise(function (resolve, reject) {
+	          client.deleteObject({
+	            Bucket: _this3.bucket,
+	            Key: actualKey
+	            // TODO: Support VersionId
+	          }, function (err, data) {
+	            if (err) {
+	              return reject(err);
+	            }
+	            resolve(data);
+	          });
 	        });
 	      });
 	    }
@@ -1079,23 +1105,35 @@ var tombofs =
 	    value: function deleteObjects(keys) {
 	      var _this4 = this;
 
-	      return this.getClient(function (client) {
+	      return this.getClient().then(function (client) {
+	        var actualKey = _this4.appPathPrefix() + key;
+
 	        var objects = keys.map(function (key) {
 	          return {
-	            Key: _this4.appPathPrefix() + key
+	            Key: key
 	            // TODO: Support VersionId
 	          };
 	        });
-	        client.deleteObjects({
-	          Bucket: _this4.bucket,
-	          Delete: {
-	            Objects: objects
-	          }
-	        }, function (err, data) {
-	          if (err) {
-	            return reject(err);
-	          }
-	          resolve(data);
+
+	        console.groupCollapsed('AWS deleteObjects(keys)');
+	        console.log({
+	          keys: keys,
+	          objects: objects
+	        });
+	        console.groupEnd();
+
+	        return new Promise(function (resolve, reject) {
+	          client.deleteObjects({
+	            Bucket: _this4.bucket,
+	            Delete: {
+	              Objects: objects
+	            }
+	          }, function (err, data) {
+	            if (err) {
+	              return reject(err);
+	            }
+	            resolve(data);
+	          });
 	        });
 	      });
 	    }
@@ -1104,7 +1142,7 @@ var tombofs =
 	    value: function listObjects(prefix) {
 	      var _this5 = this;
 
-	      return this.getClient(function (client) {
+	      return this.getClient().then(function (client) {
 	        var params = {
 	          Bucket: _this5.bucket,
 	          Delimiter: '/',
@@ -1113,14 +1151,16 @@ var tombofs =
 
 	        var contents = [];
 
-	        client.listObjects(params).eachPage(function (err, data) {
-	          if (err) {
-	            return reject(err);
-	          }
-	          if (data === null) {
-	            return resolve(contents);
-	          }
-	          contents = contents.concat(data.Contents);
+	        return new Promise(function (resolve, reject) {
+	          client.listObjects(params).eachPage(function (err, data) {
+	            if (err) {
+	              return reject(err);
+	            }
+	            if (data === null) {
+	              return resolve(contents);
+	            }
+	            contents = contents.concat(data.Contents);
+	          });
 	        });
 	      });
 	    }
@@ -1134,8 +1174,11 @@ var tombofs =
 	  }, {
 	    key: 'pathAndEntryToKey',
 	    value: function pathAndEntryToKey(path, entry) {
-	      // NOTE: Is the timestamp on a second basis is enough?
-	      return 'entries' + path + '/' + entry.mtime;
+	      // NOTE: Is the timestamp on a millisecond basis is enough?
+	      if (!entry.timestamp || typeof entry.timestamp.getTime !== 'function') {
+	        throw new Error('AWS pathAndEntryToKey: entry must have `timestamp` of Date object.');
+	      }
+	      return 'entries' + path + '/' + entry.timestamp.getTime();
 	    }
 	  }, {
 	    key: 'getFile',
@@ -1145,7 +1188,10 @@ var tombofs =
 	  }, {
 	    key: 'putFile',
 	    value: function putFile(path, entry) {
-	      return this.putObject(this.pathAndEntryToKey(path, entry), entry.content);
+	      if (!entry.contents) {
+	        return Promise.reject(new Error('AWS putFile(): entry must have `contents`'));
+	      }
+	      return this.putObject(this.pathAndEntryToKey(path, entry), entry.contents);
 	    }
 	  }, {
 	    key: 'deleteFiles',
@@ -1157,6 +1203,7 @@ var tombofs =
 	  }, {
 	    key: 'getManifest',
 	    value: function getManifest() {
+	      console.log('AWS getManifest()');
 	      // This manifest file contains entries per mountpoint
 	      return this.getObject('tombofs.manifest').then(function (data) {
 	        if (data.Body) {
@@ -1166,14 +1213,14 @@ var tombofs =
 	            mountpoints: {}
 	          };
 	        }
-	      }).catch(function (err) {
-	        // FIXME: handle 404
-	        console.log(err);
 	      });
 	    }
 	  }, {
 	    key: 'putManifest',
 	    value: function putManifest(content) {
+	      console.groupCollapsed('AWS putManifest()');
+	      console.log(conent);
+	      console.groupEnd();
 	      return this.putObject('tombofs.manifest', JSON.stringify(content)).then(function (data) {
 	        return data;
 	      });

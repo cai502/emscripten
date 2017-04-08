@@ -15,73 +15,111 @@ class TomboFSAWSClient {
   }
 
   userPathPrefix() {
+    if (!this.userId) {
+      throw new Error('AWS userPathPrefix(): empty userId');
+    }
     return `${this.userId}/`;
   }
 
   appPathPrefix() {
+    if (!this.appId) {
+      throw new Error('AWS appPathPrefix(): empty appId');
+    }
     return `${this.userPathPrefix()}${this.appId}/`;
   }
 
   getObject(key) {
-    return this.getClient((client) => {
-      client.getObject({
-        Bucket: this.bucket,
-        Key: this.appPathPrefix() + key,
-      }, (err, data) => {
-        if (err) { return reject(err); }
-        resolve(data);
+    return this.getClient().then((client) => {
+      const actualKey = this.appPathPrefix() + key;
+
+      console.log(`AWS getObject(${key}): ${actualKey}`);
+
+      return new Promise((resolve, reject) => {
+        client.getObject({
+          Bucket: this.bucket,
+          Key: actualKey
+        }, (err, data) => {
+          if (err) { return reject(err); }
+          resolve(data);
+        });
       });
     });
   }
 
   putObject(key, body) {
-    return this.getClient((client) => {
-      client.putObject({
-        Bucket: this.bucket,
-        Key: this.appPathPrefix() + key,
-        Body: body
-      }, (err, data) => {
-        if (err) { return reject(err); }
-        resolve(data);
+    return this.getClient().then((client) => {
+      const actualKey = this.appPathPrefix() + key;
+
+      console.groupCollapsed(`AWS putObject(${key}, body): ${actualKey}`);
+      console.log(body);
+      console.groupEnd();
+
+      return new Promise((resolve, reject) => {
+        client.putObject({
+          Bucket: this.bucket,
+          Key: actualKey,
+          Body: body
+        }, (err, data) => {
+          if (err) { return reject(err); }
+          resolve(data);
+        });
       });
     });
   }
 
   deleteObject(key) {
-    return this.getClient((client) => {
-      client.deleteObject({
-        Bucket: this.bucket,
-        Key: this.appPathPrefix() + key
-        // TODO: Support VersionId
-      }, (err, data) => {
-        if (err) { return reject(err); }
-        resolve(data);
+    return this.getClient().then((client) => {
+      const actualKey = this.appPathPrefix() + key;
+
+      console.log(`AWS deleteObject(${key}): ${actualKey}`);
+
+      return new Promise((resolve, reject) => {
+        client.deleteObject({
+          Bucket: this.bucket,
+          Key: actualKey
+          // TODO: Support VersionId
+        }, (err, data) => {
+          if (err) { return reject(err); }
+          resolve(data);
+        });
       });
     });
   }
 
   deleteObjects(keys) {
-    return this.getClient((client) => {
+    return this.getClient().then((client) => {
+      const actualKey = this.appPathPrefix() + key;
+
       const objects = keys.map((key) => {
         return {
-          Key: this.appPathPrefix() + key
+          Key: key
           // TODO: Support VersionId
         };
       });
-      client.deleteObjects({
-        Bucket: this.bucket,
-        Delete: {
-          Objects: objects
-        }
-      }, (err, data) => {
-        if (err) { return reject(err); }
-        resolve(data);
+
+      console.groupCollapsed('AWS deleteObjects(keys)');
+      console.log({
+        keys: keys,
+        objects: objects
+      });
+      console.groupEnd();
+
+      return new Promise((resolve, reject) => {
+        client.deleteObjects({
+          Bucket: this.bucket,
+          Delete: {
+            Objects: objects
+          }
+        }, (err, data) => {
+          if (err) { return reject(err); }
+          resolve(data);
+        });
       });
     });
   }
 
   listObjects(prefix) {
-    return this.getClient((client) => {
+    return this.getClient().then((client) => {
       let params = {
         Bucket: this.bucket,
         Delimiter: '/',
@@ -90,10 +128,12 @@ class TomboFSAWSClient {
 
       let contents = [];
 
-      client.listObjects(params).eachPage((err, data) => {
-        if (err) { return reject(err); }
-        if (data === null) { return resolve(contents); }
-        contents = contents.concat(data.Contents);
+      return new Promise((resolve, reject) => {
+        client.listObjects(params).eachPage((err, data) => {
+          if (err) { return reject(err); }
+          if (data === null) { return resolve(contents); }
+          contents = contents.concat(data.Contents);
+        });
       });
     });
   }
@@ -105,8 +145,11 @@ class TomboFSAWSClient {
   }
 
   pathAndEntryToKey(path, entry) {
-    // NOTE: Is the timestamp on a second basis is enough?
-    return `entries${path}/${entry.mtime}`;
+    // NOTE: Is the timestamp on a millisecond basis is enough?
+    if (!entry.timestamp || typeof entry.timestamp.getTime !== 'function') {
+      throw new Error('AWS pathAndEntryToKey: entry must have `timestamp` of Date object.');
+    }
+    return `entries${path}/${entry.timestamp.getTime()}`;
   }
 
   getFile(path, entry) {
@@ -114,7 +157,10 @@ class TomboFSAWSClient {
   }
 
   putFile(path, entry) {
-    return this.putObject(this.pathAndEntryToKey(path, entry), entry.content);
+    if (!entry.contents) {
+      return Promise.reject(new Error('AWS putFile(): entry must have `contents`'));
+    }
+    return this.putObject(this.pathAndEntryToKey(path, entry), entry.contents);
   }
 
   deleteFiles(paths) {
@@ -124,6 +170,7 @@ class TomboFSAWSClient {
   }
 
   getManifest() {
+    console.log('AWS getManifest()');
     // This manifest file contains entries per mountpoint
     return this.getObject('tombofs.manifest').then((data) => {
       if (data.Body) {
@@ -133,13 +180,13 @@ class TomboFSAWSClient {
           mountpoints: {}
         };
       }
-    }).catch((err) => {
-      // FIXME: handle 404
-      console.log(err);
     });
   }
 
   putManifest(content) {
+      console.groupCollapsed('AWS putManifest()');
+      console.log(conent);
+      console.groupEnd();
     return this.putObject('tombofs.manifest', JSON.stringify(content)).then((data) => {
       return data;
     });
