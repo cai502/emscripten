@@ -1008,7 +1008,8 @@ var tombofs =
 	    this.userId = userId;
 	    this.appId = appId;
 	    this.bucket = 'tombofs.development';
-	    AWS.config.region = 'us-west-2';
+	    this.region = 'us-west-2';
+	    this.endpoint = 's3-us-west-2.amazonaws.com';
 	  }
 
 	  _createClass(TomboFSAWSClient, [{
