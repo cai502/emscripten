@@ -727,7 +727,12 @@ var tombofs =
 	    });
 	  },
 	  loadTomboEntry: function loadTomboEntry(manifest, path) {
-	    console.log('loadTomboEntry: ' + path);
+	    console.groupCollapsed('loadTomboEntry: ' + path);
+	    console.log({
+	      manifest: manifest,
+	      path: path
+	    });
+	    console.groupEnd();
 	    var manifestEntry = manifest.entries[path];
 	    return TOMBOFS.AWSClient.getFile(path, manifestEntry).then(function (data) {
 	      // TODO: Check data.Body with manifestEntry.size or hash
@@ -739,7 +744,13 @@ var tombofs =
 	    });
 	  },
 	  storeTomboEntry: function storeTomboEntry(manifest, path, entry) {
-	    console.log('storeTomboEntry: ' + path);
+	    console.groupCollapsed('storeTomboEntry: ' + path);
+	    console.log({
+	      manifest: manifest,
+	      path: path,
+	      entry: entry
+	    });
+	    console.groupEnd();
 	    return TOMBOFS.AWSClient.putFile(path, entry).then(function (data) {
 	      manifest.entries[path] = {
 	        mode: entry.mode,
@@ -748,7 +759,12 @@ var tombofs =
 	    });
 	  },
 	  removeTomboEntries: function removeTomboEntries(manifest, paths) {
-	    console.log('removeTomboEntries:');
+	    console.groupCollapsed('removeTomboEntries:');
+	    console.log({
+	      manifest: manifest,
+	      paths: paths
+	    });
+	    console.groupEnd();
 	    return TOMBOFS.AWSClient.deleteFiles(paths).then(function (data) {
 	      paths.forEach(function (path) {
 	        manifest.entries.delete(path);
@@ -756,12 +772,18 @@ var tombofs =
 	    });
 	  },
 	  updateTomboManifest: function updateTomboManifest(manifest) {
-	    console.log('updateTomboManifest:');
+	    console.groupCollapsed('updateTomboManifest:');
 	    console.log(manifest);
+	    console.groupEnd();
 	    return TOMBOFS.AWSClient.putManifest(manifest);
 	  },
 	  reconcile: function reconcile(src, dst) {
-	    console.log('reconcile: from ' + src.type + ' to ' + dst.type);
+	    console.groupCollapsed('reconcile: from ' + src.type + ' (' + Object.keys(src.entries).length + ') to ' + dst.type + ' (' + Object.keys(dst.entries).length + ')');
+	    console.log({
+	      src: src,
+	      dst: dst
+	    });
+	    console.groupEnd();
 
 	    var total = 0;
 
@@ -787,6 +809,7 @@ var tombofs =
 
 	    return new Promise(function (resolve, reject) {
 	      if (!total) {
+	        console.log('reconcile END: nothing to do');
 	        return resolve();
 	      }
 
@@ -832,6 +855,13 @@ var tombofs =
 	          return;
 	        }
 	        if (++completed >= total) {
+	          console.groupCollapsed('reconcile END: from ' + src.type + ' (' + Object.keys(src.entries).length + ') to ' + dst.type + ' (' + Object.keys(dst.entries).length + ')');
+	          console.log({
+	            src: src,
+	            dst: dst
+	          });
+	          console.groupEnd();
+
 	          if (dst.type === 'tombo') {
 	            // NOTE: manifest entries are already updated to refer a new path,
 	            // so all we have to do is update the manifest file itself.
