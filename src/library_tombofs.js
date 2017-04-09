@@ -618,7 +618,7 @@ var tombofs =
 	    return TOMBOFS.AWSClient.getManifest().then(function (data) {
 	      var entries = {};
 	      var dataOnMountpoint = void 0;
-	      if (data && data.mountpoints) {
+	      if (data.mountpoints) {
 	        dataOnMountpoint = data.mountpoints[mount.mountpoint];
 
 	        if (dataOnMountpoint) {
@@ -1218,10 +1218,19 @@ var tombofs =
 	        if (data.Body) {
 	          return JSON.parse(data.Body);
 	        } else {
+	          return Promise.reject(new Error('Invalid manifest file'));
+	        }
+	      }).catch(function (err) {
+	        // If manifest file doesn't exist, initialize
+	        if (err.code === 'NoSuchKey') {
+	          console.log('Initialize manifest');
 	          return {
 	            mountpoints: {}
 	          };
 	        }
+
+	        // rethrow
+	        return Promise.reject(err);
 	      });
 	    }
 	  }, {

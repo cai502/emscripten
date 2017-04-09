@@ -177,10 +177,19 @@ class TomboFSAWSClient {
       if (data.Body) {
         return JSON.parse(data.Body);
       } else {
+        return Promise.reject(new Error('Invalid manifest file'));
+      }
+    }).catch((err) => {
+      // If manifest file doesn't exist, initialize
+      if (err.code === 'NoSuchKey') {
+        console.log('Initialize manifest');
         return {
           mountpoints: {}
         };
       }
+
+      // rethrow
+      return Promise.reject(err);
     });
   }
 
