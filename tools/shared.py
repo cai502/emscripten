@@ -2420,6 +2420,10 @@ class JS:
       null_return = " 0"
       func_prefix = "return "
       func_postfix = "|0"
+    elif sig[0] == "j":
+      null_return = " i64(0)"
+      func_prefix = "return i64("
+      func_postfix = ")"
     elif sig[0] == "d" or sig[0] == "f":
       null_return = " 0.0"
       func_prefix = "return +"
