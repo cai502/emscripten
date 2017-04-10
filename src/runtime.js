@@ -321,31 +321,38 @@ var Runtime = {
 
   loadDynamicLibrary: function(lib) {
 #if BINARYEN
-    var bin = Module['readBinary'](lib);
-    var libModule = Runtime.loadWebAssemblyModule(bin);
+    return fetch(lib).then(function(response) {
+      return response.arrayBuffer();
+    }).then(function(bin) {
+      return Runtime.loadWebAssemblyModule(new Uint8Array(bin));
+    })
 #else
-    var src = Module['read'](lib);
-    var libModule = eval(src)(
-      Runtime.alignFunctionTables(),
-      Module
-    );
+    return new Promise(function() {
+      var src = Module['read'](lib);
+      return eval(src)(
+        Runtime.alignFunctionTables(),
+        Module
+      );
+    })
 #endif
-    // add symbols into global namespace TODO: weak linking etc.
-    for (var sym in libModule) {
-      if (!Module.hasOwnProperty(sym)) {
-        Module[sym] = libModule[sym];
-      }
-#if ASSERTIONS == 2
-      else if (sym[0] === '_') {
-        var curr = Module[sym], next = libModule[sym];
-        // don't warn on functions - might be odr, linkonce_odr, etc.
-        if (!(typeof curr === 'function' && typeof next === 'function')) {
-          Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+    .then(function(libModule) {
+      // add symbols into global namespace TODO: weak linking etc.
+      for (var sym in libModule) {
+        if (!Module.hasOwnProperty(sym)) {
+          Module[sym] = libModule[sym];
         }
-      }
+#if ASSERTIONS == 2
+        else if (sym[0] === '_') {
+          var curr = Module[sym], next = libModule[sym];
+          // don't warn on functions - might be odr, linkonce_odr, etc.
+          if (!(typeof curr === 'function' && typeof next === 'function')) {
+            Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+          }
+        }
 #endif
-    }
-    Runtime.loadedDynamicLibraries.push(libModule);
+      }
+      Runtime.loadedDynamicLibraries.push(libModule);
+    });
   },
 
 #if BINARYEN
@@ -437,44 +444,48 @@ var Runtime = {
       oldTable.push(table.get(i));
     }
 #endif
-    // create a module from the instance
-    var instance = new WebAssembly.Instance(new WebAssembly.Module(binary), info);
+    return WebAssembly.compile(binary).then(function(module) {
+      // create a module from the instance
+      return WebAssembly.instantiate(module, info);
+    }).then(function(instance) {
 #if ASSERTIONS
-    // the table should be unchanged
-    assert(table === originalTable);
-    assert(table === Module['wasmTable']);
-    if (instance.exports['table']) {
-      assert(table === instance.exports['table']);
-    }
-    // the old part of the table should be unchanged
-    for (var i = 0; i < oldTableSize; i++) {
-      assert(table.get(i) === oldTable[i], 'old table entries must remain the same');
-    }
-    // verify that the new table region was filled in
-    for (var i = 0; i < tableSize; i++) {
-      assert(table.get(oldTableSize + i) !== undefined, 'table entry was not filled in');
-    }
+      // the table should be unchanged
+      assert(table === originalTable);
+      assert(table === Module['wasmTable']);
+      if (instance.exports['table']) {
+        assert(table === instance.exports['table']);
+      }
+      // the old part of the table should be unchanged
+      for (var i = 0; i < oldTableSize; i++) {
+        assert(table.get(i) === oldTable[i], 'old table entries must remain the same');
+      }
+      // verify that the new table region was filled in
+      for (var i = 0; i < tableSize; i++) {
+        assert(table.get(oldTableSize + i) !== undefined, 'table entry was not filled in');
+      }
 #endif
-    var exports = {};
-    for (var e in instance.exports) {
-      var value = instance.exports[e];
-      if (typeof value === 'number') {
-        // relocate it - modules export the absolute value, they can't relocate before they export
-        value = value + env['memoryBase'];
+      var exports = {};
+      for (var e in instance.exports) {
+        //   Module.print("exports: "+e);
+        var value = instance.exports[e];
+        if (typeof value === 'number') {
+          // relocate it - modules export the absolute value, they can't relocate before they export
+          value = value + env['memoryBase'];
+        }
+        exports[e] = value;
       }
-      exports[e] = value;
-    }
-    // initialize the module
-    var init = exports['__post_instantiate'];
-    if (init) {
-      if (runtimeInitialized) {
-        init();
-      } else {
-        // we aren't ready to run compiled code yet
-        __ATINIT__.push(init);
+      // initialize the module
+      var init = exports['__post_instantiate'];
+      if (init) {
+        if (runtimeInitialized) {
+          init();
+        } else {
+          // we aren't ready to run compiled code yet
+          __ATINIT__.push(init);
+        }
       }
-    }
-    return exports;
+      return exports;
+    });
   },
 #endif
 #endif
@@ -655,4 +666,3 @@ if (RETAIN_COMPILER_SETTINGS) {
     } catch(e){}
   }
 }
-

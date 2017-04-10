@@ -1939,14 +1939,21 @@ addOnPreRun(function() { addRunDependency('pgo') });
 }}}
 
 addOnPreRun(function() {
-  if (Module['dynamicLibraries']) {
-    Module['dynamicLibraries'].forEach(function(lib) {
-      Runtime.loadDynamicLibrary(lib);
-    });
-  }
-  if (asm['runPostSets']) {
-    asm['runPostSets']();
-  }
+  addRunDependency('postsets');
+  new Promise(function(resolve){
+    if (Module['dynamicLibraries']) {
+      Promise.all(Module['dynamicLibraries'].map(function(lib) {
+        return Runtime.loadDynamicLibrary(lib);
+      })).then(resolve);
+    } else {
+      resolve();
+    }
+  }).then(function(){
+    if (asm['runPostSets']) {
+      asm['runPostSets']();
+    }
+    removeRunDependency('postsets');
+  });
 });
 
 #if ASSERTIONS
