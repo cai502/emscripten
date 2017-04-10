@@ -726,7 +726,7 @@ module.exports = {
     }
     return TOMBOFS.AWSClient.deleteFiles(paths).then((data) => {
       paths.forEach((path) => {
-        manifestEntries.delete(path);
+        delete manifestEntries[path];
       });
     });
   },

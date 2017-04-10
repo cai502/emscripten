@@ -835,7 +835,7 @@ var tombofs =
 	    }
 	    return TOMBOFS.AWSClient.deleteFiles(paths).then(function (data) {
 	      paths.forEach(function (path) {
-	        manifestEntries.delete(path);
+	        delete manifestEntries[path];
 	      });
 	    });
 	  },
