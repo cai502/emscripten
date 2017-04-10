@@ -615,15 +615,14 @@ var tombofs =
 	      return Promise.reject(new Error('AWSClient is null'));
 	    }
 
-	    return TOMBOFS.AWSClient.getManifest().then(function (data) {
+	    return TOMBOFS.AWSClient.getManifest().then(function (manifest) {
 	      var entries = {};
-	      var dataOnMountpoint = void 0;
-	      if (data.mountpoints) {
-	        dataOnMountpoint = data.mountpoints[mount.mountpoint];
+	      if (manifest.mountpoints) {
+	        var manifestOnMountpoint = manifest.mountpoints[mount.mountpoint];
 
-	        if (dataOnMountpoint) {
-	          for (var path in Object.keys(dataOnMountpoint.entries)) {
-	            var value = dataOnMountpoint.entries[path];
+	        if (manifestOnMountpoint) {
+	          for (var path in Object.keys(manifestOnMountpoint.entries)) {
+	            var value = manifestOnMountpoint.entries[path];
 
 	            entries[path] = {
 	              timestamp: value.timestamp
@@ -634,15 +633,19 @@ var tombofs =
 
 	      // if empty, initialize
 	      // FIXME: DO NOT initialize when error occurs
-	      if (dataOnMountpoint) {
-	        dataOnMountpoint = {
+	      if (Object.keys(entries).length === 0) {
+	        var mountpoints = {};
+	        mountpoints[mount.mountpoint] = {
 	          entries: {}
+	        };
+	        manifest = {
+	          mountpoints: mountpoints
 	        };
 	      }
 
 	      return {
 	        type: 'tombo',
-	        manifest: dataOnMountpoint,
+	        manifest: manifest,
 	        entries: entries
 	      };
 	    });

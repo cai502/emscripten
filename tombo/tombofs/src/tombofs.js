@@ -534,15 +534,14 @@ module.exports = {
   getTomboSet: function(mount) {
     if (!TOMBOFS.AWSClient) { return Promise.reject(new Error('AWSClient is null')); }
 
-    return TOMBOFS.AWSClient.getManifest().then((data) => {
+    return TOMBOFS.AWSClient.getManifest().then((manifest) => {
       let entries = {};
-      let dataOnMountpoint;
-      if (data.mountpoints) {
-        dataOnMountpoint = data.mountpoints[mount.mountpoint];
+      if (manifest.mountpoints) {
+        const manifestOnMountpoint = manifest.mountpoints[mount.mountpoint];
 
-        if (dataOnMountpoint) {
-          for (const path in Object.keys(dataOnMountpoint.entries)) {
-            const value = dataOnMountpoint.entries[path];
+        if (manifestOnMountpoint) {
+          for (const path in Object.keys(manifestOnMountpoint.entries)) {
+            const value = manifestOnMountpoint.entries[path];
 
             entries[path] = {
               timestamp: value.timestamp
@@ -553,15 +552,19 @@ module.exports = {
 
       // if empty, initialize
       // FIXME: DO NOT initialize when error occurs
-      if (dataOnMountpoint) {
-        dataOnMountpoint = {
+      if (Object.keys(entries).length === 0) {
+        const mountpoints = {};
+        mountpoints[mount.mountpoint] = {
           entries: {}
+        };
+        manifest = {
+          mountpoints: mountpoints
         };
       }
 
       return {
         type: 'tombo',
-        manifest: dataOnMountpoint,
+        manifest: manifest,
         entries: entries
       };
     });
