@@ -685,10 +685,11 @@ module.exports = {
     }
     return TOMBOFS.AWSClient.getFile(path, manifestEntry).then((data) => {
       // TODO: Check data.Body with manifestEntry.size or hash
+      // NOTE: manifest have mtime with the format "2017-04-10T08:44:02.635Z"
       return {
         contents: new Uint8Array(data.Body),
         mode: manifestEntry.mode,
-        timestamp: manifestEntry.mtime
+        timestamp: new Date(manifestEntry.mtime)
       };
     });
   },
@@ -705,9 +706,10 @@ module.exports = {
       return Promise.reject(new Error(`storeTomboEntry(): Cannot get entries from manifest for ${mount.mountpoint}`));
     }
     return TOMBOFS.AWSClient.putFile(path, entry).then((data) => {
+      // NOTE: manifest have mtime with the format "2017-04-10T08:44:02.635Z"
       manifestEntries[path] = {
         mode: entry.mode,
-        mtime: entry.timestamp
+        mtime: entry.timestamp.toString()
       };
     });
   },
