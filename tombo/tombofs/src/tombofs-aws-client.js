@@ -194,9 +194,9 @@ class TomboFSAWSClient {
   }
 
   putManifest(content) {
-      console.groupCollapsed('AWS putManifest()');
-      console.log(content);
-      console.groupEnd();
+    console.groupCollapsed('AWS putManifest()');
+    console.log(content);
+    console.groupEnd();
     return this.putObject('tombofs.manifest', JSON.stringify(content)).then((data) => {
       return data;
     });
