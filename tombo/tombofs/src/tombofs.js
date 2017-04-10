@@ -856,7 +856,7 @@ module.exports = {
             });
             break;
           case 'tombo':
-            TOMBOFS.loadTomboEntry(store, path).then((entry) => {
+            TOMBOFS.loadTomboEntry(src.manifest, src.mount, path).then((entry) => {
               TOMBOFS.storeLocalEntry(path, entry);
             }).then(() => {
               done();
@@ -876,7 +876,7 @@ module.exports = {
             });
             break;
           case 'tombo':
-            TOMBOFS.loadTomboEntry(src.manifest, src.mount, store, path).then((entry) => {
+            TOMBOFS.loadTomboEntry(src.manifest, src.mount, path).then((entry) => {
               TOMBOFS.storeRemoteEntry(path, entry);
             }).then(() => {
               done();

@@ -967,7 +967,7 @@ var tombofs =
 	                });
 	                break;
 	              case 'tombo':
-	                TOMBOFS.loadTomboEntry(store, path).then(function (entry) {
+	                TOMBOFS.loadTomboEntry(src.manifest, src.mount, path).then(function (entry) {
 	                  TOMBOFS.storeLocalEntry(path, entry);
 	                }).then(function () {
 	                  done();
@@ -987,7 +987,7 @@ var tombofs =
 	                });
 	                break;
 	              case 'tombo':
-	                TOMBOFS.loadTomboEntry(src.manifest, src.mount, store, path).then(function (entry) {
+	                TOMBOFS.loadTomboEntry(src.manifest, src.mount, path).then(function (entry) {
 	                  TOMBOFS.storeRemoteEntry(path, entry);
 	                }).then(function () {
 	                  done();
