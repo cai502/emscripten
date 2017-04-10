@@ -863,6 +863,9 @@ module.exports = {
       // sort paths in descending order so files are deleted before their
       // parent directories
       const pathsToBeRemoved = remove.sort().reverse();
+      if (pathsToBeRemoved.length === 0) {
+        return;
+      }
       switch (dst.type) {
       case 'local':
         pathsToBeRemoved.forEach((path) => {
