@@ -1257,7 +1257,7 @@ var tombofs =
 	      }).catch(function (err) {
 	        // If manifest file doesn't exist, initialize
 	        if (err.code === 'NoSuchKey') {
-	          console.log('Initialize manifest');
+	          console.log('AWS getManifest(): Initialize manifest');
 	          return {
 	            mountpoints: {}
 	          };
@@ -1271,7 +1271,7 @@ var tombofs =
 	    key: 'putManifest',
 	    value: function putManifest(content) {
 	      console.groupCollapsed('AWS putManifest()');
-	      console.log(conent);
+	      console.log(content);
 	      console.groupEnd();
 	      return this.putObject('tombofs.manifest', JSON.stringify(content)).then(function (data) {
 	        return data;

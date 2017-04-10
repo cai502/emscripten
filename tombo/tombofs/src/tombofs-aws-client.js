@@ -182,7 +182,7 @@ class TomboFSAWSClient {
     }).catch((err) => {
       // If manifest file doesn't exist, initialize
       if (err.code === 'NoSuchKey') {
-        console.log('Initialize manifest');
+        console.log('AWS getManifest(): Initialize manifest');
         return {
           mountpoints: {}
         };
@@ -195,7 +195,7 @@ class TomboFSAWSClient {
 
   putManifest(content) {
       console.groupCollapsed('AWS putManifest()');
-      console.log(conent);
+      console.log(content);
       console.groupEnd();
     return this.putObject('tombofs.manifest', JSON.stringify(content)).then((data) => {
       return data;
