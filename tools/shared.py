@@ -2688,6 +2688,27 @@ class WebAssembly:
     return ret
 
   @staticmethod
+  def make_objc_section(metadata):
+    keys = [u"__objc_selrefs",
+      u"__objc_msgrefs",
+      u"__objc_classrefs",
+      u"__objc_superrefs",
+      u"__objc_classlist",
+      u"__objc_nlclslist",
+      u"__objc_catlist",
+      u"__objc_nlcatlist",
+      u"__objc_protolist",
+      u"__objc_protorefs"
+    ]
+    ret = []
+    for key in keys:
+      values = metadata[key]
+      ret += WebAssembly.lebify(len(values))
+      for value in values:
+        ret += WebAssembly.lebify(value)
+    return ret
+
+  @staticmethod
   def make_shared_library(js_file, wasm_file):
     # a wasm shared library has a special "dylink" section, see tools-conventions repo
     js = open(js_file).read()
@@ -2696,12 +2717,17 @@ class WebAssembly:
     m = re.search("Module\['wasmTableSize'\] = (\d+);", js)
     table_size = int(m.group(1))
     logging.debug('creating wasm dynamic library with mem size %d, table size %d' % (mem_size, table_size))
+    m = re.search("var EMSCRIPTEN_OBJC_METADATA = ((.[^;])+);", js, re.DOTALL)
+    metadata = json.loads(m.group(1))
+    #logging.debug('objc metadata %s' % metadata)
     wso = js_file + '.wso'
     # write the binary
     wasm = open(wasm_file, 'rb').read()
     f = open(wso, 'wb')
     f.write(wasm[0:8]) # copy magic number and version
+
     # write the special section
+    ## dylink section
     f.write('\0') # user section is code 0
     # need to find the size of this section
     name = "\06dylink" # section name, including prefixed size
@@ -2710,6 +2736,16 @@ class WebAssembly:
     f.write(''.join(WebAssembly.lebify(size)))
     f.write(name)
     f.write(''.join(contents))
+
+    ## objc section
+    f.write('\0')
+    name = "\04objc"
+    contents = WebAssembly.make_objc_section(metadata)
+    size = len(name) + len(contents)
+    f.write(''.join(WebAssembly.lebify(size)))
+    f.write(name)
+    f.write(''.join(contents))
+
     f.write(wasm[8:]) # copy rest of binary
     f.close()
     return wso

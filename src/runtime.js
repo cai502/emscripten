@@ -400,6 +400,34 @@ var Runtime = {
     for (var i = env['tableBase']; i < env['tableBase'] + tableSize; i++) {
       table.set(i, null);
     }
+
+    // objc metadata
+    assert(binary[next] === 0, 'need the objc section to be second'); next++;
+    var sectionSize = getLEB();
+    assert(binary[next] === 4);                 next++; // size of "dylink" string
+    assert(binary[next] === 'o'.charCodeAt(0)); next++;
+    assert(binary[next] === 'b'.charCodeAt(0)); next++;
+    assert(binary[next] === 'j'.charCodeAt(0)); next++;
+    assert(binary[next] === 'c'.charCodeAt(0)); next++;
+    keys = ["__objc_selrefs",
+      "__objc_msgrefs",
+      "__objc_classrefs",
+      "__objc_superrefs",
+      "__objc_classlist",
+      "__objc_nlclslist",
+      "__objc_catlist",
+      "__objc_nlcatlist",
+      "__objc_protolist",
+      "__objc_protorefs"
+    ];
+    keys.forEach(function(key){
+      var len = getLEB();
+      for(var i = 0; i < len; i++) {
+        var addr = getLEB();
+        Module['objcMetaData'][key].push(env['gb'] + addr);
+      }
+    });
+
     // copy currently exported symbols so the new module can import them
     for (var x in Module) {
       if (!(x in env)) {
