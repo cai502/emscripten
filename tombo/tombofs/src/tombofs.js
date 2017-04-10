@@ -571,11 +571,11 @@ module.exports = {
       const manifestOnMountpoint = manifest.mountpoints[mount.mountpoint];
 
       if (manifestOnMountpoint) {
-        for (const path in Object.keys(manifestOnMountpoint.entries)) {
+        for (const path of Object.keys(manifestOnMountpoint.entries)) {
           const value = manifestOnMountpoint.entries[path];
 
           entries[path] = {
-            timestamp: value.timestamp
+            timestamp: value.mtime
           }
         }
       } else {

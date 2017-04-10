@@ -652,12 +652,33 @@ var tombofs =
 	      var manifestOnMountpoint = manifest.mountpoints[mount.mountpoint];
 
 	      if (manifestOnMountpoint) {
-	        for (var path in Object.keys(manifestOnMountpoint.entries)) {
-	          var value = manifestOnMountpoint.entries[path];
+	        var _iteratorNormalCompletion = true;
+	        var _didIteratorError = false;
+	        var _iteratorError = undefined;
 
-	          entries[path] = {
-	            timestamp: value.timestamp
-	          };
+	        try {
+	          for (var _iterator = Object.keys(manifestOnMountpoint.entries)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+	            var path = _step.value;
+
+	            var value = manifestOnMountpoint.entries[path];
+
+	            entries[path] = {
+	              timestamp: value.mtime
+	            };
+	          }
+	        } catch (err) {
+	          _didIteratorError = true;
+	          _iteratorError = err;
+	        } finally {
+	          try {
+	            if (!_iteratorNormalCompletion && _iterator.return) {
+	              _iterator.return();
+	            }
+	          } finally {
+	            if (_didIteratorError) {
+	              throw _iteratorError;
+	            }
+	          }
 	        }
 	      } else {
 	        manifest.mountpoints[mount.mountpoint] = {
