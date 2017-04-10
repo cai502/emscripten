@@ -728,11 +728,30 @@ module.exports = {
       });
     });
   },
-  updateTomboManifest: function(manifest) {
-    console.groupCollapsed('updateTomboManifest:');
-    console.log(manifest);
-    console.groupEnd();
-    return TOMBOFS.AWSClient.putManifest(manifest);
+  updateTomboManifest: function() {
+    console.log('updateTomboManifest:');
+
+    // The latest manifest in stored in TOMBOFS.manifest
+    // At the first time, it is fetched by remote server.
+    const lockedUpdateTomboManifest = (resolve, reject) => {
+      if (!TOMBOFS.AWSClient) {
+        return reject(new Error('updateTomboManifest() is called but there is no AWS client'));
+      }
+      // mutex
+      if (TOMBOFS.fetchingManifest || TOMBOFS.updatingManifest) {
+        setTimeout(() => {
+          lockedUpdateTomboManifest(resolve, reject);
+        }, 0);
+        return;
+      }
+      TOMBOFS.updatingManifest = true;
+
+      TOMBOFS.AWSClient.putManifest(TOMBOFS.manifest).then(() => {
+        TOMBOFS.updatingManifest = false;
+        resolve();
+      });
+    };
+    return new Promise(lockedUpdateTomboManifest);
   },
   reconcile: function(src, dst) {
     console.groupCollapsed(`reconcile: from ${src.type} (${Object.keys(src.entries).length}) to ${dst.type} (${Object.keys(dst.entries).length})`);
@@ -814,7 +833,7 @@ module.exports = {
           if (dst.type === 'tombo') {
             // NOTE: manifest entries are already updated to refer a new path,
             // so all we have to do is update the manifest file itself.
-            TOMBOFS.updateTomboManifest(dst.manifest).then(() => {
+            TOMBOFS.updateTomboManifest().then(() => {
               resolve();
             });
           } else {
