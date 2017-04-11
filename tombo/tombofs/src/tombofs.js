@@ -673,13 +673,15 @@ module.exports = {
     if (!manifestEntry) {
       return Promise.reject(new Error(`loadTomboEntry(): Cannot get meta information from manifest for the path: ${path}`));
     }
+    let timestamp = new Date();
+    // NOTE: manifest have mtime with UNIX epoch on a millisecond basis
+    timestamp.setTime(manifestEntry.mtime);
     let entry = {
       mode: manifestEntry.mode,
-      timestamp: new Date(manifestEntry.mtime)
+      timestamp: timestamp
     };
     return TOMBOFS.AWSClient.getFile(path, entry).then((data) => {
       // TODO: Check data.Body with manifestEntry.size or hash
-      // NOTE: manifest have mtime with the format "2017-04-10T08:44:02.635Z"
       entry.contents = new Uint8Array(data.Body);
       return entry;
     });
@@ -697,10 +699,10 @@ module.exports = {
       return Promise.reject(new Error('storeTomboEntry(): Cannot get entries from manifest'));
     }
     return TOMBOFS.AWSClient.putFile(path, entry).then((data) => {
-      // NOTE: manifest have mtime with the format "2017-04-10T08:44:02.635Z"
+      // NOTE: manifest have mtime with UNIX epoch on a millisecond basis
       manifestEntries[path] = {
         mode: entry.mode,
-        mtime: entry.timestamp.toString()
+        mtime: entry.timestamp.getTime()
       };
     });
   },
