@@ -852,7 +852,7 @@ module.exports = {
             break;
           case 'tombo':
             TOMBOFS.loadTomboEntry(src.manifest, path).then((entry) => {
-              TOMBOFS.storeLocalEntry(path, entry);
+              return TOMBOFS.storeLocalEntry(path, entry);
             }).then(() => {
               done();
             });
@@ -872,7 +872,7 @@ module.exports = {
             break;
           case 'tombo':
             TOMBOFS.loadTomboEntry(src.manifest, path).then((entry) => {
-              TOMBOFS.storeRemoteEntry(path, entry);
+              return TOMBOFS.storeRemoteEntry(store, path, entry);
             }).then(() => {
               done();
             });
