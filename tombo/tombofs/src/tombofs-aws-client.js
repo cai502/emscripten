@@ -38,7 +38,10 @@ class TomboFSAWSClient {
       return new Promise((resolve, reject) => {
         client.getObject({
           Bucket: this.bucket,
-          Key: actualKey
+          Key: actualKey,
+          // NOTE: do not cache
+          ResponseCacheControl: 'No-cache',
+          ResponseExpires: 0,
         }, (err, data) => {
           if (err) { return reject(err); }
           resolve(data);

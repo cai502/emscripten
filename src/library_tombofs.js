@@ -1125,7 +1125,10 @@ var tombofs =
 	        return new Promise(function (resolve, reject) {
 	          client.getObject({
 	            Bucket: _this.bucket,
-	            Key: actualKey
+	            Key: actualKey,
+	            // NOTE: do not cache
+	            ResponseCacheControl: 'No-cache',
+	            ResponseExpires: 0
 	          }, function (err, data) {
 	            if (err) {
 	              return reject(err);
