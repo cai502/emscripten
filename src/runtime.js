@@ -503,7 +503,11 @@ var Runtime = {
         exports[e] = value;
       }
       // initialize the module
-      var init = exports['__post_instantiate'];
+      var runPostSets = exports['__post_instantiate'];
+      if (runPostSets) {
+        runPostSets();
+      }
+      var init = exports['__run_global_initializers'];
       if (init) {
         if (runtimeInitialized) {
           init();
