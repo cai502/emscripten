@@ -793,7 +793,7 @@ module.exports = {
         db = dst.db
       }
 
-      if (db) {
+      function idbtransaction() {
         transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
         store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
 
@@ -839,6 +839,7 @@ module.exports = {
 
       // sort paths in ascending order so directory entries are created
       // before the files inside them
+      if (db) { idbtransaction(); }
       create.sort().forEach((path) => {
         switch (dst.type) {
         case 'local':
@@ -872,6 +873,7 @@ module.exports = {
             break;
           case 'tombo':
             TOMBOFS.loadTomboEntry(src.manifest, path).then((entry) => {
+              idbtransaction(); // must refresh idb transaction
               return TOMBOFS.storeRemoteEntry(store, path, entry);
             }).then(() => {
               done();
@@ -923,6 +925,7 @@ module.exports = {
         });
         break;
       case 'remote':
+        idbtransaction();
         pathsToBeRemoved.forEach((path) => {
           TOMBOFS.removeRemoteEntry(store, path).then(() => {
             // delete entries for continuous reconcile

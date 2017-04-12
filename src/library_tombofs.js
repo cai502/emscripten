@@ -906,7 +906,7 @@ var tombofs =
 	        db = dst.db;
 	      }
 
-	      if (db) {
+	      function idbtransaction() {
 	        transaction = db.transaction([TOMBOFS.DB_STORE_NAME], 'readwrite');
 	        store = transaction.objectStore(TOMBOFS.DB_STORE_NAME);
 
@@ -952,6 +952,9 @@ var tombofs =
 
 	      // sort paths in ascending order so directory entries are created
 	      // before the files inside them
+	      if (db) {
+	        idbtransaction();
+	      }
 	      create.sort().forEach(function (path) {
 	        switch (dst.type) {
 	          case 'local':
@@ -985,6 +988,7 @@ var tombofs =
 	                break;
 	              case 'tombo':
 	                TOMBOFS.loadTomboEntry(src.manifest, path).then(function (entry) {
+	                  idbtransaction(); // must refresh idb transaction
 	                  return TOMBOFS.storeRemoteEntry(store, path, entry);
 	                }).then(function () {
 	                  done();
@@ -1036,6 +1040,7 @@ var tombofs =
 	          });
 	          break;
 	        case 'remote':
+	          idbtransaction();
 	          pathsToBeRemoved.forEach(function (path) {
 	            TOMBOFS.removeRemoteEntry(store, path).then(function () {
 	              // delete entries for continuous reconcile
