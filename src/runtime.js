@@ -327,12 +327,12 @@ var Runtime = {
       return Runtime.loadWebAssemblyModule(new Uint8Array(bin));
     })
 #else
-    return new Promise(function() {
+    return new Promise(function(resolve) {
       var src = Module['read'](lib);
-      return eval(src)(
+      resolve(eval(src)(
         Runtime.alignFunctionTables(),
         Module
-      );
+      ));
     })
 #endif
     .then(function(libModule) {
