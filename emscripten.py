@@ -876,13 +876,11 @@ function ftCall_%s(%s) {%s
       logging.debug("msgFunc: "+msgFunc)
 
       if settings['EMULATED_FUNCTION_POINTERS']:
-        func = 'ftCall'
         basic_funcs.append(msgFunc)
       else:
-        func = 'dynCall'
         function_tables.append(msgFunc)
 
-      objc_message_funcs.append(shared.JS.make_objc_msgSend(msgFunc, func, settings))
+      objc_message_funcs.append(shared.JS.make_objc_msgSend(msgFunc, settings))
 
     if settings['EXPORT_EXTERNAL_SYMBOL_NAMES']:
       external_symbol_file_name = outfile.name + '.externals'

@@ -2393,7 +2393,7 @@ class JS:
     return ret
 
   @staticmethod
-  def make_objc_msgSend(name, dyn_call, settings=None):
+  def make_objc_msgSend(name, settings=None):
     settings = settings or Settings
 
     (item, sig) = name.rsplit('_', 1)
@@ -2411,6 +2411,18 @@ class JS:
     args = ''.join([',a' + str(i) for i in range(args_begin, len(sig))])
     arg_coercions = ' '.join(['a' + str(i) + '=' + JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(args_begin, len(sig))])
     coerced_args = ''.join([',' + JS.make_coercion('a' + str(i), sig[i], settings) for i in range(args_begin, len(sig))])
+
+    if settings['EMULATED_FUNCTION_POINTERS']:
+      table_access = 'FUNCTION_TABLE_' + sig
+      if settings['SIDE_MODULE']:
+        table_access = 'parentModule["' + table_access + '"]'
+      if settings['BINARYEN']:
+        table_access = "Module['wasmTable']"
+        dyn_call = table_access + '.get(imp)'
+      else:
+        dyn_call = table_access + '[imp]'
+    else:
+      dyn_call = shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}]' % (sig, sig), sig[0], settings)
 
     if sig[0] == "v":
       null_return = ""
@@ -2445,12 +2457,12 @@ function %s(self,sel%s) {
     imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
   }
   if(imp >= 0) {
-    %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    %s%s(self|0,sel|0%s)%s;
   } else {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, null_return, func_prefix, dyn_call, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, null_return, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
     elif item == "_objc_msgSend_stret":
       return '''
 function %s(staddr,self,sel%s) {
@@ -2463,12 +2475,12 @@ function %s(staddr,self,sel%s) {
     imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
   }
   if(imp >= 0) {
-    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    %s%s(staddr|0,self|0,sel|0%s)%s;
   } else {
     %s__objc_msgForward_stret(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, null_return, func_prefix, dyn_call, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, null_return, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
     elif item == "_objc_msgSendSuper":
       return '''
 function %s(objcSuper,sel%s) {
@@ -2481,12 +2493,12 @@ function %s(objcSuper,sel%s) {
     imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
   }
   if(imp >= 0) {
-    %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    %s%s(self|0,sel|0%s)%s;
   } else {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
     elif item == "_objc_msgSendSuper_stret":
       return '''
 function %s(staddr,objcSuper,sel%s) {
@@ -2499,12 +2511,12 @@ function %s(staddr,objcSuper,sel%s) {
     imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
   }
   if(imp >= 0) {
-    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    %s%s(staddr|0,self|0,sel|0%s)%s;
   } else {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
     elif item == "_objc_msgSendSuper2":
       return '''
 function %s(objcSuper,sel%s) {
@@ -2518,12 +2530,12 @@ function %s(objcSuper,sel%s) {
     imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
   }
   if(imp >= 0) {
-    %s%s_%s(imp|0,self|0,sel|0%s)%s;
+    %s%s(self|0,sel|0%s)%s;
   } else {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
     elif item == "_objc_msgSendSuper2_stret":
       return '''
 function %s(staddr,objcSuper,sel%s) {
@@ -2537,12 +2549,12 @@ function %s(staddr,objcSuper,sel%s) {
     imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
   }
   if(imp >= 0) {
-    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+    %s%s(staddr|0,self|0,sel|0%s)%s;
   } else {
     %s__objc_msgForward_stret(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
     elif item == "_method_invoke":
       return '''
 function %s(self,method%s) {
@@ -2550,9 +2562,9 @@ function %s(self,method%s) {
   var imp = 0, sel = 0;
   imp = HEAP32[(method+8)>>2]|0;
   sel = HEAP32[(method)>>2]|0;
-  %s%s_%s(imp|0,self|0,sel|0%s)%s;
+  %s%s(self|0,sel|0%s)%s;
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, sig, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix)
     elif item == "_method_invoke_stret":
       return '''
 function %s(staddr,self,method%s) {
@@ -2560,9 +2572,9 @@ function %s(staddr,self,method%s) {
   var imp = 0, sel = 0;
   imp = HEAP32[(method+8)>>2]|0;
   sel = HEAP32[(method)>>2]|0;
-  %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
+  %s%s(staddr|0,self|0,sel|0%s)%s;
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, sig, coerced_args, func_postfix)
+''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix)
 
   @staticmethod
   def align(x, by):
