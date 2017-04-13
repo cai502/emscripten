@@ -1009,7 +1009,7 @@ function ftCall_%s(%s) {%s
     sending = '{ ' + ', '.join(['"' + math_fix(s) + '": ' + s for s in basic_funcs + global_funcs + basic_vars + basic_float_vars + global_vars]) + ' }'
     # received
     receiving = ''
-    if settings['ASSERTIONS']:
+    if settings['ASSERTIONS'] and not settings['SWAPPABLE_ASM_MODULE']:
       # assert on the runtime being in a valid state when calling into compiled code. The only exceptions are
       # some support code
       receiving = '\n'.join(['var real_' + s + ' = asm["' + s + '"]; asm["' + s + '''"] = function() {
@@ -1038,7 +1038,9 @@ return real_''' + s + '''.apply(null, arguments);
     else:
       final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
       asm_setup += '\n' + '\n'.join(function_tables_impls) + '\n'.join(objc_message_funcs) + '\n'
-      receiving += '\n' + function_tables_defs.replace('// EMSCRIPTEN_END_FUNCS\n', '') + '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
+      if not settings['BINARYEN']:
+        receiving += '\n' + function_tables_defs.replace('// EMSCRIPTEN_END_FUNCS\n', '')
+      receiving += '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
       if not settings['BINARYEN']:
         for sig in last_forwarded_json['Functions']['tables'].keys():
           name = 'FUNCTION_TABLE_' + sig
