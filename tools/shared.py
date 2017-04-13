@@ -2412,17 +2412,16 @@ class JS:
     arg_coercions = ' '.join(['a' + str(i) + '=' + JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(args_begin, len(sig))])
     coerced_args = ''.join([',' + JS.make_coercion('a' + str(i), sig[i], settings) for i in range(args_begin, len(sig))])
 
-    if settings['EMULATED_FUNCTION_POINTERS']:
-      table_access = 'FUNCTION_TABLE_' + sig
-      if settings['SIDE_MODULE']:
-        table_access = 'parentModule["' + table_access + '"]'
-      if settings['BINARYEN']:
-        table_access = "Module['wasmTable']"
-        dyn_call = table_access + '.get(imp)'
-      else:
-        dyn_call = table_access + '[imp]'
+    assert(settings['EMULATED_FUNCTION_POINTERS'])
+
+    table_access = 'FUNCTION_TABLE_' + sig
+    if settings['SIDE_MODULE']:
+      table_access = 'parentModule["' + table_access + '"]'
+    if settings['BINARYEN']:
+      table_access = "Module['wasmTable']"
+      dyn_call = table_access + '.get(imp)'
     else:
-      dyn_call = shared.JS.make_coercion('FUNCTION_TABLE_%s[index&{{{ FTM_%s }}}]' % (sig, sig), sig[0], settings)
+      dyn_call = table_access + '[imp]'
 
     if sig[0] == "v":
       null_return = ""
