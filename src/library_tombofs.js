@@ -791,6 +791,12 @@ var tombofs =
 	      mode: manifestEntry.mode,
 	      timestamp: timestamp
 	    };
+	    // Directory is not saved on AWS
+	    if (FS.isDir(manifestEntry.mode)) {
+	      return new Promise(function (resolve, reject) {
+	        resolve(entry);
+	      });
+	    }
 	    return TOMBOFS.AWSClient.getFile(path, entry).then(function (data) {
 	      // TODO: Check data.Body with manifestEntry.size or hash
 	      entry.contents = new Uint8Array(data.Body);
@@ -808,6 +814,16 @@ var tombofs =
 	    var manifestEntries = manifest.entries;
 	    if (!manifestEntries) {
 	      return Promise.reject(new Error('storeTomboEntry(): Cannot get entries from manifest'));
+	    }
+	    // Directory is not saved on AWS
+	    if (FS.isDir(entry.mode)) {
+	      return new Promise(function (resolve, reject) {
+	        manifestEntries[path] = {
+	          mode: entry.mode,
+	          mtime: entry.timestamp.getTime()
+	        };
+	        resolve();
+	      });
 	    }
 	    return TOMBOFS.AWSClient.putFile(path, entry).then(function (data) {
 	      // NOTE: manifest have mtime with UNIX epoch on a millisecond basis
@@ -828,11 +844,18 @@ var tombofs =
 	    if (!manifestEntries) {
 	      return Promise.reject(new Error('removeTomboEntry(): Cannot get entries from manifest'));
 	    }
-	    return TOMBOFS.AWSClient.deleteFiles(paths).then(function (data) {
-	      paths.forEach(function (path) {
-	        delete manifestEntries[path];
-	      });
+	    paths.filter(function (path, index, array) {
+	      // Directory is not saved on AWS
+	      var manifestEntry = manifestEntries[path];
+	      if (!manifestEntry) {
+	        return Promise.reject(new Error('removeTomboEntry(): Cannot get entry for ' + path + ' from manifest'));
+	      }
+	      // delete entry of manifest before deleting on AWS
+	      delete manifestEntries[path];
+	      // Since a directory is not saved on AWS, filter all the directories
+	      return !FS.isDir(manifestEntry.mode);
 	    });
+	    return TOMBOFS.AWSClient.deleteFiles(paths);
 	  },
 	  updateTomboManifest: function updateTomboManifest() {
 	    console.log('updateTomboManifest:');
