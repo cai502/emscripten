@@ -479,20 +479,20 @@ var tombofs =
 	      if (populate) {
 	        if (TOMBOFS.AWSClient) {
 	          // Tombo => IndexedDB => Memory
-	          TOMBOFS.reconcile(values[2], values[1]).then(function () {
+	          return TOMBOFS.reconcile(values[2], values[1]).then(function () {
 	            return TOMBOFS.reconcile(values[1], values[0]);
 	          }).then(function () {
 	            callback(null);
 	          });
 	        } else {
 	          // IndexedDB => Memory
-	          TOMBOFS.reconcile(values[1], values[0]).then(function () {
+	          return TOMBOFS.reconcile(values[1], values[0]).then(function () {
 	            callback(null);
 	          });
 	        }
 	      } else {
 	        // Memory => IndexedDB
-	        TOMBOFS.reconcile(values[0], values[1]).then(function () {
+	        return TOMBOFS.reconcile(values[0], values[1]).then(function () {
 	          if (TOMBOFS.AWSClient) {
 	            // IndexedDB => Tombo
 	            return TOMBOFS.reconcile(values[1], values[2], callback);
@@ -503,6 +503,9 @@ var tombofs =
 	          callback(null);
 	        });
 	      }
+	    }).catch(function (err) {
+	      console.log('syncfs: ERROR ' + err);
+	      console.log(err);
 	    });
 	  },
 	  getDB: function getDB(name, callback) {

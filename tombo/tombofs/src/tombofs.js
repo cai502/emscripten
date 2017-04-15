@@ -400,20 +400,20 @@ module.exports = {
       if (populate) {
         if (TOMBOFS.AWSClient) {
           // Tombo => IndexedDB => Memory
-          TOMBOFS.reconcile(values[2], values[1]).then(() => {
+          return TOMBOFS.reconcile(values[2], values[1]).then(() => {
             return TOMBOFS.reconcile(values[1], values[0]);
           }).then(() => {
             callback(null);
           });
         } else {
           // IndexedDB => Memory
-          TOMBOFS.reconcile(values[1], values[0]).then(() => {
+          return TOMBOFS.reconcile(values[1], values[0]).then(() => {
             callback(null);
           });
         }
       } else {
         // Memory => IndexedDB
-        TOMBOFS.reconcile(values[0], values[1]).then(() => {
+        return TOMBOFS.reconcile(values[0], values[1]).then(() => {
           if (TOMBOFS.AWSClient) {
             // IndexedDB => Tombo
             return TOMBOFS.reconcile(values[1], values[2], callback);
@@ -424,6 +424,9 @@ module.exports = {
           callback(null);
         });
       }
+    }).catch((err) => {
+      console.log(`syncfs: ERROR ${err}`);
+      console.log(err);
     });
   },
   getDB: function(name, callback) {
