@@ -875,6 +875,8 @@ module.exports = {
               return TOMBOFS.storeLocalEntry(path, entry);
             }).then(() => {
               done();
+            }).catch((err) => {
+              done(err);
             });
             break;
           case 'tombo':
@@ -882,6 +884,8 @@ module.exports = {
               return TOMBOFS.storeLocalEntry(path, entry);
             }).then(() => {
               done();
+            }).catch((err) => {
+              done(err);
             });
             break;
           default:
@@ -895,6 +899,8 @@ module.exports = {
               return TOMBOFS.storeRemoteEntry(store, path, entry);
             }).then(() => {
               done();
+            }).catch((err) => {
+              done(err);
             });
             break;
           case 'tombo':
@@ -903,6 +909,8 @@ module.exports = {
               return TOMBOFS.storeRemoteEntry(store, path, entry);
             }).then(() => {
               done();
+            }).catch((err) => {
+              done(err);
             });
             break;
           default:
@@ -916,6 +924,8 @@ module.exports = {
               return TOMBOFS.storeTomboEntry(dst.manifest, path, entry);
             }).then(() => {
               done();
+            }).catch((err) => {
+              done(err);
             });
             break;
           case 'remote':
@@ -923,6 +933,8 @@ module.exports = {
               return TOMBOFS.storeTomboEntry(dst.manifest, path, entry);
             }).then(() => {
               done();
+            }).catch((err) => {
+              done(err);
             });
             break;
           default:

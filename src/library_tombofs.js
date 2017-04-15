@@ -990,6 +990,8 @@ var tombofs =
 	                  return TOMBOFS.storeLocalEntry(path, entry);
 	                }).then(function () {
 	                  done();
+	                }).catch(function (err) {
+	                  done(err);
 	                });
 	                break;
 	              case 'tombo':
@@ -997,6 +999,8 @@ var tombofs =
 	                  return TOMBOFS.storeLocalEntry(path, entry);
 	                }).then(function () {
 	                  done();
+	                }).catch(function (err) {
+	                  done(err);
 	                });
 	                break;
 	              default:
@@ -1010,6 +1014,8 @@ var tombofs =
 	                  return TOMBOFS.storeRemoteEntry(store, path, entry);
 	                }).then(function () {
 	                  done();
+	                }).catch(function (err) {
+	                  done(err);
 	                });
 	                break;
 	              case 'tombo':
@@ -1018,6 +1024,8 @@ var tombofs =
 	                  return TOMBOFS.storeRemoteEntry(store, path, entry);
 	                }).then(function () {
 	                  done();
+	                }).catch(function (err) {
+	                  done(err);
 	                });
 	                break;
 	              default:
@@ -1031,6 +1039,8 @@ var tombofs =
 	                  return TOMBOFS.storeTomboEntry(dst.manifest, path, entry);
 	                }).then(function () {
 	                  done();
+	                }).catch(function (err) {
+	                  done(err);
 	                });
 	                break;
 	              case 'remote':
@@ -1038,6 +1048,8 @@ var tombofs =
 	                  return TOMBOFS.storeTomboEntry(dst.manifest, path, entry);
 	                }).then(function () {
 	                  done();
+	                }).catch(function (err) {
+	                  done(err);
 	                });
 	                break;
 	              default:
