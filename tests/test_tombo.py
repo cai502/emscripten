@@ -15,9 +15,15 @@ if emscripten_browser:
   webbrowser.open_new = run_in_other_browser
 
 class tombo(BrowserCore):
+  AWS_CREDENTIALS_PATH = './tombo/aws_credentials'
+  AWS_REGION = 'us-west-2'
+  S3_BUCKET_NAME = 'tombo.development'
+  TOMBO_USER_ID = 'tombo-test-user'
+  TOMBO_APP_ID = 'app-id-{}-{}'.format(os.getpid(), int(float(time.time()) * 1000))
+
   @classmethod
   def setUpClass(self):
-    self.initialize_aws_s3()
+    self.initialize_s3()
     super(tombo, self).setUpClass()
     self.browser_timeout = 20
     print
@@ -25,18 +31,30 @@ class tombo(BrowserCore):
     print
 
   @classmethod
-  def initialize_aws_s3(self):
-    aws_credentials_path = './tombo/aws_credentials'
-    if not os.path.exists(aws_credentials_path):
-      raise 'Cannot find {0}'.format(aws_credentails_path)
-    p = ConfigParser.SafeConfigParser()
-    p.read('./tombo/aws_credentials')
-    aws_access_key_id = p.get('default', 'aws_access_key_id')
-    aws_secret_access_key = p.get('default', 'aws_secret_access_key')
-    aws_env = os.environ.copy()
-    aws_env['AWS_ACCESS_KEY_ID'] = aws_access_key_id
-    aws_env['AWS_SECRET_ACCESS_KEY'] = aws_secret_access_key
-    Popen(['aws', 's3', 'ls', '--region=us-west-2', '--output=json'], env=aws_env)
+  def execute_s3_command(self, commands):
+    if not hasattr(self, 'aws_env'):
+      if not os.path.exists(self.AWS_CREDENTIALS_PATH):
+        raise 'Cannot find {0}'.format(self.AWS_CREDENTIALS_PATH)
+      p = ConfigParser.SafeConfigParser()
+      p.read(self.AWS_CREDENTIALS_PATH)
+      aws_access_key_id = p.get('default', 'aws_access_key_id')
+      aws_secret_access_key = p.get('default', 'aws_secret_access_key')
+      aws_env = os.environ.copy()
+      aws_env['AWS_ACCESS_KEY_ID'] = aws_access_key_id
+      aws_env['AWS_SECRET_ACCESS_KEY'] = aws_secret_access_key
+      self.aws_env = aws_env
+    Popen(
+      ['aws', 's3'] + commands + [
+        '--region={}'.format(self.AWS_REGION),
+        '--output=json',
+        '--recursive'
+      ], env=self.aws_env)
+
+  @classmethod
+  def initialize_s3(self):
+    url_to_be_removed = 's3://{}/{}/{}/'.format(self.S3_BUCKET_NAME, self.TOMBO_USER_ID, self.TOMBO_APP_ID)
+    print '{} is removed'.format(url_to_be_removed)
+    self.execute_s3_command(['rm', url_to_be_removed, '--recursive'])
 
   def test_fs_tombofs_sync(self):
     for extra in [[], ['-DEXTRA_WORK']]:
