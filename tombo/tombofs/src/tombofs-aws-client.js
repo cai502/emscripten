@@ -187,7 +187,7 @@ class TomboFSAWSClient {
       if (err.code === 'NoSuchKey') {
         console.log('AWS getManifest(): Initialize manifest');
         return {
-          entries: {}
+          mountpoints: {}
         };
       }
 

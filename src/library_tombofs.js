@@ -472,7 +472,7 @@ var tombofs =
 	    console.log('syncfs: ' + mount.mountpoint + ' ' + populate);
 	    var promises = [TOMBOFS.getLocalSet(mount), TOMBOFS.getRemoteSet(mount)];
 	    if (TOMBOFS.AWSClient) {
-	      promises.push(TOMBOFS.getTomboSet());
+	      promises.push(TOMBOFS.getTomboSet(mount));
 	    }
 
 	    Promise.all(promises).then(function (values) {
@@ -642,26 +642,36 @@ var tombofs =
 	    };
 	    return new Promise(lockedGetTomboManifest);
 	  },
-	  getTomboSet: function getTomboSet() {
+	  getTomboSet: function getTomboSet(mount) {
 	    if (!TOMBOFS.AWSClient) {
 	      return Promise.reject(new Error('AWSClient is null'));
 	    }
 
 	    return TOMBOFS.getTomboManifest().then(function (manifest) {
-	      var entries = {};
-	      if (!manifest.entries) {
-	        return Promise.reject(new Error('manifest must have the key `entries`'));
+	      if (!manifest.mountpoints) {
+	        return Promise.reject(new Error('manifest must have the key `mountpoints`'));
+	      }
+	      if (!manifest.mountpoints.hasOwnProperty(mount.mountpoint)) {
+	        console.log('Initialize manifest for mountpoint ' + mount.mountpoint);
+	        manifest.mountpoints[mount.mountpoint] = {
+	          entries: {}
+	        };
+	      }
+	      var manifestOnMountpoint = manifest.mountpoints[mount.mountpoint];
+	      if (!manifestOnMountpoint.entries) {
+	        return Promise.reject(new Error('manifest for the mountpoint ' + mount.mountpoint + ' must have the key \'entries\''));
 	      }
 
+	      var entries = {};
 	      var _iteratorNormalCompletion = true;
 	      var _didIteratorError = false;
 	      var _iteratorError = undefined;
 
 	      try {
-	        for (var _iterator = Object.keys(manifest.entries)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+	        for (var _iterator = Object.keys(manifestOnMountpoint.entries)[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
 	          var path = _step.value;
 
-	          var value = manifest.entries[path];
+	          var value = manifestOnMountpoint.entries[path];
 
 	          entries[path] = {
 	            timestamp: value.mtime
@@ -685,6 +695,7 @@ var tombofs =
 	      return {
 	        type: 'tombo',
 	        manifest: manifest,
+	        mountpoint: mount.mountpoint,
 	        entries: entries
 	      };
 	    });
@@ -776,14 +787,14 @@ var tombofs =
 	      };
 	    });
 	  },
-	  loadTomboEntry: function loadTomboEntry(manifest, path) {
+	  loadTomboEntry: function loadTomboEntry(manifest, mountpoint, path) {
 	    console.groupCollapsed('loadTomboEntry: ' + path);
 	    console.log({
 	      manifest: manifest,
 	      path: path
 	    });
 	    console.groupEnd();
-	    var manifestEntry = manifest.entries[path];
+	    var manifestEntry = manifest.mountpoints[mountpoint].entries[path];
 	    if (!manifestEntry) {
 	      return Promise.reject(new Error('loadTomboEntry(): Cannot get meta information from manifest for the path: ' + path));
 	    }
@@ -806,7 +817,7 @@ var tombofs =
 	      return entry;
 	    });
 	  },
-	  storeTomboEntry: function storeTomboEntry(manifest, path, entry) {
+	  storeTomboEntry: function storeTomboEntry(manifest, mountpoint, path, entry) {
 	    console.groupCollapsed('storeTomboEntry: ' + path);
 	    console.log({
 	      manifest: manifest,
@@ -814,7 +825,7 @@ var tombofs =
 	      entry: entry
 	    });
 	    console.groupEnd();
-	    var manifestEntries = manifest.entries;
+	    var manifestEntries = manifest.mountpoints[mountpoint].entries;
 	    if (!manifestEntries) {
 	      return Promise.reject(new Error('storeTomboEntry(): Cannot get entries from manifest'));
 	    }
@@ -836,14 +847,14 @@ var tombofs =
 	      };
 	    });
 	  },
-	  removeTomboEntries: function removeTomboEntries(manifest, paths) {
+	  removeTomboEntries: function removeTomboEntries(manifest, mountpoint, paths) {
 	    console.groupCollapsed('removeTomboEntries:');
 	    console.log({
 	      manifest: manifest,
 	      paths: paths
 	    });
 	    console.groupEnd();
-	    var manifestEntries = manifest.entries;
+	    var manifestEntries = manifest.mountpoints[mountpoint].entries;
 	    if (!manifestEntries) {
 	      return Promise.reject(new Error('removeTomboEntry(): Cannot get entries from manifest'));
 	    }
@@ -995,7 +1006,7 @@ var tombofs =
 	                });
 	                break;
 	              case 'tombo':
-	                TOMBOFS.loadTomboEntry(src.manifest, path).then(function (entry) {
+	                TOMBOFS.loadTomboEntry(src.manifest, src.mountpoint, path).then(function (entry) {
 	                  return TOMBOFS.storeLocalEntry(path, entry);
 	                }).then(function () {
 	                  done();
@@ -1019,7 +1030,7 @@ var tombofs =
 	                });
 	                break;
 	              case 'tombo':
-	                TOMBOFS.loadTomboEntry(src.manifest, path).then(function (entry) {
+	                TOMBOFS.loadTomboEntry(src.manifest, src.mountpoint, path).then(function (entry) {
 	                  idbtransaction(); // must refresh idb transaction
 	                  return TOMBOFS.storeRemoteEntry(store, path, entry);
 	                }).then(function () {
@@ -1036,7 +1047,7 @@ var tombofs =
 	            switch (src.type) {
 	              case 'local':
 	                TOMBOFS.loadLocalEntry(path).then(function (entry) {
-	                  return TOMBOFS.storeTomboEntry(dst.manifest, path, entry);
+	                  return TOMBOFS.storeTomboEntry(dst.manifest, dst.mountpoint, path, entry);
 	                }).then(function () {
 	                  done();
 	                }).catch(function (err) {
@@ -1045,7 +1056,7 @@ var tombofs =
 	                break;
 	              case 'remote':
 	                TOMBOFS.loadRemoteEntry(store, path).then(function (entry) {
-	                  return TOMBOFS.storeTomboEntry(dst.manifest, path, entry);
+	                  return TOMBOFS.storeTomboEntry(dst.manifest, dst.mountpoint, path, entry);
 	                }).then(function () {
 	                  done();
 	                }).catch(function (err) {
@@ -1088,7 +1099,7 @@ var tombofs =
 	          });
 	          break;
 	        case 'tombo':
-	          TOMBOFS.removeTomboEntries(dst.manifest, pathsToBeRemoved).then(function () {
+	          TOMBOFS.removeTomboEntries(dst.manifest, dst.mountpoint, pathsToBeRemoved).then(function () {
 	            pathsToBeRemoved.forEach(function (path) {
 	              // delete entries for continuous reconcile
 	              delete dst.entries[path];
@@ -1342,7 +1353,7 @@ var tombofs =
 	        if (err.code === 'NoSuchKey') {
 	          console.log('AWS getManifest(): Initialize manifest');
 	          return {
-	            entries: {}
+	            mountpoints: {}
 	          };
 	        }
 
