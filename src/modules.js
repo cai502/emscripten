@@ -162,6 +162,7 @@ var LibraryManager = {
     libraries = libraries.concat([
       'library_xhr.js',
       'library_font.js',
+      'library_uikit.js',
       'library_webview.js',
       'library_objc.js',
       'library_coreaudio.js',
