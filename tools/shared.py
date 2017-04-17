@@ -2728,7 +2728,7 @@ class WebAssembly:
     m = re.search("Module\['wasmTableSize'\] = (\d+);", js)
     table_size = int(m.group(1))
     logging.debug('creating wasm dynamic library with mem size %d, table size %d' % (mem_size, table_size))
-    m = re.search("var EMSCRIPTEN_OBJC_METADATA = ((.[^;])+);", js, re.DOTALL)
+    m = re.search("var EMSCRIPTEN_OBJC_METADATA = ([^;]+);", js, re.DOTALL)
     metadata = json.loads(m.group(1))
     #logging.debug('objc metadata %s' % metadata)
     wso = js_file + '.wso'
