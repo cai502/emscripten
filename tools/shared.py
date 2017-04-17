@@ -2409,8 +2409,6 @@ class JS:
       assert sig[0:4] == "viii"
       args_begin = 4
     args = ''.join([',a' + str(i) for i in range(args_begin, len(sig))])
-    arg_coercions = ' '.join(['a' + str(i) + '=' + JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(args_begin, len(sig))])
-    coerced_args = ''.join([',' + JS.make_coercion('a' + str(i), sig[i], settings) for i in range(args_begin, len(sig))])
 
     assert(settings['EMULATED_FUNCTION_POINTERS'])
 
@@ -2427,14 +2425,10 @@ class JS:
       null_return = ""
       func_prefix = ""
       func_postfix = ""
-    elif sig[0] == "i":
+    elif sig[0] == "i" or sig[0] == "j":
       null_return = " 0"
       func_prefix = "return "
       func_postfix = "|0"
-    elif sig[0] == "j":
-      null_return = " i64(0)"
-      func_prefix = "return i64("
-      func_postfix = ")"
     elif sig[0] == "d" or sig[0] == "f":
       null_return = " 0.0"
       func_prefix = "return +"
@@ -2447,7 +2441,6 @@ class JS:
     if item == "_objc_msgSend":
       return '''
 function %s(self,sel%s) {
-  self=self|0; sel=sel|0;%s
   var cls = 0, imp = 0;
   if(!self) return%s;
   cls = HEAP32[(self+0)>>2]|0;
@@ -2461,11 +2454,10 @@ function %s(self,sel%s) {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, null_return, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, null_return, func_prefix, dyn_call, args, func_postfix, func_prefix, args, func_postfix)
     elif item == "_objc_msgSend_stret":
       return '''
 function %s(staddr,self,sel%s) {
-  staddr=staddr|0;self=self|0; sel=sel|0;%s
   var cls = 0, imp = 0;
   if(!self) return%s;
   cls = HEAP32[(self+0)>>2]|0;
@@ -2479,11 +2471,10 @@ function %s(staddr,self,sel%s) {
     %s__objc_msgForward_stret(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, null_return, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, null_return, func_prefix, dyn_call, args, func_postfix, func_prefix, args, func_postfix)
     elif item == "_objc_msgSendSuper":
       return '''
 function %s(objcSuper,sel%s) {
-  objcSuper=objcSuper|0; sel=sel|0;%s
   var self = 0, superCls = 0, imp = 0;
   self = HEAP32[(objcSuper+0)>>2]|0;
   superCls = HEAP32[(objcSuper+4)>>2]|0;
@@ -2497,11 +2488,10 @@ function %s(objcSuper,sel%s) {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, func_prefix, dyn_call, args, func_postfix, func_prefix, args, func_postfix)
     elif item == "_objc_msgSendSuper_stret":
       return '''
 function %s(staddr,objcSuper,sel%s) {
-  staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
   var self = 0, superCls = 0, imp = 0;
   self = HEAP32[(objcSuper+0)>>2]|0;
   superCls = HEAP32[(objcSuper+4)>>2]|0;
@@ -2515,11 +2505,10 @@ function %s(staddr,objcSuper,sel%s) {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, func_prefix, dyn_call, args, func_postfix, func_prefix, args, func_postfix)
     elif item == "_objc_msgSendSuper2":
       return '''
 function %s(objcSuper,sel%s) {
-  objcSuper=objcSuper|0; sel=sel|0;%s
   var self = 0, cls = 0, superCls = 0, imp = 0;
   self = HEAP32[(objcSuper+0)>>2]|0;
   cls = HEAP32[(objcSuper+4)>>2]|0;
@@ -2534,11 +2523,10 @@ function %s(objcSuper,sel%s) {
     %s__objc_msgForward(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, func_prefix, dyn_call, args, func_postfix, func_prefix, args, func_postfix)
     elif item == "_objc_msgSendSuper2_stret":
       return '''
 function %s(staddr,objcSuper,sel%s) {
-  staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
   var self = 0|0, cls = 0|0, superCls = 0|0, imp = 0|0;
   self = HEAP32[(objcSuper+0)>>2]|0;
   cls = HEAP32[(objcSuper+4)>>2]|0;
@@ -2553,27 +2541,25 @@ function %s(staddr,objcSuper,sel%s) {
     %s__objc_msgForward_stret(self|0,sel|0%s)%s;
   }
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix)
+''' % (name, args, func_prefix, dyn_call, args, func_postfix, func_prefix, args, func_postfix)
     elif item == "_method_invoke":
       return '''
 function %s(self,method%s) {
-  self=self|0;method=method|0;%s
   var imp = 0, sel = 0;
   imp = HEAP32[(method+8)>>2]|0;
   sel = HEAP32[(method)>>2]|0;
   %s%s(self|0,sel|0%s)%s;
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix)
+''' % (name, args, func_prefix, dyn_call, args, func_postfix)
     elif item == "_method_invoke_stret":
       return '''
 function %s(staddr,self,method%s) {
-  staddr=staddr|0;self=self|0;method=method|0;%s
   var imp = 0, sel = 0;
   imp = HEAP32[(method+8)>>2]|0;
   sel = HEAP32[(method)>>2]|0;
   %s%s(staddr|0,self|0,sel|0%s)%s;
 }
-''' % (name, args, arg_coercions, func_prefix, dyn_call, coerced_args, func_postfix)
+''' % (name, args, func_prefix, dyn_call, args, func_postfix)
 
   @staticmethod
   def align(x, by):
