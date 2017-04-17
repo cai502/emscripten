@@ -262,6 +262,7 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
 
     # Use sanitized name after here
     settings['EXPORTED_FUNCTIONS'] = map(lambda x: re.sub(r'\W', '_', x), settings['EXPORTED_FUNCTIONS'])
+    settings['EXPORTED_VARIABLES'] = map(lambda x: re.sub(r'\W', '_', x), settings['EXPORTED_VARIABLES'])
 
     # Integrate info from backend
     if settings['SIDE_MODULE']:
@@ -273,9 +274,9 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
     ) + map(lambda x: x[1:], metadata['externs'])
     if settings['MAIN_MODULE'] == 2:
       settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'] += set(map(lambda x: x[1:], settings['EXPORTED_FUNCTIONS'])).difference(
-          map(lambda x: x[1:], metadata['implementedFunctions'])
+        map(lambda x: x[1:], metadata['implementedFunctions'])
       ).difference(
-          [k[1:] for k, v in metadata['namedGlobals'].iteritems()]
+        map(lambda x: x[1:], settings['GENERATE_OBJC_MSG_FUNCTIONS'])
       )
     if metadata['simd']:
       settings['SIMD'] = 1
@@ -869,180 +870,34 @@ function ftCall_%s(%s) {%s
             body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
           funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
 
+    objc_message_func_names = set(metadata['objCMessageFuncs'] + settings['GENERATE_OBJC_MSG_FUNCTIONS'])
     objc_message_funcs = []
-    for msgFunc in metadata['objCMessageFuncs']:
-      #function_tables.append(msgFunc)
-
-      (item, sig) = msgFunc.rsplit('_', 1)
-
-      # check args
-      if item.find("stret") == -1:
-        assert len(sig) >= 3
-        assert sig[1:3] == "ii"
-        args_begin = 3
-      else:
-        # void objc_msgSend_stret(void *st_addr, id self, SEL op, ...);
-        assert len(sig) >= 4
-        assert sig[0:4] == "viii"
-        args_begin = 4
-      args = ''.join([',a' + str(i) for i in range(args_begin, len(sig))])
-      arg_coercions = ' '.join(['a' + str(i) + '=' + shared.JS.make_coercion('a' + str(i), sig[i], settings) + ';' for i in range(args_begin, len(sig))])
-      coerced_args = ''.join([','+shared.JS.make_coercion('a' + str(i), sig[i], settings) for i in range(args_begin, len(sig))])
-
-      if sig[0] == "v":
-        null_return = ""
-        func_prefix = ""
-        func_postfix = ""
-      elif sig[0] == "i":
-        null_return = " 0"
-        func_prefix = "return "
-        func_postfix = "|0"
-      elif sig[0] == "d" or sig[0] == "f":
-        null_return = " 0.0"
-        func_prefix = "return +"
-        func_postfix = ""
-
-      if settings['OBJC_DEBUG']:
-        func_prefix = "try{ " + func_prefix
-        func_postfix = func_postfix + ";} catch(e) { Module.print('error sel:'+Pointer_stringify(sel)); throw e;}"
+    for msgFunc in objc_message_func_names:
+      logging.debug("msgFunc: "+msgFunc)
 
       if settings['EMULATED_FUNCTION_POINTERS']:
-        func = 'ftCall'
         basic_funcs.append(msgFunc)
       else:
-        func = 'dynCall'
         function_tables.append(msgFunc)
 
-      if item == "_objc_msgSend":
-        objc_message_funcs.append('''
-  function %s(self,sel%s) {
-    self=self|0; sel=sel|0;%s
-    var cls = 0, imp = 0;
-    if(!self) return%s;
-    cls = HEAP32[(self+0)>>2]|0;
-    imp = _cache_getImp(cls|0, sel|0)|0;
-    if(!imp) {
-      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
-    }
-    if(imp >= 0) {
-      %s%s_%s(imp|0,self|0,sel|0%s)%s;
-    } else {
-      %s__objc_msgForward(self|0,sel|0%s)%s;
-    }
-  }
-''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
-      elif item == "_objc_msgSend_stret":
-        objc_message_funcs.append('''
-  function %s(staddr,self,sel%s) {
-    staddr=staddr|0;self=self|0; sel=sel|0;%s
-    var cls = 0, imp = 0;
-    if(!self) return%s;
-    cls = HEAP32[(self+0)>>2]|0;
-    imp = _cache_getImp(cls|0, sel|0)|0;
-    if(!imp) {
-      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, cls|0)|0;
-    }
-    if(imp >= 0) {
-      %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
-    } else {
-      %s__objc_msgForward_stret(self|0,sel|0%s)%s;
-    }
-  }
-''' % (msgFunc, args, arg_coercions, null_return, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
-      elif item == "_objc_msgSendSuper":
-        objc_message_funcs.append('''
-  function %s(objcSuper,sel%s) {
-    objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = 0, superCls = 0, imp = 0;
-    self = HEAP32[(objcSuper+0)>>2]|0;
-    superCls = HEAP32[(objcSuper+4)>>2]|0;
-    imp = _cache_getImp(superCls|0, sel|0)|0;
-    if(!imp) {
-      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
-    }
-    if(imp >= 0) {
-      %s%s_%s(imp|0,self|0,sel|0%s)%s;
-    } else {
-      %s__objc_msgForward(self|0,sel|0%s)%s;
-    }
-  }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
-      elif item == "_objc_msgSendSuper_stret":
-        objc_message_funcs.append('''
-  function %s(staddr,objcSuper,sel%s) {
-    staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = 0, superCls = 0, imp = 0;
-    self = HEAP32[(objcSuper+0)>>2]|0;
-    superCls = HEAP32[(objcSuper+4)>>2]|0;
-    imp = _cache_getImp(superCls|0, sel|0)|0;
-    if(!imp) {
-      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
-    }
-    if(imp >= 0) {
-      %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
-    } else {
-      %s__objc_msgForward(self|0,sel|0%s)%s;
-    }
-  }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
-      elif item == "_objc_msgSendSuper2":
-        objc_message_funcs.append('''
-  function %s(objcSuper,sel%s) {
-    objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = 0, cls = 0, superCls = 0, imp = 0;
-    self = HEAP32[(objcSuper+0)>>2]|0;
-    cls = HEAP32[(objcSuper+4)>>2]|0;
-    superCls = HEAP32[(cls+4)>>2]|0;
-    imp = _cache_getImp(superCls|0, sel|0)|0;
-    if(!imp) {
-      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
-    }
-    if(imp >= 0) {
-      %s%s_%s(imp|0,self|0,sel|0%s)%s;
-    } else {
-      %s__objc_msgForward(self|0,sel|0%s)%s;
-    }
-  }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
-      elif item == "_objc_msgSendSuper2_stret":
-        objc_message_funcs.append('''
-  function %s(staddr,objcSuper,sel%s) {
-    staddr=staddr|0;objcSuper=objcSuper|0; sel=sel|0;%s
-    var self = 0|0, cls = 0|0, superCls = 0|0, imp = 0|0;
-    self = HEAP32[(objcSuper+0)>>2]|0;
-    cls = HEAP32[(objcSuper+4)>>2]|0;
-    superCls = HEAP32[(cls+4)>>2]|0;
-    imp = _cache_getImp(superCls|0, sel|0)|0;
-    if(!imp) {
-      imp = __class_lookupMethodAndLoadCache3(self|0, sel|0, superCls|0)|0;
-    }
-    if(imp >= 0) {
-      %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
-    } else {
-      %s__objc_msgForward_stret(self|0,sel|0%s)%s;
-    }
-  }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix, func_prefix, coerced_args, func_postfix))
-      elif item == "_method_invoke":
-        objc_message_funcs.append('''
-  function %s(self,method%s) {
-    self=self|0;method=method|0;%s
-    var imp = 0, sel = 0;
-    imp = HEAP32[(method+8)>>2]|0;
-    sel = HEAP32[(method)>>2]|0;
-    %s%s_%s(imp|0,self|0,sel|0%s)%s;
-  }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
-      elif item == "_method_invoke_stret":
-        objc_message_funcs.append('''
-  function %s(staddr,self,method%s) {
-    staddr=staddr|0;self=self|0;method=method|0;%s
-    var imp = 0, sel = 0;
-    imp = HEAP32[(method+8)>>2]|0;
-    sel = HEAP32[(method)>>2]|0;
-    %s%s_%s(imp|0,staddr|0,self|0,sel|0%s)%s;
-  }
-''' % (msgFunc, args, arg_coercions, func_prefix, func, sig, coerced_args, func_postfix))
+      objc_message_funcs.append(shared.JS.make_objc_msgSend(msgFunc, settings))
+
+    if settings['EXPORT_EXTERNAL_SYMBOL_NAMES']:
+      external_symbol_file_name = outfile.name + '.externals'
+      with open(external_symbol_file_name, 'w') as external_symbol_file:
+        # YAML
+        external_symbol_file.write('msgFuncs:\n')
+        for msgFunc in objc_message_func_names:
+          external_symbol_file.write('  - ' + msgFunc + '\n')
+        external_symbol_file.write('declares:\n')
+        for declare in metadata['declares']:
+          external_symbol_file.write('  - _' + declare + '\n')
+        external_symbol_file.write('externs:\n')
+        for extern in metadata['externsOriginal']:
+          external_symbol_file.write('  - _' + extern + '\n')
+        external_symbol_file.write('exports:\n')
+        for export in exported_implemented_functions:
+          external_symbol_file.write('  - ' + export + '\n')
 
     # calculate exports
     exported_implemented_functions = list(exported_implemented_functions) + metadata['initializers']
@@ -1069,7 +924,7 @@ function ftCall_%s(%s) {%s
     if settings['BINARYEN'] and settings['SIDE_MODULE']:
       # named globals in side wasm modules are exported globals from asm/wasm
       for k, v in metadata['namedGlobals'].iteritems():
-        exports.append(quote('_' + str(k)) + ': ' + str(v))
+        exports.append(quote(str(k)) + ': ' + str(v))
       # aliases become additional exports
       for k, v in metadata['aliases'].iteritems():
         exports.append(quote(str(k)) + ': ' + str(v))
@@ -1085,12 +940,13 @@ function ftCall_%s(%s) {%s
       global_vars = [] # linkable code accesses globals through function calls
     global_funcs = list(set([key for key, value in forwarded_json['Functions']['libraryFunctions'].iteritems() if value != 2]).difference(set(global_vars)).difference(implemented_functions))
     if settings['RELOCATABLE']:
-      global_funcs += ['g$' + extern for extern in metadata['externs']]
+      externs = metadata['externs'] + settings['EXPORTED_VARIABLES']
+      global_funcs += ['g$' + extern for extern in externs]
       side = 'parent' if settings['SIDE_MODULE'] else ''
       def check(extern):
         if settings['ASSERTIONS']: return 'assert(' + side + 'Module["' + extern + '"], "external function \'' + extern + '\' is missing. perhaps a side module was not linked in? if this symbol was expected to arrive from a system library, try to build the MAIN_MODULE with EMCC_FORCE_STDLIBS=1 in the environment");'
         return ''
-      for extern in metadata['externs']:
+      for extern in externs:
         asm_setup += 'var g$' + extern + ' = function() { ' + check(extern) + ' return ' + side + 'Module["' + extern + '"] };\n'
     def math_fix(g):
       return g if not g.startswith('Math_') else g.split('_')[1]
@@ -1153,7 +1009,7 @@ function ftCall_%s(%s) {%s
     sending = '{ ' + ', '.join(['"' + math_fix(s) + '": ' + s for s in basic_funcs + global_funcs + basic_vars + basic_float_vars + global_vars]) + ' }'
     # received
     receiving = ''
-    if settings['ASSERTIONS']:
+    if settings['ASSERTIONS'] and not settings['SWAPPABLE_ASM_MODULE']:
       # assert on the runtime being in a valid state when calling into compiled code. The only exceptions are
       # some support code
       receiving = '\n'.join(['var real_' + s + ' = asm["' + s + '"]; asm["' + s + '''"] = function() {
@@ -1182,7 +1038,9 @@ return real_''' + s + '''.apply(null, arguments);
     else:
       final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
       asm_setup += '\n' + '\n'.join(function_tables_impls) + '\n'.join(objc_message_funcs) + '\n'
-      receiving += '\n' + function_tables_defs.replace('// EMSCRIPTEN_END_FUNCS\n', '') + '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
+      if not settings['BINARYEN']:
+        receiving += '\n' + function_tables_defs.replace('// EMSCRIPTEN_END_FUNCS\n', '')
+      receiving += '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
       if not settings['BINARYEN']:
         for sig in last_forwarded_json['Functions']['tables'].keys():
           name = 'FUNCTION_TABLE_' + sig

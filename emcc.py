@@ -1002,7 +1002,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 
       # If not compiling to JS, then we are compiling to an intermediate bitcode objects or library, so
       # ignore dynamic linking, since multiple dynamic linkings can interfere with each other
-      if not filename_type_suffix(target) in JS_CONTAINING_SUFFIXES or ignore_dynamic_linking:
+      if not filename_type_suffix(target) in EXECUTABLE_SUFFIXES or ignore_dynamic_linking:
         def check(input_file):
           if filename_type_ending(input_file) in DYNAMICLIB_ENDINGS:
             if not ignore_dynamic_linking: logging.warning('ignoring dynamic library %s because not compiling to JS or HTML, remember to link it when compiling to JS or HTML at the end', os.path.basename(input_file))
@@ -1711,6 +1711,10 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
         cd_target = final + '.cd'
         shutil.move(cd_target, target + '.cd')
 
+      if shared.Settings.EXPORT_EXTERNAL_SYMBOL_NAMES:
+        external_symbol_file_name = final + '.externals'
+        shutil.move(external_symbol_file_name, target + '.externals')
+
     # exit block 'emscript'
     log_time('emscript (llvm => executable code)')
 
@@ -2126,6 +2130,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
             sys.exit(1)
 
       if shared.Settings.BINARYEN:
+        system_libs.process_args([], shared.Settings) # ensure BINARYEN_ROOT set
         logging.debug('using binaryen, with method: ' + shared.Settings.BINARYEN_METHOD)
         binaryen_bin = os.path.join(shared.Settings.BINARYEN_ROOT, 'bin')
         # Emit wasm.js at the top of the js. This is *not* optimized with the rest of the code, since

@@ -321,31 +321,38 @@ var Runtime = {
 
   loadDynamicLibrary: function(lib) {
 #if BINARYEN
-    var bin = Module['readBinary'](lib);
-    var libModule = Runtime.loadWebAssemblyModule(bin);
+    return fetch(lib).then(function(response) {
+      return response.arrayBuffer();
+    }).then(function(bin) {
+      return Runtime.loadWebAssemblyModule(new Uint8Array(bin));
+    })
 #else
-    var src = Module['read'](lib);
-    var libModule = eval(src)(
-      Runtime.alignFunctionTables(),
-      Module
-    );
+    return new Promise(function(resolve) {
+      var src = Module['read'](lib);
+      resolve(eval(src)(
+        Runtime.alignFunctionTables(),
+        Module
+      ));
+    })
 #endif
-    // add symbols into global namespace TODO: weak linking etc.
-    for (var sym in libModule) {
-      if (!Module.hasOwnProperty(sym)) {
-        Module[sym] = libModule[sym];
-      }
-#if ASSERTIONS == 2
-      else if (sym[0] === '_') {
-        var curr = Module[sym], next = libModule[sym];
-        // don't warn on functions - might be odr, linkonce_odr, etc.
-        if (!(typeof curr === 'function' && typeof next === 'function')) {
-          Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+    .then(function(libModule) {
+      // add symbols into global namespace TODO: weak linking etc.
+      for (var sym in libModule) {
+        if (!Module.hasOwnProperty(sym)) {
+          Module[sym] = libModule[sym];
         }
-      }
+#if ASSERTIONS == 2
+        else if (sym[0] === '_') {
+          var curr = Module[sym], next = libModule[sym];
+          // don't warn on functions - might be odr, linkonce_odr, etc.
+          if (!(typeof curr === 'function' && typeof next === 'function')) {
+            Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+          }
+        }
 #endif
-    }
-    Runtime.loadedDynamicLibraries.push(libModule);
+      }
+      Runtime.loadedDynamicLibraries.push(libModule);
+    });
   },
 
 #if BINARYEN
@@ -393,14 +400,70 @@ var Runtime = {
     for (var i = env['tableBase']; i < env['tableBase'] + tableSize; i++) {
       table.set(i, null);
     }
+
+    // objc metadata
+    assert(binary[next] === 0, 'need the objc section to be second'); next++;
+    var sectionSize = getLEB();
+    assert(binary[next] === 4);                 next++; // size of "dylink" string
+    assert(binary[next] === 'o'.charCodeAt(0)); next++;
+    assert(binary[next] === 'b'.charCodeAt(0)); next++;
+    assert(binary[next] === 'j'.charCodeAt(0)); next++;
+    assert(binary[next] === 'c'.charCodeAt(0)); next++;
+    keys = ["__objc_selrefs",
+      "__objc_msgrefs",
+      "__objc_classrefs",
+      "__objc_superrefs",
+      "__objc_classlist",
+      "__objc_nlclslist",
+      "__objc_catlist",
+      "__objc_nlcatlist",
+      "__objc_protolist",
+      "__objc_protorefs"
+    ];
+    keys.forEach(function(key){
+      var len = getLEB();
+      for(var i = 0; i < len; i++) {
+        var addr = getLEB();
+        Module['objcMetaData'][key].push(env['gb'] + addr);
+      }
+    });
+
     // copy currently exported symbols so the new module can import them
     for (var x in Module) {
       if (!(x in env)) {
         env[x] = Module[x];
       }
     }
+    var asm2wasmImports = { // special asm2wasm imports
+      "f64-rem": function(x, y) {
+        return x % y;
+      },
+      "f64-to-int": function(x) {
+        return x | 0;
+      },
+      "i32s-div": function(x, y) {
+        return ((x | 0) / (y | 0)) | 0;
+      },
+      "i32u-div": function(x, y) {
+        return ((x >>> 0) / (y >>> 0)) >>> 0;
+      },
+      "i32s-rem": function(x, y) {
+        return ((x | 0) % (y | 0)) | 0;
+      },
+      "i32u-rem": function(x, y) {
+        return ((x >>> 0) % (y >>> 0)) >>> 0;
+      },
+      "debugger": function() {
+        debugger;
+      },
+    };
     var info = {
-      global: Module['asmGlobalArg'],
+      global: {
+        'NaN': NaN,
+        'Infinity': Infinity
+      },
+      "global.Math": Math,
+      asm2wasm: asm2wasmImports,
       env: env
     };
 #if ASSERTIONS
@@ -409,44 +472,52 @@ var Runtime = {
       oldTable.push(table.get(i));
     }
 #endif
-    // create a module from the instance
-    var instance = new WebAssembly.Instance(new WebAssembly.Module(binary), info);
+    return WebAssembly.compile(binary).then(function(module) {
+      // create a module from the instance
+      return WebAssembly.instantiate(module, info);
+    }).then(function(instance) {
 #if ASSERTIONS
-    // the table should be unchanged
-    assert(table === originalTable);
-    assert(table === Module['wasmTable']);
-    if (instance.exports['table']) {
-      assert(table === instance.exports['table']);
-    }
-    // the old part of the table should be unchanged
-    for (var i = 0; i < oldTableSize; i++) {
-      assert(table.get(i) === oldTable[i], 'old table entries must remain the same');
-    }
-    // verify that the new table region was filled in
-    for (var i = 0; i < tableSize; i++) {
-      assert(table.get(oldTableSize + i) !== undefined, 'table entry was not filled in');
-    }
+      // the table should be unchanged
+      assert(table === originalTable);
+      assert(table === Module['wasmTable']);
+      if (instance.exports['table']) {
+        assert(table === instance.exports['table']);
+      }
+      // the old part of the table should be unchanged
+      for (var i = 0; i < oldTableSize; i++) {
+        assert(table.get(i) === oldTable[i], 'old table entries must remain the same');
+      }
+      // verify that the new table region was filled in
+      for (var i = 0; i < tableSize; i++) {
+        assert(table.get(oldTableSize + i) !== undefined, 'table entry was not filled in');
+      }
 #endif
-    var exports = {};
-    for (var e in instance.exports) {
-      var value = instance.exports[e];
-      if (typeof value === 'number') {
-        // relocate it - modules export the absolute value, they can't relocate before they export
-        value = value + env['memoryBase'];
+      var exports = {};
+      for (var e in instance.exports) {
+        //   Module.print("exports: "+e);
+        var value = instance.exports[e];
+        if (typeof value === 'number') {
+          // relocate it - modules export the absolute value, they can't relocate before they export
+          value = value + env['memoryBase'];
+        }
+        exports[e] = value;
       }
-      exports[e] = value;
-    }
-    // initialize the module
-    var init = exports['__post_instantiate'];
-    if (init) {
-      if (runtimeInitialized) {
-        init();
-      } else {
-        // we aren't ready to run compiled code yet
-        __ATINIT__.push(init);
+      // initialize the module
+      var runPostSets = exports['__post_instantiate'];
+      if (runPostSets) {
+        runPostSets();
       }
-    }
-    return exports;
+      var init = exports['__run_global_initializers'];
+      if (init) {
+        if (runtimeInitialized) {
+          init();
+        } else {
+          // we aren't ready to run compiled code yet
+          __ATINIT__.push(init);
+        }
+      }
+      return exports;
+    });
   },
 #endif
 #endif
@@ -627,4 +698,3 @@ if (RETAIN_COMPILER_SETTINGS) {
     } catch(e){}
   }
 }
-

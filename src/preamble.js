@@ -1939,14 +1939,26 @@ addOnPreRun(function() { addRunDependency('pgo') });
 }}}
 
 addOnPreRun(function() {
-  if (Module['dynamicLibraries']) {
-    Module['dynamicLibraries'].forEach(function(lib) {
-      Runtime.loadDynamicLibrary(lib);
-    });
-  }
-  if (asm['runPostSets']) {
-    asm['runPostSets']();
-  }
+  addRunDependency('dynamicLibraries');
+  new Promise(function(resolve){
+    if (Module['dynamicLibraries']) {
+      Promise.all(Module['dynamicLibraries'].map(function(lib) {
+        return Runtime.loadDynamicLibrary(lib);
+      })).then(resolve);
+    } else {
+      resolve();
+    }
+  }).then(function(){
+#if SWAPPABLE_ASM_MODULE
+  var runPostSets = Module['asm']['runPostSets'];
+#else
+  var runPostSets = asm['runPostSets'];
+#endif
+    if (runPostSets) {
+      runPostSets();
+    }
+    removeRunDependency('dynamicLibraries');
+  });
 });
 
 #if ASSERTIONS
@@ -2248,7 +2260,12 @@ function integrateWasmJS(Module) {
       Module['printErr']('failed to asynchronously prepare wasm: ' + reason);
       Module['quit'](1, reason);
     });
-    return {}; // no exports yet; we'll fill them in later
+    return new Proxy({},{
+      get: function(target, name) {
+        Module['printErr']("Couldn't access asm['"+name+"'] because instantiation has not been done.");
+        return null;
+      }
+    }); // no exports yet; we'll fill them in later
 #else
     var instance;
     try {
