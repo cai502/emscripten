@@ -2502,7 +2502,7 @@ function %s(staddr,objcSuper,sel%s) {
   if(imp >= 0) {
     %s%s(staddr|0,self|0,sel|0%s)%s;
   } else {
-    %s__objc_msgForward(self|0,sel|0%s)%s;
+    %s__objc_msgForward_stret(self|0,sel|0%s)%s;
   }
 }
 ''' % (name, args, func_prefix, dyn_call, args, func_postfix, func_prefix, args, func_postfix)
