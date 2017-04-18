@@ -20,6 +20,7 @@ class tombo(BrowserCore):
   S3_BUCKET_NAME = 'tombo.development'
   TOMBO_USER_ID = 'tombo-test-user'
   TOMBO_APP_ID = 'app-id-{}-{}'.format(os.getpid(), int(float(time.time()) * 1000))
+  PRE_JS_TOMBOFS = ['--pre-js', 'tombofs-parameters.js']
 
   @classmethod
   def setUpClass(self):
@@ -56,11 +57,23 @@ class tombo(BrowserCore):
     print '{} is removed'.format(url_to_be_removed)
     self.execute_s3_command(['rm', url_to_be_removed, '--recursive'])
 
+  def setUp(self):
+    super(tombo, self).setUp()
+    self.write_tombofs_parameters_js()
+
+  def write_tombofs_parameters_js(self):
+    open(os.path.join(self.get_dir(), 'tombofs-parameters.js'), 'w').write('''
+      Module.tombo = {
+        appId: '%s',
+        userId: '%s'
+      };
+    ''' % (tombo.TOMBO_APP_ID, tombo.TOMBO_USER_ID))
+
   def test_fs_tombofs_sync(self):
     for extra in [[], ['-DEXTRA_WORK']]:
       secret = str(time.time())
-      self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=['-ltombofs.js', '-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
-      self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=['-ltombofs.js', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''] + extra)
+      self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
+      self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''] + extra)
 
   def test_fs_tombofs_fsync(self):
     # sync from persisted state into memory before main()
@@ -77,7 +90,7 @@ class tombo(BrowserCore):
       };
     ''')
 
-    args = ['--pre-js', 'pre.js', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-ltombofs.js']
+    args = tombo.PRE_JS_TOMBOFS + ['--pre-js', 'pre.js', '-s', 'EMTERPRETIFY=1', '-s', 'EMTERPRETIFY_ASYNC=1', '-ltombofs.js']
     secret = str(time.time())
     self.btest(path_from_root('tests', 'tombo', 'test_tombofs_fsync.c'), '1', force_c=True, args=args + ['-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_success']'''])
     self.btest(path_from_root('tests', 'tombo', 'test_tombofs_fsync.c'), '1', force_c=True, args=args + ['-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_success']'''])

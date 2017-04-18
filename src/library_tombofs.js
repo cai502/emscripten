@@ -67,8 +67,8 @@ var tombofs =
 	  // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
 	  ops_table: null,
 	  mount: function mount(_mount) {
-	    if (window.TomboUserId && window.TomboAppId) {
-	      TOMBOFS.AWSClient = new TomboFSAWSClient(window.TomboUserId, window.TomboAppId);
+	    if (Module.tombo && Module.tombo.userId && Module.tombo.appId) {
+	      TOMBOFS.AWSClient = new TomboFSAWSClient(Module.tombo.userId, Module.tombo.appId);
 	    }
 	    return TOMBOFS.createNode(null, '/', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, 0);
 	  },
