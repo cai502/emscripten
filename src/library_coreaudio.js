@@ -212,6 +212,12 @@ var LibraryCoreAudio = {
     },
     audioPlayer_destroy: function(playerId) {
         delete CoreAudio.audioPlayers[playerId];
+    },
+    audioPlayer_stopAll__deps: ['audioPlayer_stop'],
+    audioPlayer_stopAll: function() {
+        for(playerId in CoreAudio.audioPlayers) {
+            _audioPlayer_stop(playerId)
+        }
     }
 };
 
