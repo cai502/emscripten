@@ -10,9 +10,43 @@ class TomboFSAWSClient {
     this.endpoint = 's3-us-west-2.amazonaws.com';
   }
 
+  setCredentials(accessKeyId, secretAccessKey, sessionToken, expiration) {
+    this.accessKeyId = accessKeyId;
+    this.secretAccessKey = secretAccessKey;
+    this.sessionToken = sessionToken;
+    this.expiration = expiration;
+  }
+
+  haveValidCredentials() {
+    // FIXME: implement expiration check
+    return (this.accessKeyId && this.secretAccessKey && this.sessionToken);
+  }
+
   getClient() {
-    // FIXME: This method should be implemented by XHR
-    return new Promise((resolve, reject) => { resolve(null); });
+    return new Promise((resolve, reject) => {
+      if (this.haveValidCredentials()) {
+        // if credential is valid and there is an old S3 client instance,
+        // we can reuse it.
+        if (this.s3) {
+          return resolve(this.s3);
+        }
+      } else {
+        // FIXME: This method should be implemented by XHR
+        return reject(new Error('FIXME: imeplement fetching credentials from Tombo platform'));
+      }
+      console.log('creating AWS S3 client instance');
+      const credentials = new AWS.Credentials(
+        this.accessKeyId,
+        this.secretAccessKey,
+        this.sessionToken
+      );
+      this.s3 = new AWS.S3({
+        credentials: credentials,
+        endpoint: this.endpoint,
+        region: this.region
+      });
+      resolve(this.s3);
+    });
   }
 
   userPathPrefix() {

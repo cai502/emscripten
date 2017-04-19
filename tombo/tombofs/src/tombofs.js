@@ -8,6 +8,17 @@ module.exports = {
   mount: function(mount) {
     if (Module.tombo && Module.tombo.userId && Module.tombo.appId)  {
       TOMBOFS.AWSClient = new TomboFSAWSClient(Module.tombo.userId, Module.tombo.appId);
+      if (Module.tombo.aws.debugAccessKeyId &&
+          Module.tombo.aws.debugSecretAccessKey &&
+          Module.tombo.aws.debugSessionToken &&
+          Module.tombo.aws.debugExpiration) {
+        TOMBOFS.AWSClient.setCredentials(
+          Module.tombo.aws.debugAccessKeyId,
+          Module.tombo.aws.debugSecretAccessKey,
+          Module.tombo.aws.debugSessionToken,
+          Module.tombo.aws.debugExpiration
+        );
+      }
     }
     return TOMBOFS.createNode(null, '/', EMSCRIPTEN_CDEFINE_S_IFDIR | 511 /* 0777 */, 0);
   },

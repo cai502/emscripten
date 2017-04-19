@@ -69,6 +69,9 @@ var tombofs =
 	  mount: function mount(_mount) {
 	    if (Module.tombo && Module.tombo.userId && Module.tombo.appId) {
 	      TOMBOFS.AWSClient = new TomboFSAWSClient(Module.tombo.userId, Module.tombo.appId);
+	      if (Module.tombo.aws.debugAccessKeyId && Module.tombo.aws.debugSecretAccessKey && Module.tombo.aws.debugSessionToken && Module.tombo.aws.debugExpiration) {
+	        TOMBOFS.AWSClient.setCredentials(Module.tombo.aws.debugAccessKeyId, Module.tombo.aws.debugSecretAccessKey, Module.tombo.aws.debugSessionToken, Module.tombo.aws.debugExpiration);
+	      }
 	    }
 	    return TOMBOFS.createNode(null, '/', {{{ cDefine('S_IFDIR') }}} | 511 /* 0777 */, 0);
 	  },
@@ -1138,11 +1141,43 @@ var tombofs =
 	  }
 
 	  _createClass(TomboFSAWSClient, [{
+	    key: 'setCredentials',
+	    value: function setCredentials(accessKeyId, secretAccessKey, sessionToken, expiration) {
+	      this.accessKeyId = accessKeyId;
+	      this.secretAccessKey = secretAccessKey;
+	      this.sessionToken = sessionToken;
+	      this.expiration = expiration;
+	    }
+	  }, {
+	    key: 'haveValidCredentials',
+	    value: function haveValidCredentials() {
+	      // FIXME: implement expiration check
+	      return this.accessKeyId && this.secretAccessKey && this.sessionToken;
+	    }
+	  }, {
 	    key: 'getClient',
 	    value: function getClient() {
-	      // FIXME: This method should be implemented by XHR
+	      var _this = this;
+
 	      return new Promise(function (resolve, reject) {
-	        resolve(null);
+	        if (_this.haveValidCredentials()) {
+	          // if credential is valid and there is an old S3 client instance,
+	          // we can reuse it.
+	          if (_this.s3) {
+	            return resolve(_this.s3);
+	          }
+	        } else {
+	          // FIXME: This method should be implemented by XHR
+	          return reject(new Error('FIXME: imeplement fetching credentials from Tombo platform'));
+	        }
+	        console.log('creating AWS S3 client instance');
+	        var credentials = new AWS.Credentials(_this.accessKeyId, _this.secretAccessKey, _this.sessionToken);
+	        _this.s3 = new AWS.S3({
+	          credentials: credentials,
+	          endpoint: _this.endpoint,
+	          region: _this.region
+	        });
+	        resolve(_this.s3);
 	      });
 	    }
 	  }, {
@@ -1164,16 +1199,16 @@ var tombofs =
 	  }, {
 	    key: 'getObject',
 	    value: function getObject(key) {
-	      var _this = this;
+	      var _this2 = this;
 
 	      return this.getClient().then(function (client) {
-	        var actualKey = _this.appPathPrefix() + key;
+	        var actualKey = _this2.appPathPrefix() + key;
 
 	        console.log('AWS getObject(' + key + '): ' + actualKey);
 
 	        return new Promise(function (resolve, reject) {
 	          client.getObject({
-	            Bucket: _this.bucket,
+	            Bucket: _this2.bucket,
 	            Key: actualKey,
 	            // NOTE: do not cache
 	            ResponseCacheControl: 'No-cache',
@@ -1190,10 +1225,10 @@ var tombofs =
 	  }, {
 	    key: 'putObject',
 	    value: function putObject(key, body) {
-	      var _this2 = this;
+	      var _this3 = this;
 
 	      return this.getClient().then(function (client) {
-	        var actualKey = _this2.appPathPrefix() + key;
+	        var actualKey = _this3.appPathPrefix() + key;
 
 	        console.groupCollapsed('AWS putObject(' + key + ', body): ' + actualKey);
 	        console.log(body);
@@ -1201,7 +1236,7 @@ var tombofs =
 
 	        return new Promise(function (resolve, reject) {
 	          client.putObject({
-	            Bucket: _this2.bucket,
+	            Bucket: _this3.bucket,
 	            Key: actualKey,
 	            Body: body
 	          }, function (err, data) {
@@ -1216,16 +1251,16 @@ var tombofs =
 	  }, {
 	    key: 'deleteObject',
 	    value: function deleteObject(key) {
-	      var _this3 = this;
+	      var _this4 = this;
 
 	      return this.getClient().then(function (client) {
-	        var actualKey = _this3.appPathPrefix() + key;
+	        var actualKey = _this4.appPathPrefix() + key;
 
 	        console.log('AWS deleteObject(' + key + '): ' + actualKey);
 
 	        return new Promise(function (resolve, reject) {
 	          client.deleteObject({
-	            Bucket: _this3.bucket,
+	            Bucket: _this4.bucket,
 	            Key: actualKey
 	            // TODO: Support VersionId
 	          }, function (err, data) {
@@ -1240,10 +1275,10 @@ var tombofs =
 	  }, {
 	    key: 'deleteObjects',
 	    value: function deleteObjects(keys) {
-	      var _this4 = this;
+	      var _this5 = this;
 
 	      return this.getClient().then(function (client) {
-	        var actualKey = _this4.appPathPrefix() + key;
+	        var actualKey = _this5.appPathPrefix() + key;
 
 	        var objects = keys.map(function (key) {
 	          return {
@@ -1261,7 +1296,7 @@ var tombofs =
 
 	        return new Promise(function (resolve, reject) {
 	          client.deleteObjects({
-	            Bucket: _this4.bucket,
+	            Bucket: _this5.bucket,
 	            Delete: {
 	              Objects: objects
 	            }
@@ -1277,13 +1312,13 @@ var tombofs =
 	  }, {
 	    key: 'listObjects',
 	    value: function listObjects(prefix) {
-	      var _this5 = this;
+	      var _this6 = this;
 
 	      return this.getClient().then(function (client) {
 	        var params = {
-	          Bucket: _this5.bucket,
+	          Bucket: _this6.bucket,
 	          Delimiter: '/',
-	          Prefix: _this5.appPathPrefix() + prefix
+	          Prefix: _this6.appPathPrefix() + prefix
 	        };
 
 	        var contents = [];
