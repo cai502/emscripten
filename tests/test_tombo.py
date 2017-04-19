@@ -37,29 +37,34 @@ class tombo(BrowserCore):
     print
 
   @classmethod
-  def execute_aws_command(self, service, commands):
-    if not hasattr(self, 'aws_env'):
-      if not os.path.exists(self.AWS_CREDENTIALS_PATH):
-        raise 'Cannot find {0}'.format(self.AWS_CREDENTIALS_PATH)
-      p = ConfigParser.SafeConfigParser()
-      p.read(self.AWS_CREDENTIALS_PATH)
-      aws_access_key_id = p.get('default', 'aws_access_key_id')
-      aws_secret_access_key = p.get('default', 'aws_secret_access_key')
-      aws_env = os.environ.copy()
-      aws_env['AWS_ACCESS_KEY_ID'] = aws_access_key_id
-      aws_env['AWS_SECRET_ACCESS_KEY'] = aws_secret_access_key
-      self.aws_env = aws_env
+  def execute_aws_command_with_credentials(self, service, commands, access_key_id, secret_access_key, session_token=None):
+    aws_env = os.environ.copy()
+    aws_env['AWS_ACCESS_KEY_ID'] = access_key_id
+    aws_env['AWS_SECRET_ACCESS_KEY'] = secret_access_key
+    if session_token:
+      aws_env['AWS_SESSION_TOKEN'] = session_token
     p = Popen(
       ['aws', service] + commands + [
         '--region={}'.format(self.AWS_REGION),
         '--output=json'
-      ], env=self.aws_env, stdout=PIPE)
+      ], env=aws_env, stdout=PIPE)
     stdout, stderr = p.communicate()
     if service == 's3':
       # s3 output cannot be JSON
       return stdout
     else:
       return json.loads(stdout)
+
+  @classmethod
+  def execute_aws_command(self, service, commands):
+    if not hasattr(self, 'aws_access_key_id'):
+      if not os.path.exists(self.AWS_CREDENTIALS_PATH):
+        raise 'Cannot find {0}'.format(self.AWS_CREDENTIALS_PATH)
+      p = ConfigParser.SafeConfigParser()
+      p.read(self.AWS_CREDENTIALS_PATH)
+      self.aws_access_key_id = p.get('default', 'aws_access_key_id')
+      self.aws_secret_access_key = p.get('default', 'aws_secret_access_key')
+    return self.execute_aws_command_with_credentials(service, commands, self.aws_access_key_id, self.aws_secret_access_key)
 
   @classmethod
   def initialize_s3(self):
@@ -94,10 +99,10 @@ class tombo(BrowserCore):
       '--web-identity-token', web_identity_token
     ])
     credentials = result['Credentials']
-    self.cognitoAccessKeyId = credentials['AccessKeyId']
-    self.cognitoSecretAccessKey = credentials['SecretAccessKey']
-    self.cognitoSessionToken = credentials['SessionToken']
-    self.cognitoExpiration = credentials['Expiration']
+    self.cognito_access_key_id = credentials['AccessKeyId']
+    self.cognito_secret_access_key = credentials['SecretAccessKey']
+    self.cognito_session_token = credentials['SessionToken']
+    self.cognito_expiration = credentials['Expiration']
 
   def setUp(self):
     super(tombo, self).setUp()
@@ -108,12 +113,12 @@ class tombo(BrowserCore):
       'appId': tombo.TOMBO_APP_ID,
       'userId': tombo.TOMBO_USER_ID,
       'aws': {
-        'debugAccessKeyId': tombo.cognitoAccessKeyId,
-        'debugSecretAccessKey': tombo.cognitoSecretAccessKey,
-        'debugSessionToken': tombo.cognitoSessionToken,
-        'debugExpiration': tombo.cognitoExpiration
+        'debugAccessKeyId': tombo.cognito_access_key_id,
+        'debugSecretAccessKey': tombo.cognito_secret_access_key,
+        'debugSessionToken': tombo.cognito_session_token,
+        'debugExpiration': tombo.cognito_expiration
       }
-    })));
+    })))
 
   def test_fs_tombofs_sync(self):
     for extra in [[], ['-DEXTRA_WORK']]:
