@@ -997,7 +997,7 @@ function checkStackCookie() {
   }
 #if !SAFE_SPLIT_MEMORY
   // Also test the global address 0 for integrity. This check is not compatible with SAFE_SPLIT_MEMORY though, since that mode already tests all address 0 accesses on its own.
-  if (HEAP32[0] !== 0x63736d65 /* 'emsc' */) throw 'Runtime error: The application has corrupted its heap memory area (address zero)!';
+  if (HEAP32[0] !== 0x63736d65 /* 'emsc' */) throw new Error('Runtime error: The application has corrupted its heap memory area (address zero)!');
 #endif
 }
 
