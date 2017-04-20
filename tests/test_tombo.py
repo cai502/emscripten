@@ -18,7 +18,7 @@ if emscripten_browser:
 class tombo(BrowserCore):
   AWS_CREDENTIALS_PATH = './tombo/aws_credentials'
   AWS_REGION = 'us-west-2'
-  S3_BUCKET_NAME = 'tombo.development'
+  S3_BUCKET_NAME = 'tombofs.development'
   COGNITO_IDENTITY_POOL_ID = 'us-west-2:3fd36f0b-b2e2-4bd3-9bde-f7ca921936f5'
   COGNITO_ROLE_ARN = 'arn:aws:iam::125704208149:role/Cognito_TomboAuth_Role'
 
@@ -141,6 +141,13 @@ class tombo(BrowserCore):
         'debugExpiration': tombo.cognito_expiration
       }
     })))
+
+  def test_s3_policy(self):
+    with self.assertRaises(Exception):
+      self.execute_aws_command_with_cognito('s3', ['ls'])
+    self.execute_aws_command_with_cognito('s3', ['cp', os.path.realpath(__file__), tombo.S3_USER_BASE_URL + 'test.file'])
+    result = self.execute_aws_command_with_cognito('s3', ['ls', tombo.S3_USER_BASE_URL])
+    self.assertNotEqual(result.find(' test.file'), -1)
 
   def test_fs_tombofs_sync(self):
     for extra in [[], ['-DEXTRA_WORK']]:
