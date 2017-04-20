@@ -891,6 +891,7 @@ var tombofs =
 	        return;
 	      }
 	      TOMBOFS.updatingManifest = true;
+	      TOMBOFS.manifest.mtime = new Date().getTime();
 
 	      TOMBOFS.AWSClient.putManifest(TOMBOFS.manifest).then(function () {
 	        TOMBOFS.updatingManifest = false;
