@@ -24,11 +24,17 @@ class tombo(BrowserCore):
 
   TOMBO_USER_ID = 'tombo-test-user'
   TOMBO_APP_ID = 'app-id-{}-{}'.format(os.getpid(), int(float(time.time()) * 1000))
+  S3_USER_BASE_URL = 's3://{}/{}/'.format(S3_BUCKET_NAME, TOMBO_USER_ID)
+  S3_BASE_URL = 's3://{}/{}/{}/'.format(S3_BUCKET_NAME, TOMBO_USER_ID, TOMBO_APP_ID)
   PRE_JS_TOMBOFS = ['--pre-js', 'tombofs-parameters.js']
 
   @classmethod
   def setUpClass(self):
-    self.initialize_s3()
+    try:
+      self.initialize_s3()
+    except Exception as e:
+      if str(e).find('NoSuchBucket') == -1:
+        raise e
     self.cognito_credentials()
     super(tombo, self).setUpClass()
     self.browser_timeout = 20
@@ -38,6 +44,8 @@ class tombo(BrowserCore):
 
   @classmethod
   def execute_aws_command_with_credentials(self, service, commands, access_key_id, secret_access_key, session_token=None):
+    if commands is None:
+      commands = []
     aws_env = os.environ.copy()
     aws_env['AWS_ACCESS_KEY_ID'] = access_key_id
     aws_env['AWS_SECRET_ACCESS_KEY'] = secret_access_key
@@ -47,13 +55,24 @@ class tombo(BrowserCore):
       ['aws', service] + commands + [
         '--region={}'.format(self.AWS_REGION),
         '--output=json'
-      ], env=aws_env, stdout=PIPE)
+      ], env=aws_env, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
     if service == 's3':
+      if stderr != '':
+        raise Exception(stderr)
       # s3 output cannot be JSON
       return stdout
     else:
       return json.loads(stdout)
+
+  @classmethod
+  def execute_aws_command_with_cognito(self, service, commands):
+    return self.execute_aws_command_with_credentials(
+      service, commands,
+      self.cognito_access_key_id,
+      self.cognito_secret_access_key,
+      self.cognito_session_token
+    )
 
   @classmethod
   def execute_aws_command(self, service, commands):
@@ -64,13 +83,16 @@ class tombo(BrowserCore):
       p.read(self.AWS_CREDENTIALS_PATH)
       self.aws_access_key_id = p.get('default', 'aws_access_key_id')
       self.aws_secret_access_key = p.get('default', 'aws_secret_access_key')
-    return self.execute_aws_command_with_credentials(service, commands, self.aws_access_key_id, self.aws_secret_access_key)
+    return self.execute_aws_command_with_credentials(
+      service, commands,
+      self.aws_access_key_id,
+      self.aws_secret_access_key
+    )
 
   @classmethod
   def initialize_s3(self):
-    url_to_be_removed = 's3://{}/{}/{}/'.format(self.S3_BUCKET_NAME, self.TOMBO_USER_ID, self.TOMBO_APP_ID)
-    print '{} is removed'.format(url_to_be_removed)
-    self.execute_aws_command('s3', ['rm', url_to_be_removed, '--recursive'])
+    print '{} is removed'.format(tombo.S3_BASE_URL)
+    self.execute_aws_command('s3', ['rm', tombo.S3_BASE_URL, '--recursive'])
 
   @classmethod
   def cognito_credentials(self):
@@ -94,7 +116,7 @@ class tombo(BrowserCore):
             'Action': '*',
             'Resource': 'arn:aws:s3:::{}/{}/*'.format(tombo.S3_BUCKET_NAME, tombo.TOMBO_USER_ID)
           }
-         ]
+        ]
       }),
       '--web-identity-token', web_identity_token
     ])
