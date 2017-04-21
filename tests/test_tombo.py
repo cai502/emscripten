@@ -91,8 +91,8 @@ class tombo(BrowserCore):
 
   @classmethod
   def initialize_s3(self):
-    print '{} is removed'.format(tombo.S3_BASE_URL)
-    self.execute_aws_command('s3', ['rm', tombo.S3_BASE_URL, '--recursive'])
+    print '{} is removed'.format(tombo.S3_USER_BASE_URL)
+    self.execute_aws_command('s3', ['rm', tombo.S3_USER_BASE_URL, '--recursive'])
 
   @classmethod
   def cognito_credentials(self):
