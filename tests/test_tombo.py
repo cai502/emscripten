@@ -37,7 +37,7 @@ class tombo(BrowserCore):
         raise e
     self.cognito_credentials()
     super(tombo, self).setUpClass()
-    self.browser_timeout = 20
+    self.browser_timeout = 30
     print
     print 'Running the browser tests. Make sure the browser allows popups from localhost.'
     print
