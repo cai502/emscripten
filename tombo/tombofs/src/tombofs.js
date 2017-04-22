@@ -438,6 +438,11 @@ module.exports = {
     }).catch((err) => {
       console.log(`syncfs: ERROR ${err}`);
       console.log(err);
+      // Delete TOMBOFS AWSClient
+      if (TOMBOFS.AWSClient) {
+        delete TOMBOFS.AWSClient;
+      }
+      callback(err);
     });
   },
   getDB: function(name, callback) {
@@ -715,85 +720,59 @@ module.exports = {
       return entry;
     });
   },
-  storeTomboEntry: function(manifest, mountpoint, path, entry) {
+  storeTomboEntry: function(path, entry) {
     console.groupCollapsed(`storeTomboEntry: ${path}`);
     console.log({
-      manifest: manifest,
       path: path,
       entry: entry
     });
     console.groupEnd();
-    let manifestEntries = manifest.mountpoints[mountpoint].entries;
-    if (!manifestEntries) {
-      return Promise.reject(new Error('storeTomboEntry(): Cannot get entries from manifest'));
-    }
     // Directory is not saved on AWS
     if (FS.isDir(entry.mode)) {
-      return new Promise((resolve, reject) => {
-        manifestEntries[path] = {
-          mode: entry.mode,
-          mtime: entry.timestamp.getTime()
-        };
-        resolve();
-      });
+      return new Promise.resolve();
     }
-    return TOMBOFS.AWSClient.putFile(path, entry).then((data) => {
-      // NOTE: manifest have mtime with UNIX epoch on a millisecond basis
-      manifestEntries[path] = {
-        mode: entry.mode,
-        mtime: entry.timestamp.getTime()
-      };
-    });
+    return TOMBOFS.AWSClient.putFile(path, entry);
   },
-  removeTomboEntries: function(manifest, mountpoint, paths) {
+  removeTomboEntries: function(entries) {
     console.groupCollapsed('removeTomboEntries:');
     console.log({
-      manifest: manifest,
-      paths: paths
+      entries: entries
     });
     console.groupEnd();
-    let manifestEntries = manifest.mountpoints[mountpoint].entries;
-    if (!manifestEntries) {
-      return Promise.reject(new Error('removeTomboEntry(): Cannot get entries from manifest'));
-    }
+
+    let paths = Object.keys(entries).sort().reverse();
+    if (paths.length === 0) { return Promise.resolve(); }
     paths.filter((path, index, array) => {
-      // Directory is not saved on AWS
-      const manifestEntry = manifestEntries[path];
-      if (!manifestEntry) {
-        return Promise.reject(new Error(`removeTomboEntry(): Cannot get entry for ${path} from manifest`));
-      }
-      // delete entry of manifest before deleting on AWS
-      delete manifestEntries[path];
       // Since a directory is not saved on AWS, filter all the directories
-      return !FS.isDir(manifestEntry.mode);
+      return !FS.isDir(entries[path].mode);
     });
     return TOMBOFS.AWSClient.deleteFiles(paths);
   },
-  updateTomboManifest: function() {
-    console.log('updateTomboManifest:');
+  uploadTomboManifest: function() {
+    console.log('uploadTomboManifest:');
 
     // The latest manifest in stored in TOMBOFS.manifest
     // At the first time, it is fetched by remote server.
-    const lockedUpdateTomboManifest = (resolve, reject) => {
+    const lockedUploadTomboManifest = (resolve, reject) => {
       if (!TOMBOFS.AWSClient) {
-        return reject(new Error('updateTomboManifest() is called but there is no AWS client'));
+        return reject(new Error('uploadTomboManifest() is called but there is no AWS client'));
       }
       // mutex
-      if (TOMBOFS.fetchingManifest || TOMBOFS.updatingManifest) {
+      if (TOMBOFS.fetchingManifest || TOMBOFS.uploadingManifest) {
         setTimeout(() => {
-          lockedUpdateTomboManifest(resolve, reject);
+          lockedUploadTomboManifest(resolve, reject);
         }, 0);
         return;
       }
-      TOMBOFS.updatingManifest = true;
+      TOMBOFS.uploadingManifest = true;
       TOMBOFS.manifest.mtime = new Date().getTime();
 
       TOMBOFS.AWSClient.putManifest(TOMBOFS.manifest).then(() => {
-        TOMBOFS.updatingManifest = false;
+        TOMBOFS.uploadingManifest = false;
         resolve();
       });
     };
-    return new Promise(lockedUpdateTomboManifest);
+    return new Promise(lockedUploadTomboManifest);
   },
   reconcile: function(src, dst) {
     console.groupCollapsed(`reconcile: from ${src.type} (${Object.keys(src.entries).length}) to ${dst.type} (${Object.keys(dst.entries).length})`);
@@ -814,6 +793,9 @@ module.exports = {
         total++;
       }
     });
+    // sort paths in ascending order so directory entries are created
+    // before the files inside them
+    create = create.sort();
 
     let remove = [];
     Object.keys(dst.entries).forEach(function (key) {
@@ -824,6 +806,9 @@ module.exports = {
         total++;
       }
     });
+    // sort paths in descending order so files are deleted before their
+    // parent directories
+    remove = remove.sort().reverse();
 
     return new Promise((resolve, reject) => {
       if (!total) {
@@ -852,42 +837,70 @@ module.exports = {
 
       function done(err) {
         if (err) {
-          if (!done.errored) {
-            done.errored = true;
-            if (dst.type === 'tombo') {
-              // NOTE: In this case, there are some garbages in S3.
-              // TODO: Delete these garbages
-              return reject(err);
-            } else {
-              return reject(err);
-            }
-          }
-          return;
+          if (done.errored) { return; }
+          done.errored = true;
+          return reject(err);
         }
-        if (++completed >= total) {
-          console.groupCollapsed(`reconcile END: from ${src.type} (${Object.keys(src.entries).length}) to ${dst.type} (${Object.keys(dst.entries).length})`);
-          console.log({
-            src: src,
-            dst: dst
-          });
-          console.groupEnd();
+        if (++completed < total) { return; }
 
-          if (dst.type === 'tombo') {
-            // NOTE: manifest entries are already updated to refer a new path,
-            // so all we have to do is update the manifest file itself.
-            TOMBOFS.updateTomboManifest().then(() => {
-              resolve();
-            });
-          } else {
-            resolve();
+        // now all tasks are completed
+
+        console.groupCollapsed(`reconcile END: from ${src.type} (${Object.keys(src.entries).length}) to ${dst.type} (${Object.keys(dst.entries).length})`);
+        console.log({
+          src: src,
+          dst: dst
+        });
+        console.groupEnd();
+
+        // When reject() is already called, do nothing
+        if (done.errored) { return; }
+
+        // the end of reconcile() except the destination is Tombo
+        if (dst.type !== 'tombo') { return resolve(); }
+
+        // update manifest
+        let manifestEntries = dst.manifest.mountpoints[dst.mountpoint].entries;
+        let entriesToBeRemovedAfterManifestUpload = {};
+        console.groupCollapsed('reconcile Update manifest:');
+        console.log(manifestEntries);
+        create.forEach((path) => {
+          if (manifestEntries[path]) {
+            // file is updated, so we must delete the old file from S3
+            entriesToBeRemovedAfterManifestUpload[path] = manifestEntries[path];
           }
-        }
+          const entry = storedTomboEntries[path];
+          manifestEntries[path] = {
+            mode: entry.mode,
+            mtime: entry.timestamp.getTime()
+          };
+        });
+        remove.forEach((path) => {
+          // so we must delete the actual file from S3
+          if (!manifestEntries[path]) {
+            return reject(new Error(`Cannot find manifest entry for ${path}`));
+          }
+          entriesToBeRemovedAfterManifestUpload[path] = manifestEntries[path];
+          delete manifestEntries[path];
+        });
+        console.log(manifestEntries);
+        console.groupEnd();
+
+        TOMBOFS.uploadTomboManifest().then(() => {
+          if (Object.keys(entriesToBeRemovedAfterManifestUpload).length === 0) {
+            return;
+          }
+          // delete all the removed files in S3
+          return TOMBOFS.removeTomboEntries(entriesToBeRemovedAfterManifestUpload);
+        }).then(() => {
+          resolve();
+        }).catch((err) => {
+          reject(err);
+        });
       };
 
-      // sort paths in ascending order so directory entries are created
-      // before the files inside them
       if (db) { idbtransaction(); }
-      create.sort().forEach((path) => {
+      let storedTomboEntries = {}; // for deleting files in failure
+      create.forEach((path) => {
         switch (dst.type) {
         case 'local':
           switch (src.type) {
@@ -942,8 +955,11 @@ module.exports = {
           switch (src.type) {
           case 'local':
             TOMBOFS.loadLocalEntry(path).then((entry) => {
-              return TOMBOFS.storeTomboEntry(dst.manifest, dst.mountpoint, path, entry);
-            }).then(() => {
+              return TOMBOFS.storeTomboEntry(path, entry).then(() => {
+                return entry;
+              });
+            }).then((entry) => {
+              storedTomboEntries[path] = entry;
               done();
             }).catch((err) => {
               done(err);
@@ -951,8 +967,11 @@ module.exports = {
             break;
           case 'remote':
             TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
-              return TOMBOFS.storeTomboEntry(dst.manifest, dst.mountpoint, path, entry);
-            }).then(() => {
+              return TOMBOFS.storeTomboEntry(path, entry).then(() => {
+                return entry;
+              });
+            }).then((entry) => {
+              storedTomboEntries[path] = entry;
               done();
             }).catch((err) => {
               done(err);
@@ -967,15 +986,12 @@ module.exports = {
         dst.entries[path] = src.entries[path];
       });
 
-      // sort paths in descending order so files are deleted before their
-      // parent directories
-      const pathsToBeRemoved = remove.sort().reverse();
-      if (pathsToBeRemoved.length === 0) {
-        return;
-      }
+      if (remove.length === 0) { return; }
+
+      // removing entries
       switch (dst.type) {
       case 'local':
-        pathsToBeRemoved.forEach((path) => {
+        remove.forEach((path) => {
           TOMBOFS.removeLocalEntry(path).then(() => {
             // delete entries for continuous reconcile
             delete dst.entries[path];
@@ -985,7 +1001,7 @@ module.exports = {
         break;
       case 'remote':
         idbtransaction();
-        pathsToBeRemoved.forEach((path) => {
+        remove.forEach((path) => {
           TOMBOFS.removeRemoteEntry(store, path).then(() => {
             // delete entries for continuous reconcile
             delete dst.entries[path];
@@ -994,12 +1010,12 @@ module.exports = {
         });
         break;
       case 'tombo':
-        TOMBOFS.removeTomboEntries(dst.manifest, dst.mountpoint, pathsToBeRemoved).then(() => {
-          pathsToBeRemoved.forEach((path) => {
-            // delete entries for continuous reconcile
-            delete dst.entries[path];
-            done();
-          });
+        // Just delete entries for continuous reconcile
+        // after all entries are created or removed,
+        // file deletions in S3 will occur in done().
+        remove.forEach((path) => {
+          delete dst.entries[path]
+          done();
         });
         break;
       }
