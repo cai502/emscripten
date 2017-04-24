@@ -59,6 +59,10 @@ class tombo(BrowserCore):
     if service == 's3':
       # s3 output cannot be JSON
       return stdout
+    elif service == 's3api':
+      if commands[0] == 'delete-object':
+        # NOTE: aws s3api delete-object doesn't respond any output X(
+        return stdout
     try:
       return json.loads(stdout)
     except ValueError as e:
@@ -214,6 +218,12 @@ class tombo(BrowserCore):
     # The list has only the uploaded object
     self.assertEqual(len(results['Contents']), 1)
     self.assertEqual(results['Contents'][0]['Key'], TEST_FILE_PATH)
+    # Can delete uploaded object
+    self.execute_aws_command_with_cognito('s3api', [
+      'delete-object',
+      '--bucket', tombo.S3_BUCKET_NAME,
+      '--key', TEST_FILE_PATH
+    ])
 
   def test_fs_tombofs_sync(self):
     for extra in [[], ['-DEXTRA_WORK']]:
