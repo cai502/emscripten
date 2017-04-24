@@ -421,7 +421,6 @@ var EXPORTED_FUNCTIONS = ['_main'];
 var OBJC_DEBUG = 0;
 var LIBRARY_IMPLEMENTED_FUNCTIONS = [];
 var EXPORT_EXTERNAL_SYMBOL_NAMES = 0;
-var GENERATE_OBJC_MSG_FUNCTIONS = [];
 var EXPORTED_VARIABLES = [];
 
 var EXPORT_ALL = 0; // If true, we export all the symbols. Note that this does *not* affect LLVM, so it can
