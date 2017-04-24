@@ -231,22 +231,32 @@ class tombo(BrowserCore):
       secret = str(time.time())
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
 
+      # FIRST execution
       results = self.execute_aws_command_with_cognito('s3api', [
         'list-objects-v2',
         '--bucket', tombo.S3_BUCKET_NAME,
         '--prefix', tombo.S3_BASE_PATH
       ])
-      keys = frozenset([i['Key'] for i in results['Contents']])
-      keys_without_timestamp = frozenset([re.sub(r'/\d+$', '', i) for i in keys])
+      keys_first = frozenset([i['Key'] for i in results['Contents']])
+      keys_first_without_timestamp = frozenset([re.sub(r'/\d+$', '', i) for i in keys_first])
       keys_expected = frozenset([tombo.S3_BASE_PATH + i for i in [
         'tombofs.manifest',
         'entries/working1/moar.txt',
         'entries/working1/waka.txt',
         'entries/working1/empty.txt'
       ]])
-      self.assertSetEqual(keys_without_timestamp, keys_expected)
+      self.assertSetEqual(keys_first_without_timestamp, keys_expected)
 
+      # SECOND execution
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''] + extra)
+      results = self.execute_aws_command_with_cognito('s3api', [
+        'list-objects-v2',
+        '--bucket', tombo.S3_BUCKET_NAME,
+        '--prefix', tombo.S3_BASE_PATH
+      ])
+      keys_second = frozenset([i['Key'] for i in results['Contents']])
+      keys_second_without_timestamp = frozenset([re.sub(r'/\d+$', '', i) for i in keys_second])
+      self.assertSetEqual(keys_second, keys_first)
 
   def test_fs_tombofs_fsync(self):
     # sync from persisted state into memory before main()
