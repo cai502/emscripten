@@ -472,49 +472,67 @@ var tombofs =
 	  DB_VERSION: 21,
 	  DB_STORE_NAME: 'FILE_DATA',
 	  syncfs: function syncfs(mount, populate, callback) {
-	    console.log('syncfs: ' + mount.mountpoint + ' ' + populate);
-	    var promises = [TOMBOFS.getLocalSet(mount), TOMBOFS.getRemoteSet(mount)];
-	    if (TOMBOFS.AWSClient) {
-	      promises.push(TOMBOFS.getTomboSet(mount));
-	    }
+	    // serialize syncfs() even if mount points are different
+	    var lockedSyncfs = function lockedSyncfs() {
+	      // mutex
+	      if (TOMBOFS.syncingFS) {
+	        setTimeout(function () {
+	          lockedSyncfs();
+	        }, 0);
+	        return;
+	      }
+	      TOMBOFS.syncingFS = true;
 
-	    Promise.all(promises).then(function (values) {
-	      if (populate) {
-	        if (TOMBOFS.AWSClient) {
-	          // Tombo => IndexedDB => Memory
-	          return TOMBOFS.reconcile(values[2], values[1]).then(function () {
-	            return TOMBOFS.reconcile(values[1], values[0]);
-	          }).then(function () {
-	            callback(null);
-	          });
+	      console.log('syncfs: ' + mount.mountpoint + ' ' + populate);
+
+	      var promises = [TOMBOFS.getLocalSet(mount), TOMBOFS.getRemoteSet(mount)];
+	      if (TOMBOFS.AWSClient) {
+	        promises.push(TOMBOFS.getTomboSet(mount));
+	      }
+
+	      Promise.all(promises).then(function (values) {
+	        if (populate) {
+	          if (TOMBOFS.AWSClient) {
+	            // Tombo => IndexedDB => Memory
+	            return TOMBOFS.reconcile(values[2], values[1]).then(function () {
+	              return TOMBOFS.reconcile(values[1], values[0]);
+	            }).then(function () {
+	              TOMBOFS.syncingFS = false;
+	              callback(null);
+	            });
+	          } else {
+	            // IndexedDB => Memory
+	            return TOMBOFS.reconcile(values[1], values[0]).then(function () {
+	              TOMBOFS.syncingFS = false;
+	              callback(null);
+	            });
+	          }
 	        } else {
-	          // IndexedDB => Memory
-	          return TOMBOFS.reconcile(values[1], values[0]).then(function () {
+	          // Memory => IndexedDB
+	          return TOMBOFS.reconcile(values[0], values[1]).then(function () {
+	            if (TOMBOFS.AWSClient) {
+	              // IndexedDB => Tombo
+	              return TOMBOFS.reconcile(values[1], values[2], callback);
+	            } else {
+	              return null;
+	            }
+	          }).then(function () {
+	            TOMBOFS.syncingFS = false;
 	            callback(null);
 	          });
 	        }
-	      } else {
-	        // Memory => IndexedDB
-	        return TOMBOFS.reconcile(values[0], values[1]).then(function () {
-	          if (TOMBOFS.AWSClient) {
-	            // IndexedDB => Tombo
-	            return TOMBOFS.reconcile(values[1], values[2], callback);
-	          } else {
-	            return null;
-	          }
-	        }).then(function () {
-	          callback(null);
-	        });
-	      }
-	    }).catch(function (err) {
-	      console.log('syncfs: ERROR ' + err);
-	      console.log(err);
-	      // Delete TOMBOFS AWSClient
-	      if (TOMBOFS.AWSClient) {
-	        delete TOMBOFS.AWSClient;
-	      }
-	      callback(err);
-	    });
+	      }).catch(function (err) {
+	        console.log('syncfs: ERROR ' + err);
+	        console.log(err);
+	        // Delete TOMBOFS AWSClient
+	        if (TOMBOFS.AWSClient) {
+	          delete TOMBOFS.AWSClient;
+	        }
+	        TOMBOFS.syncingFS = false;
+	        callback(err);
+	      });
+	    };
+	    lockedSyncfs();
 	  },
 	  getDB: function getDB(name, callback) {
 	    // check the cache first
