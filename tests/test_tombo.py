@@ -26,15 +26,12 @@ class tombo(BrowserCore):
   TOMBO_APP_ID = 'app-id-{}-{}'.format(os.getpid(), int(float(time.time()) * 1000))
   S3_USER_BASE_URL = 's3://{}/{}/'.format(S3_BUCKET_NAME, TOMBO_USER_ID)
   S3_BASE_URL = 's3://{}/{}/{}/'.format(S3_BUCKET_NAME, TOMBO_USER_ID, TOMBO_APP_ID)
+  S3_USER_BASE_PATH = '{}/'.format(TOMBO_USER_ID)
+  S3_BASE_PATH = '{}/{}/'.format(TOMBO_USER_ID, TOMBO_APP_ID)
   PRE_JS_TOMBOFS = ['--pre-js', 'tombofs-parameters.js']
 
   @classmethod
   def setUpClass(self):
-    try:
-      self.initialize_s3()
-    except Exception as e:
-      if str(e).find('NoSuchBucket') == -1:
-        raise e
     self.cognito_credentials()
     super(tombo, self).setUpClass()
     self.browser_timeout = 30
@@ -57,13 +54,15 @@ class tombo(BrowserCore):
         '--output=json'
       ], env=aws_env, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
+    if stderr != '':
+      raise Exception(stderr)
     if service == 's3':
-      if stderr != '':
-        raise Exception(stderr)
       # s3 output cannot be JSON
       return stdout
-    else:
+    try:
       return json.loads(stdout)
+    except ValueError as e:
+      raise Exception(stdout)
 
   @classmethod
   def execute_aws_command_with_cognito(self, service, commands):
@@ -91,8 +90,22 @@ class tombo(BrowserCore):
 
   @classmethod
   def initialize_s3(self):
-    print '{} is removed'.format(tombo.S3_USER_BASE_URL)
-    self.execute_aws_command('s3', ['rm', tombo.S3_USER_BASE_URL, '--recursive'])
+    try:
+      self.execute_aws_command('s3api', [
+        'create-bucket',
+        '--bucket', self.S3_BUCKET_NAME,
+        '--create-bucket-configuration', 'LocationConstraint={}'.format(self.AWS_REGION)
+      ])
+    except Exception as e:
+      if str(e).find('BucketAlreadyOwnedByYou') == -1:
+        raise e
+    try:
+      self.execute_aws_command('s3', [
+        'rm', tombo.S3_USER_BASE_URL, '--recursive'
+      ])
+    except Exception as e:
+      if str(e).find('NoSuchBucket') == -1:
+        raise e
 
   @classmethod
   def cognito_credentials(self):
@@ -129,6 +142,7 @@ class tombo(BrowserCore):
   def setUp(self):
     super(tombo, self).setUp()
     self.write_tombofs_parameters_js()
+    self.initialize_s3()
 
   def write_tombofs_parameters_js(self):
     open(os.path.join(self.get_dir(), 'tombofs-parameters.js'), 'w').write('Module.tombo = {}'.format(json.dumps({
@@ -143,11 +157,63 @@ class tombo(BrowserCore):
     })))
 
   def test_s3_policy(self):
+    # Preparation
+    FORBIDDEN_BUCKET_NAME = 'user.cannot.access'
+    try:
+      self.execute_aws_command('s3api', [
+        'create-bucket',
+        '--bucket', FORBIDDEN_BUCKET_NAME,
+        '--create-bucket-configuration', 'LocationConstraint={}'.format(self.AWS_REGION)
+      ])
+    except Exception as e:
+      if str(e).find('BucketAlreadyOwnedByYou') == -1:
+        raise e
+    self.execute_aws_command('s3api', [
+      'put-object',
+      '--bucket', FORBIDDEN_BUCKET_NAME,
+      '--key', 'test.file',
+      '--body', os.path.realpath(__file__)
+    ])
+
+    # Cannot do list-buckets
     with self.assertRaises(Exception):
-      self.execute_aws_command_with_cognito('s3', ['ls'])
-    self.execute_aws_command_with_cognito('s3', ['cp', os.path.realpath(__file__), tombo.S3_USER_BASE_URL + 'test.file'])
-    result = self.execute_aws_command_with_cognito('s3', ['ls', tombo.S3_USER_BASE_URL])
-    self.assertNotEqual(result.find(' test.file'), -1)
+      self.execute_aws_command_with_cognito('s3api', [
+        'list-buckets',
+      ])
+    # Cannot do list-objects under other bucket
+    with self.assertRaises(Exception):
+      self.execute_aws_command_with_cognito('s3api', [
+        'list-objects-v2',
+        '--bucket', FORBIDDEN_BUCKET_NAME
+      ])
+    TEST_FILE_PATH = tombo.S3_BASE_PATH + 'test.file'
+    # Can do put-object under app path
+    self.execute_aws_command_with_cognito('s3api', [
+      'put-object',
+      '--bucket', tombo.S3_BUCKET_NAME,
+      '--key', TEST_FILE_PATH,
+      '--body', os.path.realpath(__file__)
+    ])
+    # Can do list-objects under bucket (FIXME: wrong)
+    self.execute_aws_command_with_cognito('s3api', [
+      'list-objects-v2',
+      '--bucket', tombo.S3_BUCKET_NAME
+    ])
+    # Can do list-objects under user path
+    self.execute_aws_command_with_cognito('s3api', [
+      'list-objects-v2',
+      '--bucket', tombo.S3_BUCKET_NAME,
+      '--prefix', tombo.S3_USER_BASE_PATH
+    ])
+    # Can list under uploaded path
+    results = self.execute_aws_command_with_cognito('s3api', [
+      'list-objects-v2',
+      '--bucket', tombo.S3_BUCKET_NAME,
+      '--prefix', tombo.S3_BASE_PATH
+    ])
+    # The list has only the uploaded object
+    self.assertEqual(len(results['Contents']), 1)
+    self.assertEqual(results['Contents'][0]['Key'], TEST_FILE_PATH)
 
   def test_fs_tombofs_sync(self):
     for extra in [[], ['-DEXTRA_WORK']]:
