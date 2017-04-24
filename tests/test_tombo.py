@@ -3,6 +3,7 @@ from runner import BrowserCore, path_from_root
 from tools.shared import *
 import ConfigParser # for reading AWS credentials
 import json
+import re
 
 # User can specify an environment variable EMSCRIPTEN_BROWSER to force the browser test suite to
 # run using another browser command line than the default system browser.
@@ -209,7 +210,7 @@ class tombo(BrowserCore):
       '--bucket', tombo.S3_BUCKET_NAME,
       '--prefix', tombo.S3_USER_BASE_PATH
     ])
-    # Can list under uploaded path
+    # Can list under app path in the user path
     results = self.execute_aws_command_with_cognito('s3api', [
       'list-objects-v2',
       '--bucket', tombo.S3_BUCKET_NAME,
@@ -229,6 +230,22 @@ class tombo(BrowserCore):
     for extra in [[], ['-DEXTRA_WORK']]:
       secret = str(time.time())
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
+
+      results = self.execute_aws_command_with_cognito('s3api', [
+        'list-objects-v2',
+        '--bucket', tombo.S3_BUCKET_NAME,
+        '--prefix', tombo.S3_BASE_PATH
+      ])
+      keys = frozenset([i['Key'] for i in results['Contents']])
+      keys_without_timestamp = frozenset([re.sub(r'/\d+$', '', i) for i in keys])
+      keys_expected = frozenset([tombo.S3_BASE_PATH + i for i in [
+        'tombofs.manifest',
+        'entries/working1/moar.txt',
+        'entries/working1/waka.txt',
+        'entries/working1/empty.txt'
+      ]])
+      self.assertSetEqual(keys_without_timestamp, keys_expected)
+
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''] + extra)
 
   def test_fs_tombofs_fsync(self):
