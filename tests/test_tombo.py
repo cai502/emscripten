@@ -140,7 +140,7 @@ class tombo(BrowserCore):
             'Condition': {
               'StringLike': {
                 's3:prefix': [
-                  tombo.S3_USER_BASE_PATH
+                  tombo.S3_USER_BASE_PATH + '*'
                 ]
               }
             }
@@ -236,11 +236,12 @@ class tombo(BrowserCore):
       '--key', TEST_FILE_PATH,
       '--body', os.path.realpath(__file__)
     ])
-    # Can do list-objects under bucket (FIXME: wrong, NOT ALLOWED)
-    self.execute_aws_command_with_cognito('s3api', [
-      'list-objects-v2',
-      '--bucket', tombo.S3_BUCKET_NAME
-    ])
+    # Cannot do list-objects under bucket
+    with self.assertRaises(Exception):
+      results = self.execute_aws_command_with_cognito('s3api', [
+        'list-objects-v2',
+        '--bucket', tombo.S3_BUCKET_NAME
+      ])
     # Can do list-objects under user path
     self.execute_aws_command_with_cognito('s3api', [
       'list-objects-v2',
@@ -264,7 +265,7 @@ class tombo(BrowserCore):
     ])
 
     # Teardown
-    self.execute_aws_command_with_cognito('s3api', [
+    self.execute_aws_command('s3api', [
       'delete-object',
       '--bucket', tombo.S3_BUCKET_NAME,
       '--key', OTHER_USER_TEST_FILE_PATH
