@@ -20,8 +20,6 @@ class tombo(BrowserCore):
   AWS_CREDENTIALS_PATH = './tombo/aws_credentials'
   AWS_REGION = 'us-west-2'
   S3_BUCKET_NAME = 'tombofs.development'
-  COGNITO_IDENTITY_POOL_ID = 'us-west-2:3fd36f0b-b2e2-4bd3-9bde-f7ca921936f5'
-  COGNITO_ROLE_ARN = 'arn:aws:iam::125704208149:role/Cognito_TomboAuth_Role'
 
   TOMBO_USER_ID = 'tombo-test-user'
   TOMBO_APP_ID = 'app-id-{}-{}'.format(os.getpid(), int(float(time.time()) * 1000))
@@ -33,7 +31,7 @@ class tombo(BrowserCore):
 
   @classmethod
   def setUpClass(self):
-    self.cognito_credentials()
+    self.sts_credential()
     super(tombo, self).setUpClass()
     self.browser_timeout = 30
     print
@@ -72,12 +70,12 @@ class tombo(BrowserCore):
       raise Exception(stdout)
 
   @classmethod
-  def execute_aws_command_with_cognito(self, service, commands):
+  def execute_aws_command_with_federation(self, service, commands):
     return self.execute_aws_command_with_credentials(
       service, commands,
-      self.cognito_access_key_id,
-      self.cognito_secret_access_key,
-      self.cognito_session_token
+      self.federation_access_key_id,
+      self.federation_secret_access_key,
+      self.federation_session_token
     )
 
   @classmethod
@@ -98,15 +96,6 @@ class tombo(BrowserCore):
   @classmethod
   def initialize_s3(self):
     try:
-      self.execute_aws_command('s3api', [
-        'create-bucket',
-        '--bucket', self.S3_BUCKET_NAME,
-        '--create-bucket-configuration', 'LocationConstraint={}'.format(self.AWS_REGION)
-      ])
-    except Exception as e:
-      if str(e).find('BucketAlreadyOwnedByYou') == -1:
-        raise e
-    try:
       self.execute_aws_command('s3', [
         'rm', tombo.S3_USER_BASE_URL, '--recursive'
       ])
@@ -115,19 +104,11 @@ class tombo(BrowserCore):
         raise e
 
   @classmethod
-  def cognito_credentials(self):
-    result = self.execute_aws_command('cognito-identity', [
-      'get-open-id-token-for-developer-identity',
-      '--identity-pool-id', tombo.COGNITO_IDENTITY_POOL_ID,
-      '--logins', json.dumps({
-        'login.tombo.app': tombo.TOMBO_USER_ID
-      })
-    ])
-    web_identity_token = result['Token']
+  def sts_credential(self):
     result = self.execute_aws_command('sts', [
-      'assume-role-with-web-identity',
-      '--role-arn', tombo.COGNITO_ROLE_ARN,
-      '--role-session-name', tombo.TOMBO_USER_ID,
+      'get-federation-token',
+      '--name', tombo.TOMBO_USER_ID,
+      '--duration-seconds', '129600',
       '--policy', json.dumps({
         'Version': '2012-10-17',
         'Statement': [
@@ -155,14 +136,13 @@ class tombo(BrowserCore):
             'Resource': 'arn:aws:s3:::{}/{}/*'.format(tombo.S3_BUCKET_NAME, tombo.TOMBO_USER_ID)
           }
         ]
-      }),
-      '--web-identity-token', web_identity_token
+      })
     ])
     credentials = result['Credentials']
-    self.cognito_access_key_id = credentials['AccessKeyId']
-    self.cognito_secret_access_key = credentials['SecretAccessKey']
-    self.cognito_session_token = credentials['SessionToken']
-    self.cognito_expiration = credentials['Expiration']
+    self.federation_access_key_id = credentials['AccessKeyId']
+    self.federation_secret_access_key = credentials['SecretAccessKey']
+    self.federation_session_token = credentials['SessionToken']
+    self.federation_expiration = credentials['Expiration']
 
   def setUp(self):
     super(tombo, self).setUp()
@@ -174,25 +154,16 @@ class tombo(BrowserCore):
       'appId': tombo.TOMBO_APP_ID,
       'userId': tombo.TOMBO_USER_ID,
       'aws': {
-        'debugAccessKeyId': tombo.cognito_access_key_id,
-        'debugSecretAccessKey': tombo.cognito_secret_access_key,
-        'debugSessionToken': tombo.cognito_session_token,
-        'debugExpiration': tombo.cognito_expiration
+        'debugAccessKeyId': tombo.federation_access_key_id,
+        'debugSecretAccessKey': tombo.federation_secret_access_key,
+        'debugSessionToken': tombo.federation_session_token,
+        'debugExpiration': tombo.federation_expiration
       }
     })))
 
   def test_s3_policy(self):
     # Preparation
     FORBIDDEN_BUCKET_NAME = 'user.cannot.access'
-    try:
-      self.execute_aws_command('s3api', [
-        'create-bucket',
-        '--bucket', FORBIDDEN_BUCKET_NAME,
-        '--create-bucket-configuration', 'LocationConstraint={}'.format(self.AWS_REGION)
-      ])
-    except Exception as e:
-      if str(e).find('BucketAlreadyOwnedByYou') == -1:
-        raise e
     self.execute_aws_command('s3api', [
       'put-object',
       '--bucket', FORBIDDEN_BUCKET_NAME,
@@ -201,15 +172,15 @@ class tombo(BrowserCore):
     ])
     OTHER_USER_NAME = 'tombo-other-user'
     OTHER_USER_TEST_FILE_PATH = '{}/test.file'.format(OTHER_USER_NAME)
-    # Cannot do put-object under other user's path with Cognito
+    # Cannot do put-object under other user's path with federation user
     with self.assertRaises(Exception):
-      self.execute_aws_command_with_cognito('s3api', [
+      self.execute_aws_command_with_federation('s3api', [
         'put-object',
         '--bucket', tombo.S3_BUCKET_NAME,
         '--key', OTHER_USER_TEST_FILE_PATH,
         '--body', os.path.realpath(__file__)
       ])
-    # Should be okay without Cognito
+    # Can do put-object with IAM user
     self.execute_aws_command('s3api', [
       'put-object',
       '--bucket', tombo.S3_BUCKET_NAME,
@@ -219,18 +190,18 @@ class tombo(BrowserCore):
 
     # Cannot do list-buckets
     with self.assertRaises(Exception):
-      self.execute_aws_command_with_cognito('s3api', [
+      self.execute_aws_command_with_federation('s3api', [
         'list-buckets',
       ])
     # Cannot do list-objects under other bucket
     with self.assertRaises(Exception):
-      self.execute_aws_command_with_cognito('s3api', [
+      self.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
         '--bucket', FORBIDDEN_BUCKET_NAME
       ])
     TEST_FILE_PATH = tombo.S3_BASE_PATH + 'test.file'
     # Can do put-object under app path
-    self.execute_aws_command_with_cognito('s3api', [
+    self.execute_aws_command_with_federation('s3api', [
       'put-object',
       '--bucket', tombo.S3_BUCKET_NAME,
       '--key', TEST_FILE_PATH,
@@ -238,18 +209,18 @@ class tombo(BrowserCore):
     ])
     # Cannot do list-objects under bucket
     with self.assertRaises(Exception):
-      results = self.execute_aws_command_with_cognito('s3api', [
+      results = self.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
         '--bucket', tombo.S3_BUCKET_NAME
       ])
     # Can do list-objects under user path
-    self.execute_aws_command_with_cognito('s3api', [
+    self.execute_aws_command_with_federation('s3api', [
       'list-objects-v2',
       '--bucket', tombo.S3_BUCKET_NAME,
       '--prefix', tombo.S3_USER_BASE_PATH
     ])
     # Can list under app path in the user path
-    results = self.execute_aws_command_with_cognito('s3api', [
+    results = self.execute_aws_command_with_federation('s3api', [
       'list-objects-v2',
       '--bucket', tombo.S3_BUCKET_NAME,
       '--prefix', tombo.S3_BASE_PATH
@@ -258,7 +229,7 @@ class tombo(BrowserCore):
     self.assertEqual(len(results['Contents']), 1)
     self.assertEqual(results['Contents'][0]['Key'], TEST_FILE_PATH)
     # Can delete uploaded object
-    self.execute_aws_command_with_cognito('s3api', [
+    self.execute_aws_command_with_federation('s3api', [
       'delete-object',
       '--bucket', tombo.S3_BUCKET_NAME,
       '--key', TEST_FILE_PATH
@@ -277,7 +248,7 @@ class tombo(BrowserCore):
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
 
       # FIRST execution
-      results = self.execute_aws_command_with_cognito('s3api', [
+      results = self.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
         '--bucket', tombo.S3_BUCKET_NAME,
         '--prefix', tombo.S3_BASE_PATH
@@ -294,7 +265,7 @@ class tombo(BrowserCore):
 
       # SECOND execution
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''] + extra)
-      results = self.execute_aws_command_with_cognito('s3api', [
+      results = self.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
         '--bucket', tombo.S3_BUCKET_NAME,
         '--prefix', tombo.S3_BASE_PATH
