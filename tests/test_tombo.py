@@ -131,7 +131,25 @@ class tombo(BrowserCore):
         'Statement': [
           {
             'Effect': 'Allow',
-            'Action': '*',
+            'Action': [
+              's3:ListBucket'
+            ],
+            'Resource': 'arn:aws:s3:::{}'.format(tombo.S3_BUCKET_NAME),
+            'Condition': {
+              'StringLike': {
+                's3:prefix': [
+                  tombo.S3_USER_BASE_PATH
+                ]
+              }
+            }
+          },
+          {
+            'Effect': 'Allow',
+            'Action': [
+              's3:PutObject*',
+              's3:GetObject*',
+              's3:DeleteObject*'
+            ],
             'Resource': 'arn:aws:s3:::{}/{}/*'.format(tombo.S3_BUCKET_NAME, tombo.TOMBO_USER_ID)
           }
         ]
@@ -179,6 +197,23 @@ class tombo(BrowserCore):
       '--key', 'test.file',
       '--body', os.path.realpath(__file__)
     ])
+    OTHER_USER_NAME = 'tombo-other-user'
+    OTHER_USER_TEST_FILE_PATH = '{}/test.file'.format(OTHER_USER_NAME)
+    # Cannot do put-object under other user's path with Cognito
+    with self.assertRaises(Exception):
+      self.execute_aws_command_with_cognito('s3api', [
+        'put-object',
+        '--bucket', tombo.S3_BUCKET_NAME,
+        '--key', OTHER_USER_TEST_FILE_PATH,
+        '--body', os.path.realpath(__file__)
+      ])
+    # Should be okay without Cognito
+    self.execute_aws_command('s3api', [
+      'put-object',
+      '--bucket', tombo.S3_BUCKET_NAME,
+      '--key', OTHER_USER_TEST_FILE_PATH,
+      '--body', os.path.realpath(__file__)
+    ])
 
     # Cannot do list-buckets
     with self.assertRaises(Exception):
@@ -199,7 +234,7 @@ class tombo(BrowserCore):
       '--key', TEST_FILE_PATH,
       '--body', os.path.realpath(__file__)
     ])
-    # Can do list-objects under bucket (FIXME: wrong)
+    # Can do list-objects under bucket (FIXME: wrong, NOT ALLOWED)
     self.execute_aws_command_with_cognito('s3api', [
       'list-objects-v2',
       '--bucket', tombo.S3_BUCKET_NAME
@@ -224,6 +259,13 @@ class tombo(BrowserCore):
       'delete-object',
       '--bucket', tombo.S3_BUCKET_NAME,
       '--key', TEST_FILE_PATH
+    ])
+
+    # Teardown
+    self.execute_aws_command_with_cognito('s3api', [
+      'delete-object',
+      '--bucket', tombo.S3_BUCKET_NAME,
+      '--key', OTHER_USER_TEST_FILE_PATH
     ])
 
   def test_fs_tombofs_sync(self):
