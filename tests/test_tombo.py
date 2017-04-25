@@ -44,9 +44,11 @@ class tombo(BrowserCore):
   def execute_aws_command_with_credentials(self, service, commands, access_key_id, secret_access_key, session_token=None):
     if commands is None:
       commands = []
-    aws_env = os.environ.copy()
-    aws_env['AWS_ACCESS_KEY_ID'] = access_key_id
-    aws_env['AWS_SECRET_ACCESS_KEY'] = secret_access_key
+    aws_env = {
+      'PATH': os.environ['PATH'],
+      'AWS_ACCESS_KEY_ID': access_key_id,
+      'AWS_SECRET_ACCESS_KEY': secret_access_key,
+    }
     if session_token:
       aws_env['AWS_SESSION_TOKEN'] = session_token
     p = Popen(
