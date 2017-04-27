@@ -275,8 +275,6 @@ def compiler_glue(metadata, settings, libraries, compiler_engine, temp_files, DE
     if settings['MAIN_MODULE'] == 2:
       settings['DEFAULT_LIBRARY_FUNCS_TO_INCLUDE'] += set(map(lambda x: x[1:], settings['EXPORTED_FUNCTIONS'])).difference(
         map(lambda x: x[1:], metadata['implementedFunctions'])
-      ).difference(
-        map(lambda x: x[1:], settings['GENERATE_OBJC_MSG_FUNCTIONS'])
       )
     if metadata['simd']:
       settings['SIMD'] = 1
@@ -870,25 +868,10 @@ function ftCall_%s(%s) {%s
             body = 'if (((ptr|0) >= (fb|0)) & ((ptr|0) < (fb + {{{ FTM_' + sig + ' }}} | 0))) { ' + maybe_return + ' ' + shared.JS.make_coercion('FUNCTION_TABLE_' + sig + '[(ptr-fb)&{{{ FTM_' + sig + ' }}}](' + mini_coerced_params + ')', sig[0], settings, ffi_arg=True) + '; ' + ('return;' if sig[0] == 'v' else '') + ' }' + final_return
           funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
 
-    objc_message_func_names = set(metadata['objCMessageFuncs'] + settings['GENERATE_OBJC_MSG_FUNCTIONS'])
-    objc_message_funcs = []
-    for msgFunc in objc_message_func_names:
-      logging.debug("msgFunc: "+msgFunc)
-
-      if settings['EMULATED_FUNCTION_POINTERS']:
-        basic_funcs.append(msgFunc)
-      else:
-        function_tables.append(msgFunc)
-
-      objc_message_funcs.append(shared.JS.make_objc_msgSend(msgFunc, settings))
-
     if settings['EXPORT_EXTERNAL_SYMBOL_NAMES']:
       external_symbol_file_name = outfile.name + '.externals'
       with open(external_symbol_file_name, 'w') as external_symbol_file:
         # YAML
-        external_symbol_file.write('msgFuncs:\n')
-        for msgFunc in objc_message_func_names:
-          external_symbol_file.write('  - ' + msgFunc + '\n')
         external_symbol_file.write('declares:\n')
         for declare in metadata['declares']:
           external_symbol_file.write('  - _' + declare + '\n')
@@ -1033,11 +1016,9 @@ return real_''' + s + '''.apply(null, arguments);
 
     if DEBUG: logging.debug('asm text sizes' + str([map(len, funcs_js), len(asm_setup), len(asm_global_vars), len(asm_global_funcs), len(pre_tables), len('\n'.join(function_tables_impls)), len(function_tables_defs) + (function_tables_defs.count('\n') * len('  ')), len(exports), len(the_global), len(sending), len(receiving)]))
 
-    if not settings.get('EMULATED_FUNCTION_POINTERS'):
-      final_function_tables = '\n'.join(function_tables_impls) + '\n'.join(objc_message_funcs) + '\n' + function_tables_defs
-    else:
-      final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
-      asm_setup += '\n' + '\n'.join(function_tables_impls) + '\n'.join(objc_message_funcs) + '\n'
+    final_function_tables = '\n'.join(function_tables_impls) + '\n' + function_tables_defs
+    if settings.get('EMULATED_FUNCTION_POINTERS'):
+      asm_setup += '\n' + '\n'.join(function_tables_impls) + '\n'
       if not settings['BINARYEN']:
         receiving += '\n' + function_tables_defs.replace('// EMSCRIPTEN_END_FUNCS\n', '')
       receiving += '\n' + ''.join(['Module["dynCall_%s"] = dynCall_%s\n' % (sig, sig) for sig in last_forwarded_json['Functions']['tables']])
