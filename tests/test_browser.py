@@ -632,6 +632,10 @@ If manually bisecting:
     shutil.copyfile(path_from_root('tests', 'screenshot.jpg'), os.path.join(self.get_dir(), 'screenshot.not'))
     self.btest('sdl_stb_image_data.c', reference='screenshot.jpg', args=['-s', 'STB_IMAGE=1', '--preload-file', 'screenshot.not', '-lSDL', '-lGL'])
 
+  def test_sdl_stb_image_cleanup(self):
+    shutil.copyfile(path_from_root('tests', 'screenshot.jpg'), os.path.join(self.get_dir(), 'screenshot.not'))
+    self.btest('sdl_stb_image_cleanup.c', expected='0', args=['-s', 'STB_IMAGE=1', '--preload-file', 'screenshot.not', '-lSDL', '-lGL', '--memoryprofiler'])
+
   def test_sdl_canvas(self):
     self.clear()
     self.btest('sdl_canvas.c', expected='1', args=['-s', 'LEGACY_GL_EMULATION=1', '-lSDL', '-lGL'])
@@ -2743,6 +2747,15 @@ window.close = function() {
     shutil.copyfile(path_from_root('tests', 'cursor.bmp'), os.path.join(self.get_dir(), 'cursor.bmp'))
     self.btest('sdl2_custom_cursor.c', expected='1', args=['--preload-file', 'cursor.bmp', '-s', 'USE_SDL=2'])
 
+  def test_cocos2d_hello(self):
+    from tools import system_libs
+    cocos2d_root = os.path.join(system_libs.Ports.get_build_dir(), 'Cocos2d')
+    preload_file = os.path.join(cocos2d_root, 'samples', 'HelloCpp', 'Resources') + '@'
+    self.btest('cocos2d_hello.cpp', reference='cocos2d_hello.png', reference_slack=1,
+      args=['-s', 'USE_COCOS2D=3', '--std=c++11', '--preload-file', preload_file, '--use-preload-plugins'],
+      message='You should see Cocos2d logo',
+      timeout=30)
+
   def test_emterpreter_async(self):
     for opts in [0, 1, 2, 3]:
       print opts
@@ -2799,20 +2812,38 @@ window.close = function() {
     for opts in [[], ['-O1'], ['-O2', '-profiling'], ['-O2'], ['-O2', '--closure', '1']]:
       for args, code in [
         ([], 'Module();'), # defaults
+        # use EXPORT_NAME
         (['-s', 'EXPORT_NAME="HelloWorld"'], '''
           if (typeof Module !== "undefined") throw "what?!"; // do not pollute the global scope, we are modularized!
           HelloWorld.noInitialRun = true; // errorneous module capture will load this and cause timeout
           HelloWorld();
-        '''), # use EXPORT_NAME
+        '''),
+        # pass in a Module option (which prevents main(), which we then invoke ourselves)
         (['-s', 'EXPORT_NAME="HelloWorld"'], '''
           var hello = HelloWorld({ noInitialRun: true, onRuntimeInitialized: function() {
             setTimeout(function() { hello._main(); }); // must be async, because onRuntimeInitialized may be called synchronously, so |hello| is not yet set!
           } });
-        '''), # pass in a Module option (which prevents main(), which we then invoke ourselves)
+        '''),
+        # similar, but without a mem init file, everything is sync and simple
         (['-s', 'EXPORT_NAME="HelloWorld"', '--memory-init-file', '0'], '''
           var hello = HelloWorld({ noInitialRun: true});
           hello._main();
-        '''), # similar, but without a mem init file, everything is sync and simple
+        '''),
+        # use the then() API
+        (['-s', 'EXPORT_NAME="HelloWorld"'], '''
+          HelloWorld({ noInitialRun: true }).then(function(hello) {
+            hello._main();
+          });
+        '''),
+        # then() API, also note the returned value
+        (['-s', 'EXPORT_NAME="HelloWorld"'], '''
+          var helloOutside = HelloWorld({ noInitialRun: true }).then(function(hello) {
+            setTimeout(function() {
+              hello._main();
+              assert(hello === helloOutside); // as we are async, helloOutside must have been set
+            });
+          });
+        '''),
       ]:
         print 'test on', opts, args, code
         src = open(path_from_root('tests', 'browser_test_hello_world.c')).read()
@@ -3317,7 +3348,8 @@ window.close = function() {
         ['-O2', '-s', 'EMTERPRETIFY=1'],
         ['-O2', '-s', 'ALLOW_MEMORY_GROWTH=1'],
         ['-O2', '-s', 'EMTERPRETIFY=1', '-s', 'ALLOW_MEMORY_GROWTH=1'],
-        ['-O2', '-s', 'OUTLINING_LIMIT=1000']
+        ['-O2', '-s', 'OUTLINING_LIMIT=1000'],
+        ['-O2', '--closure', '1'],
       ]:
       print opts
       self.btest('browser_test_hello_world.c', expected='0', args=['-s', 'BINARYEN=1'] + opts)
@@ -3365,6 +3397,16 @@ window.close = function() {
 
   def test_binaryen_worker(self):
     self.do_test_worker(['-s', 'WASM=1'])
+
+  def test_wasm_locate_file(self):
+    # Test that it is possible to define "Module.locateFile(foo)" function to locate where pthread-main.js will be loaded from.
+    self.clear()
+    os.makedirs(os.path.join(self.get_dir(), 'cdn'))
+    open('shell2.html', 'w').write(open(path_from_root('src', 'shell.html')).read().replace('var Module = {', 'var Module = { locateFile: function(filename) { if (filename == "test.wasm") return "cdn/test.wasm"; else return filename; }, '))
+    open('src.cpp', 'w').write(self.with_report_result(open(path_from_root('tests', 'browser_test_hello_world.c')).read()))
+    subprocess.check_call([PYTHON, EMCC, 'src.cpp', '--shell-file', 'shell2.html', '-s', 'WASM=1', '-o', 'test.html'])
+    shutil.move('test.wasm', os.path.join('cdn', 'test.wasm'))
+    self.run_browser('test.html', '', '/report_result?0')
 
   def test_utf8_textdecoder(self):
     self.btest('benchmark_utf8.cpp', expected='0', args=['--embed-file', path_from_root('tests/utf8_corpus.txt') + '@/utf8_corpus.txt'])

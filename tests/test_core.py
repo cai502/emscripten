@@ -1625,18 +1625,10 @@ int main() {
     Building.COMPILER_TEST_OPTS += ['-std=c++11']
     self.do_run_in_out_file_test('tests', 'core', 'test_em_asm_parameter_pack')
 
+  @no_wasm_backend('stackSave/stackRestore is only generated in asmjs')
   def test_runtime_stacksave(self):
-    self.do_run(r'''
-#include <emscripten.h>
-#include <assert.h>
-
-int main() {
-  int x = EM_ASM_INT_V({ return Runtime.stackSave(); });
-  int y = EM_ASM_INT_V({ return Runtime.stackSave(); });
-  assert(x == y);
-  EM_ASM({ Module.print('success'); });
-}
-''', 'success')
+    src = open(path_from_root('tests', 'core', 'test_runtime_stacksave.c')).read()
+    self.do_run(src, 'success')
 
   def test_memorygrowth(self):
     self.emcc_args += ['-s', 'ALLOW_MEMORY_GROWTH=0'] # start with 0
@@ -4611,7 +4603,6 @@ PORT: 3979
   def test_atomic(self):
     self.do_run_in_out_file_test('tests', 'core', 'test_atomic')
 
-  @no_wasm_backend()
   def test_atomic_cxx(self):
     test_path = path_from_root('tests', 'core', 'test_atomic_cxx')
     src, output = (test_path + s for s in ('.cpp', '.txt'))
@@ -4630,6 +4621,12 @@ PORT: 3979
     src = open(path_from_root('tests', 'netinet', 'in.cpp'), 'r').read()
     expected = open(path_from_root('tests', 'netinet', 'in.out'), 'r').read()
     self.do_run(src, expected)
+
+  @no_wasm_backend()
+  def test_main_module_static_align(self):
+    if Settings.ALLOW_MEMORY_GROWTH: return self.skip('no shared modules with memory growth')
+    Settings.MAIN_MODULE = 1
+    self.do_run_in_out_file_test('tests', 'core', 'test_main_module_static_align')
 
   # libc++ tests
 
@@ -4916,6 +4913,12 @@ return malloc(size);
       test()
       Settings.RELOCATABLE = Settings.EMULATED_FUNCTION_POINTERS = 0
 
+    if not self.is_wasm():
+      print 'split memory'
+      Settings.SPLIT_MEMORY = 8*1024*1024
+      test()
+      Settings.SPLIT_MEMORY = 0
+
     if self.is_emterpreter():
       print 'emterpreter/async/assertions' # extra coverage
       self.emcc_args += ['-s', 'EMTERPRETIFY_ASYNC=1', '-s', 'ASSERTIONS=1']
@@ -4923,12 +4926,6 @@ return malloc(size);
       print 'emterpreter/async/assertions/whitelist'
       self.emcc_args += ['-s', 'EMTERPRETIFY_WHITELIST=["_frexpl"]'] # test double call assertions
       test()
-
-    if not self.is_wasm():
-      print 'split memory'
-      Settings.SPLIT_MEMORY = 8*1024*1024
-      test()
-      Settings.SPLIT_MEMORY = 0
 
   def test_relocatable_void_function(self):
     Settings.RELOCATABLE = 1
@@ -6070,6 +6067,7 @@ def process(filename):
     '''
     self.do_run(src, '|1.266,1|\n')
 
+  @no_wasm_backend('Need support for -g in wasm backend')
   def test_demangle_stacks(self):
     Settings.DEMANGLE_SUPPORT = 1
     if '-O' in str(self.emcc_args):
@@ -6290,6 +6288,10 @@ def process(filename):
       }
     '''
     self.do_run(src, '107')
+
+  def test_embind_5(self):
+    Building.COMPILER_TEST_OPTS += ['--bind']
+    self.do_run_in_out_file_test('tests', 'core', 'test_embind_5')
 
   @sync
   @no_wasm_backend()
