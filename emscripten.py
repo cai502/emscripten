@@ -415,7 +415,7 @@ def function_tables_and_exports(funcs, metadata, mem_init, glue, forwarded_data,
 
     funcs_js += setup_funcs_js(function_table_sigs, settings)
 
-    export_external_symbol_names(outfile.name, metadata, settings)
+    export_external_symbol_names(exported_implemented_functions, outfile.name, metadata, settings)
 
     exports = create_exports(exported_implemented_functions, in_table, function_table_data, metadata, settings)
 
@@ -848,7 +848,7 @@ def setup_funcs_js(function_table_sigs, settings):
         funcs_js.append(make_func('mftCall_' + sig, body, params, coercions) + '\n')
   return funcs_js
 
-def export_external_symbol_names(outfile_name, metadata, settings):
+def export_external_symbol_names(exported_implemented_functions, outfile_name, metadata, settings):
   if settings['EXPORT_EXTERNAL_SYMBOL_NAMES']:
     external_symbol_file_name = outfile_name + '.externals'
     with open(external_symbol_file_name, 'w') as external_symbol_file:
