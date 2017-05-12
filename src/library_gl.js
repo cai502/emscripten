@@ -6673,7 +6673,7 @@ var LibraryGL = {
         GLImmediate.matrixStack.push([]);
         GLImmediate.matrixVersion.push(0);
         GLImmediate.matrix.push(GLImmediate.matrixLib.mat4.create());
-        GLImmediate.matrix[i] = GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[i]);
+        GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[i]);
       }
 
       // Renderer cache
@@ -7312,7 +7312,7 @@ var LibraryGL = {
   glLoadIdentity: function() {
     GLImmediate.matricesModified = true;
     GLImmediate.matrixVersion[GLImmediate.currentMatrix] = (GLImmediate.matrixVersion[GLImmediate.currentMatrix] + 1)|0;
-    GLImmediate.matrix[GLImmediate.currentMatrix] = GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[GLImmediate.currentMatrix]);
+    GLImmediate.matrixLib.mat4.identity(GLImmediate.matrix[GLImmediate.currentMatrix]);
   },
 
   glLoadMatrixd: function(matrix) {
