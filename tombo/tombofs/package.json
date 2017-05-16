@@ -5,7 +5,7 @@
   "main": "src/tombofs.js",
   "scripts": {
     "build": "webpack",
-    "prepublish": "npm run build"
+    "prepublish": "NODE_ENV=production npm run build"
   },
   "author": "Tasuku SUENAGA",
   "license": "MIT",
