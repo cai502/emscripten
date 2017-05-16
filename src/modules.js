@@ -119,6 +119,7 @@ var LibraryManager = {
       if (!STRICT) {
         libraries = libraries.concat([
           'library_idbfs.js',
+          'library_tombofs.js',
           'library_nodefs.js',
           'library_proxyfs.js',
           'library_sockfs.js',
