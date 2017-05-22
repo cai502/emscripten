@@ -5,12 +5,15 @@ class TomboFSAWSClient {
   constructor(userId, appId) {
     this.userId = userId;
     this.appId = appId;
-    this.bucket = 'tombofs.development';
-    this.region = 'us-west-2';
-    this.endpoint = 's3-us-west-2.amazonaws.com';
   }
 
-  setCredentials(accessKeyId, secretAccessKey, sessionToken, expiration) {
+  setCredentials(
+    bucket, region, endpoint,
+    accessKeyId, secretAccessKey, sessionToken, expiration
+  ) {
+    this.bucket = bucket;
+    this.region = region;
+    this.endpoint = endpoint;
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
     this.sessionToken = sessionToken;

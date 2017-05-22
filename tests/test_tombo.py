@@ -20,6 +20,7 @@ class tombo(BrowserCore):
   AWS_CREDENTIALS_PATH = './tombo/aws_credentials'
   AWS_REGION = 'us-west-2'
   S3_BUCKET_NAME = 'tombofs.development'
+  S3_ENDPOINT = 's3-us-west-2.amazonaws.com'
 
   TOMBO_USER_ID = 'tombo-test-user'
   TOMBO_APP_ID = 'app-id-{}-{}'.format(os.getpid(), int(float(time.time()) * 1000))
@@ -154,6 +155,9 @@ class tombo(BrowserCore):
       'appId': tombo.TOMBO_APP_ID,
       'userId': tombo.TOMBO_USER_ID,
       'aws': {
+        'debugRemoteFileSystemBucket': tombo.S3_BUCKET_NAME,
+        'debugRemoteFileSystemRegion': tombo.AWS_REGION,
+        'debugRemoteFileSystemEndpoint': tombo.S3_ENDPOINT,
         'debugAccessKeyId': tombo.federation_access_key_id,
         'debugSecretAccessKey': tombo.federation_secret_access_key,
         'debugSessionToken': tombo.federation_session_token,
