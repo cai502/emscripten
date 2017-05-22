@@ -57,6 +57,7 @@ var LibraryGLFW = {
       };
       this.buttons = 0;
       this.keys = new Array();
+      this.domKeys = new Array();
       this.shouldClose = 0;
       this.title = null;
       this.windowPosFunc = null; // GLFWwindowposfun
@@ -343,6 +344,7 @@ var LibraryGLFW = {
 
     onKeyPress: function(event) {
       if (!GLFW.active || !GLFW.active.charFunc) return;
+      if (event.ctrlKey || event.metaKey) return;
 
       // correct unicode charCode is only available with onKeyPress event
       var charCode = event.charCode;
@@ -357,16 +359,17 @@ var LibraryGLFW = {
 #endif
     },
 
-    onKeyChanged: function(event, status) {
+    onKeyChanged: function(keyCode, status) {
       if (!GLFW.active) return;
 
-      var key = GLFW.DOMToGLFWKeyCode(event.keyCode);
+      var key = GLFW.DOMToGLFWKeyCode(keyCode);
       if (key == -1) return;
 
 #if USE_GLFW == 3
       var repeat = status && GLFW.active.keys[key];
 #endif
       GLFW.active.keys[key] = status;
+      GLFW.active.domKeys[keyCode] = status;
       if (!GLFW.active.keyFunc) return;
 
 #if USE_GLFW == 2
@@ -375,12 +378,12 @@ var LibraryGLFW = {
 
 #if USE_GLFW == 3
       if (repeat) status = 2; // GLFW_REPEAT
-      Module['dynCall_viiiii'](GLFW.active.keyFunc, GLFW.active.id, key, event.keyCode, status, GLFW.getModBits(GLFW.active));
+      Module['dynCall_viiiii'](GLFW.active.keyFunc, GLFW.active.id, key, keyCode, status, GLFW.getModBits(GLFW.active));
 #endif
     },
 
     onKeydown: function(event) {
-      GLFW.onKeyChanged(event, 1); // GLFW_PRESS or GLFW_REPEAT
+      GLFW.onKeyChanged(event.keyCode, 1); // GLFW_PRESS or GLFW_REPEAT
 
       // This logic comes directly from the sdl implementation. We cannot
       // call preventDefault on all keydown events otherwise onKeyPress will
@@ -391,7 +394,17 @@ var LibraryGLFW = {
     },
 
     onKeyup: function(event) {
-      GLFW.onKeyChanged(event, 0); // GLFW_RELEASE
+      GLFW.onKeyChanged(event.keyCode, 0); // GLFW_RELEASE
+    },
+
+    onBlur: function(event) {
+      if (!GLFW.active) return;
+
+      for (var i = 0; i < GLFW.active.domKeys.length; ++i) {
+        if (GLFW.active.domKeys[i]) {
+          GLFW.onKeyChanged(i, 0); // GLFW_RELEASE
+        }
+      }
     },
 
     onMousemove: function(event) {
@@ -944,6 +957,7 @@ var LibraryGLFW = {
     window.addEventListener("keydown", GLFW.onKeydown, true);
     window.addEventListener("keypress", GLFW.onKeyPress, true);
     window.addEventListener("keyup", GLFW.onKeyup, true);
+    window.addEventListener("blur", GLFW.onBlur, true);
     Module["canvas"].addEventListener("mousemove", GLFW.onMousemove, true);
     Module["canvas"].addEventListener("mousedown", GLFW.onMouseButtonDown, true);
     Module["canvas"].addEventListener("mouseup", GLFW.onMouseButtonUp, true);
@@ -962,6 +976,7 @@ var LibraryGLFW = {
     window.removeEventListener("keydown", GLFW.onKeydown, true);
     window.removeEventListener("keypress", GLFW.onKeyPress, true);
     window.removeEventListener("keyup", GLFW.onKeyup, true);
+    window.removeEventListener("blur", GLFW.onBlur, true);
     Module["canvas"].removeEventListener("mousemove", GLFW.onMousemove, true);
     Module["canvas"].removeEventListener("mousedown", GLFW.onMouseButtonDown, true);
     Module["canvas"].removeEventListener("mouseup", GLFW.onMouseButtonUp, true);
@@ -983,8 +998,8 @@ var LibraryGLFW = {
 
 #if USE_GLFW == 3
     setValue(major, 3, 'i32');
-    setValue(minor, 0, 'i32');
-    setValue(rev, 0, 'i32');
+    setValue(minor, 2, 'i32');
+    setValue(rev, 1, 'i32');
 #endif
   },
 
@@ -1027,7 +1042,7 @@ var LibraryGLFW = {
 #if USE_GLFW == 3
   glfwGetVersionString: function() {
     if (!GLFW.versionString) {
-      GLFW.versionString = allocate(intArrayFromString("3.0.0 JS WebGL Emscripten"), 'i8', ALLOC_NORMAL);
+      GLFW.versionString = allocate(intArrayFromString("3.2.1 JS WebGL Emscripten"), 'i8', ALLOC_NORMAL);
     }
     return GLFW.versionString;
   },
@@ -1035,6 +1050,10 @@ var LibraryGLFW = {
   glfwSetErrorCallback: function(cbfun) {
     GLFW.errorFunc = cbfun;
   },
+
+  glfwWaitEventsTimeout: function(timeout) {},
+
+  glfwPostEmptyEvent: function() {},
 
   glfwGetMonitors: function(count) {
     setValue(count, 1, 'i32');
@@ -1221,6 +1240,28 @@ var LibraryGLFW = {
     win.windowIconifyFunc = cbfun;
   },
 
+  glfwSetWindowIcon: function(winid, count, images) {},
+
+  glfwSetWindowSizeLimits: function(winid, minwidth, minheight, maxwidth, maxheight) {},
+
+  glfwSetWindowAspectRatio: function(winid, numer, denom) {},
+
+  glfwGetWindowFrameSize: function(winid, left, top, right, bottom) { throw "glfwGetWindowFrameSize not implemented."; },
+
+  glfwMaximizeWindow: function(winid) {},
+
+  glfwFocusWindow: function(winid) {},
+
+  glfwSetWindowMonitor: function(winid, monitor, xpos, ypos, width, height, refreshRate) { throw "glfwSetWindowMonitor not implemented."; },
+
+  glfwCreateCursor: function(image, xhot, yhot) {},
+
+  glfwCreateStandardCursor: function(shape) {},
+
+  glfwDestroyCursor: function(cursor) {},
+
+  glfwSetCursor: function(winid, cursor) {},
+
   glfwSetFramebufferSizeCallback: function(winid, cbfun) {
     var win = GLFW.WindowFromId(winid);
     if (!win) return;
@@ -1230,6 +1271,17 @@ var LibraryGLFW = {
   glfwGetInputMode: function(winid, mode) {
     var win = GLFW.WindowFromId(winid);
     if (!win) return;
+
+    switch (mode) {
+      case 0x00033001: { // GLFW_CURSOR
+        if (Browser.pointerLock) {
+          win.inputModes[mode] = 0x00034003; // GLFW_CURSOR_DISABLED
+        } else {
+          win.inputModes[mode] = 0x00034001; // GLFW_CURSOR_NORMAL
+        }
+      }
+    }
+
     return win.inputModes[mode];
   },
 
@@ -1240,6 +1292,8 @@ var LibraryGLFW = {
   glfwGetKey: function(winid, key) {
     return GLFW.getKey(winid, key);
   },
+
+  glfwGetKeyName: function(key, scancode) { throw "glfwGetKeyName not implemented."; },
 
   glfwGetMouseButton: function(winid, button) {
     return GLFW.getMouseButton(winid, button);
@@ -1262,6 +1316,8 @@ var LibraryGLFW = {
     GLFW.setCharCallback(winid, cbfun);
   },
 
+  glfwSetCharModsCallback: function(winid, cbfun) { throw "glfwSetCharModsCallback not implemented."; },
+
   glfwSetMouseButtonCallback: function(winid, cbfun) {
     GLFW.setMouseButtonCallback(winid, cbfun);
   },
@@ -1279,6 +1335,26 @@ var LibraryGLFW = {
   glfwSetScrollCallback: function(winid, cbfun) {
     GLFW.setScrollCallback(winid, cbfun);
   },
+
+  glfwVulkanSupported: function() {
+    return 0;
+  },
+
+  glfwSetDropCallback: function(winid, cbfun) { throw "glfwSetDropCallback is not implemented."; },
+
+  glfwGetTimerValue: function() { throw "glfwGetTimerValue is not implemented."; },
+
+  glfwGetTimerFrequency: function() { throw "glfwGetTimerFrequency is not implemented."; },
+
+  glfwGetRequiredInstanceExtensions: function(count) { throw "glfwGetRequiredInstanceExtensions is not implemented."; },
+
+  glfwGetInstanceProcAddress: function(instance, procname) { throw "glfwGetInstanceProcAddress is not implemented."; },
+
+  glfwGetPhysicalDevicePresentationSupport: function(instance, device, queuefamily) { throw "glfwGetPhysicalDevicePresentationSupport is not implemented"; },
+
+  glfwCreateWindowSurface: function(instance, winid, allocator, surface) { throw "glfwCreateWindowSurface is not implemented."; },
+
+  glfwSetJoystickCallback: function(cbfun) { throw "glfwSetJoystickCallback is not implemented."; },
 
   glfwJoystickPresent: function(joy) { throw "glfwJoystickPresent is not implemented."; },
 

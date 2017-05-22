@@ -39,6 +39,13 @@ var LibraryJSEvents = {
       if (typeof window !== 'undefined') {
         window.addEventListener("gamepadconnected", function() { ++JSEvents.numGamepadsConnected; });
         window.addEventListener("gamepaddisconnected", function() { --JSEvents.numGamepadsConnected; });
+        
+        // Chromium does not fire the gamepadconnected event on reload, so we need to get the number of gamepads here as a workaround.
+        // See https://bugs.chromium.org/p/chromium/issues/detail?id=502824
+        var firstState = navigator.getGamepads ? navigator.getGamepads() : (navigator.webkitGetGamepads ? navigator.webkitGetGamepads() : null);
+        if (firstState) {
+          JSEvents.numGamepadsConnected = firstState.length;
+        }
       }
     },
 
@@ -1126,7 +1133,7 @@ var LibraryJSEvents = {
     // HTML5 does not really have a polling API for mouse events, so implement one manually by
     // returning the data from the most recently received event. This requires that user has registered
     // at least some no-op function as an event handler to any of the mouse function.
-    HEAP32.set(HEAP32.subarray(JSEvents.mouseEvent, {{{ C_STRUCTS.EmscriptenMouseEvent.__size__ }}}), mouseState);
+    HEAP8.set(HEAP8.subarray(JSEvents.mouseEvent, JSEvents.mouseEvent + {{{ C_STRUCTS.EmscriptenMouseEvent.__size__ }}}), mouseState);
     return {{{ cDefine('EMSCRIPTEN_RESULT_SUCCESS') }}};
   },
 
