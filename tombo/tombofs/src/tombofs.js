@@ -8,7 +8,8 @@ module.exports = {
   mount: function(mount) {
     if (Module.tombo && Module.tombo.userId && Module.tombo.appId)  {
       TOMBOFS.AWSClient = new TomboFSAWSClient(Module.tombo.userId, Module.tombo.appId);
-      if (Module.tombo.aws.debugAccessKeyId &&
+      if (Module.tombo.aws &&
+          Module.tombo.aws.debugAccessKeyId &&
           Module.tombo.aws.debugSecretAccessKey &&
           Module.tombo.aws.debugSessionToken &&
           Module.tombo.aws.debugExpiration) {

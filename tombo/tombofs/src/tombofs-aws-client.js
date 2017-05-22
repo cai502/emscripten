@@ -32,7 +32,7 @@ class TomboFSAWSClient {
         }
       } else {
         // FIXME: This method should be implemented by XHR
-        return reject(new Error('FIXME: imeplement fetching credentials from Tombo platform'));
+        return reject(new Error('FIXME: implement fetching credentials from Tombo platform'));
       }
       console.log('creating AWS S3 client instance');
       const credentials = new AWS.Credentials(

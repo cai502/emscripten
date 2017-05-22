@@ -4,8 +4,8 @@
   "description": "A filesystem for emscripten syncing with a remote server",
   "main": "src/tombofs.js",
   "scripts": {
-    "build": "webpack",
-    "prepublish": "NODE_ENV=production npm run build"
+    "build": "NODE_ENV=production webpack",
+    "prepublish": "npm run build"
   },
   "author": "Tasuku SUENAGA",
   "license": "MIT",
