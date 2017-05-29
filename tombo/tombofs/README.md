@@ -2,18 +2,27 @@
 
 ## setup
 
-```sh
+```console
 npm install
 ```
 
 ## build
 
-```sh
+```console
 npm run build
 ```
 
 Or watch the directory.
 
-```sh
+```console
 npm run build -- --watch
+```
+
+## test
+
+```console
+cd ${EMSCRIPTEN}/tests
+python runner.py tombo
+# with specific browser
+EMSCRIPTEN_BROWSER=/Applications/Google\\\ Chrome\\\ Canary.app/Contents/MacOS/Google\\\ Chrome\\\ Canary python runner.py tombo
 ```
