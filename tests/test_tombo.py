@@ -230,71 +230,71 @@ class tombo(BrowserCore):
     OTHER_USER_TEST_FILE_PATH = '{}/test.file'.format(OTHER_USER_NAME)
     # Cannot do put-object under other user's path with federation user
     with self.assertRaises(Exception):
-      self.execute_aws_command_with_federation('s3api', [
+      PlatformHandler.execute_aws_command_with_federation('s3api', [
         'put-object',
-        '--bucket', tombo.S3_BUCKET_NAME,
+        '--bucket', PlatformHandler.S3_BUCKET_NAME,
         '--key', OTHER_USER_TEST_FILE_PATH,
         '--body', os.path.realpath(__file__)
       ])
     # Can do put-object with IAM user
     self.execute_aws_command('s3api', [
       'put-object',
-      '--bucket', tombo.S3_BUCKET_NAME,
+      '--bucket', PlatformHandler.S3_BUCKET_NAME,
       '--key', OTHER_USER_TEST_FILE_PATH,
       '--body', os.path.realpath(__file__)
     ])
 
     # Cannot do list-buckets
     with self.assertRaises(Exception):
-      self.execute_aws_command_with_federation('s3api', [
+      PlatformHandler.execute_aws_command_with_federation('s3api', [
         'list-buckets',
       ])
     # Cannot do list-objects under other bucket
     with self.assertRaises(Exception):
-      self.execute_aws_command_with_federation('s3api', [
+      PlatformHandler.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
         '--bucket', FORBIDDEN_BUCKET_NAME
       ])
-    TEST_FILE_PATH = tombo.S3_BASE_PATH + 'test.file'
+    TEST_FILE_PATH = PlatformHandler.S3_BASE_PATH + 'test.file'
     # Can do put-object under app path
-    self.execute_aws_command_with_federation('s3api', [
+    PlatformHandler.execute_aws_command_with_federation('s3api', [
       'put-object',
-      '--bucket', tombo.S3_BUCKET_NAME,
+      '--bucket', PlatformHandler.S3_BUCKET_NAME,
       '--key', TEST_FILE_PATH,
       '--body', os.path.realpath(__file__)
     ])
     # Cannot do list-objects under bucket
     with self.assertRaises(Exception):
-      results = self.execute_aws_command_with_federation('s3api', [
+      results = PlatformHandler.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
-        '--bucket', tombo.S3_BUCKET_NAME
+        '--bucket', PlatformHandler.S3_BUCKET_NAME
       ])
     # Can do list-objects under user path
-    self.execute_aws_command_with_federation('s3api', [
+    PlatformHandler.execute_aws_command_with_federation('s3api', [
       'list-objects-v2',
-      '--bucket', tombo.S3_BUCKET_NAME,
-      '--prefix', tombo.S3_USER_BASE_PATH
+      '--bucket', PlatformHandler.S3_BUCKET_NAME,
+      '--prefix', PlatformHandler.S3_USER_BASE_PATH
     ])
     # Can list under app path in the user path
-    results = self.execute_aws_command_with_federation('s3api', [
+    results = PlatformHandler.execute_aws_command_with_federation('s3api', [
       'list-objects-v2',
-      '--bucket', tombo.S3_BUCKET_NAME,
-      '--prefix', tombo.S3_BASE_PATH
+      '--bucket', PlatformHandler.S3_BUCKET_NAME,
+      '--prefix', PlatformHandler.S3_BASE_PATH
     ])
     # The list has only the uploaded object
     self.assertEqual(len(results['Contents']), 1)
     self.assertEqual(results['Contents'][0]['Key'], TEST_FILE_PATH)
     # Can delete uploaded object
-    self.execute_aws_command_with_federation('s3api', [
+    PlatformHandler.execute_aws_command_with_federation('s3api', [
       'delete-object',
-      '--bucket', tombo.S3_BUCKET_NAME,
+      '--bucket', PlatformHandler.S3_BUCKET_NAME,
       '--key', TEST_FILE_PATH
     ])
 
     # Teardown
     self.execute_aws_command('s3api', [
       'delete-object',
-      '--bucket', tombo.S3_BUCKET_NAME,
+      '--bucket', PlatformHandler.S3_BUCKET_NAME,
       '--key', OTHER_USER_TEST_FILE_PATH
     ])
 
@@ -304,14 +304,14 @@ class tombo(BrowserCore):
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DFIRST', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''])
 
       # FIRST execution
-      results = self.execute_aws_command_with_federation('s3api', [
+      results = PlatformHandler.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
-        '--bucket', tombo.S3_BUCKET_NAME,
-        '--prefix', tombo.S3_BASE_PATH
+        '--bucket', PlatformHandler.S3_BUCKET_NAME,
+        '--prefix', PlatformHandler.S3_BASE_PATH
       ])
       keys_first = frozenset([i['Key'] for i in results['Contents']])
       keys_first_without_timestamp = frozenset([re.sub(r'/\d+$', '', i) for i in keys_first])
-      keys_expected = frozenset([tombo.S3_BASE_PATH + i for i in [
+      keys_expected = frozenset([PlatformHandler.S3_BASE_PATH + i for i in [
         'tombofs.manifest',
         'entries/working1/moar.txt',
         'entries/working1/waka.txt',
@@ -321,10 +321,10 @@ class tombo(BrowserCore):
 
       # SECOND execution
       self.btest(path_from_root('tests', 'tombo', 'test_tombofs_sync.c'), '1', force_c=True, args=tombo.PRE_JS_TOMBOFS + ['-ltombofs.js', '-DSECRET=\"' + secret + '\"', '-s', '''EXPORTED_FUNCTIONS=['_main', '_test', '_success']'''] + extra)
-      results = self.execute_aws_command_with_federation('s3api', [
+      results = PlatformHandler.execute_aws_command_with_federation('s3api', [
         'list-objects-v2',
-        '--bucket', tombo.S3_BUCKET_NAME,
-        '--prefix', tombo.S3_BASE_PATH
+        '--bucket', PlatformHandler.S3_BUCKET_NAME,
+        '--prefix', PlatformHandler.S3_BASE_PATH
       ])
       keys_second = frozenset([i['Key'] for i in results['Contents']])
       keys_second_without_timestamp = frozenset([re.sub(r'/\d+$', '', i) for i in keys_second])
