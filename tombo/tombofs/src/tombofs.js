@@ -6,26 +6,9 @@ module.exports = {
   // NOTE: based on library_memfs.js b6012fb7ba259e67dd7cd4f87377de0cbdb04eec
   ops_table: null,
   mount: function(mount) {
-    if (Module.tombo && Module.tombo.userId && Module.tombo.appId)  {
-      TOMBOFS.AWSClient = new TomboFSAWSClient(Module.tombo.userId, Module.tombo.appId);
-      if (Module.tombo.aws &&
-          Module.tombo.aws.debugRemoteFileSystemBucket &&
-          Module.tombo.aws.debugRemoteFileSystemRegion &&
-          Module.tombo.aws.debugRemoteFileSystemEndpoint &&
-          Module.tombo.aws.debugAccessKeyId &&
-          Module.tombo.aws.debugSecretAccessKey &&
-          Module.tombo.aws.debugSessionToken &&
-          Module.tombo.aws.debugExpiration) {
-        TOMBOFS.AWSClient.setCredentials(
-          Module.tombo.aws.debugRemoteFileSystemBucket,
-          Module.tombo.aws.debugRemoteFileSystemRegion,
-          Module.tombo.aws.debugRemoteFileSystemEndpoint,
-          Module.tombo.aws.debugAccessKeyId,
-          Module.tombo.aws.debugSecretAccessKey,
-          Module.tombo.aws.debugSessionToken,
-          Module.tombo.aws.debugExpiration
-        );
-      }
+    if (Module.tombo && Module.tombo.userId && Module.tombo.appId) {
+      // NOTE: Module.tombo.apiURI could be null when running without Tombo platform.
+      TOMBOFS.AWSClient = new TomboFSAWSClient(Module.tombo.userId, Module.tombo.appId, Module.tombo.apiURI);
     }
     return TOMBOFS.createNode(null, '/', EMSCRIPTEN_CDEFINE_S_IFDIR | 511 /* 0777 */, 0);
   },

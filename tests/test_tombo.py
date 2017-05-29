@@ -1,4 +1,4 @@
-import BaseHTTPServer, multiprocessing, os, shutil, subprocess, unittest, zlib, webbrowser, time, shlex
+import BaseHTTPServer, multiprocessing, os, shutil, subprocess, unittest, zlib, webbrowser, time, shlex, httplib
 from runner import BrowserCore, path_from_root
 from tools.shared import *
 import ConfigParser # for reading AWS credentials
@@ -16,7 +16,7 @@ if emscripten_browser:
     print >> sys.stderr, "using Emscripten browser: " + str(cmd)
   webbrowser.open_new = run_in_other_browser
 
-class tombo(BrowserCore):
+class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
   AWS_CREDENTIALS_PATH = './tombo/aws_credentials'
   AWS_REGION = 'us-west-2'
   S3_BUCKET_NAME = 'tombofs.development'
@@ -28,16 +28,34 @@ class tombo(BrowserCore):
   S3_BASE_URL = 's3://{}/{}/{}/'.format(S3_BUCKET_NAME, TOMBO_USER_ID, TOMBO_APP_ID)
   S3_USER_BASE_PATH = '{}/'.format(TOMBO_USER_ID)
   S3_BASE_PATH = '{}/{}/'.format(TOMBO_USER_ID, TOMBO_APP_ID)
-  PRE_JS_TOMBOFS = ['--pre-js', 'tombofs-parameters.js']
 
   @classmethod
-  def setUpClass(self):
+  def initialize(self):
     self.sts_credential()
-    super(tombo, self).setUpClass()
-    self.browser_timeout = 30
-    print
-    print 'Running the browser tests. Make sure the browser allows popups from localhost.'
-    print
+
+  def do_GET(s):
+    s.send_response(200)
+    s.send_header('Access-Control-Allow-Origin', '*')
+    s.send_header('Access-Control-Request-Method', '*')
+    s.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    s.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
+    s.end_headers()
+    s.wfile.write(json.dumps(
+      {
+        'data': {
+          'type': 'credential',
+          'attributes': {
+            'access_key_id': PlatformHandler.federation_access_key_id,
+            'secret_access_key': PlatformHandler.federation_secret_access_key,
+            'session_token': PlatformHandler.federation_session_token,
+            'expiration': PlatformHandler.federation_expiration,
+            'bucket': PlatformHandler.S3_BUCKET_NAME,
+            'region': PlatformHandler.AWS_REGION,
+            'endpoint': PlatformHandler.S3_ENDPOINT
+          }
+        }
+      }
+    ))
 
   @classmethod
   def execute_aws_command_with_credentials(self, service, commands, access_key_id, secret_access_key, session_token=None):
@@ -98,7 +116,7 @@ class tombo(BrowserCore):
   def initialize_s3(self):
     try:
       self.execute_aws_command('s3', [
-        'rm', tombo.S3_USER_BASE_URL, '--recursive'
+        'rm', self.S3_USER_BASE_URL, '--recursive'
       ])
     except Exception as e:
       if str(e).find('NoSuchBucket') == -1:
@@ -108,7 +126,7 @@ class tombo(BrowserCore):
   def sts_credential(self):
     result = self.execute_aws_command('sts', [
       'get-federation-token',
-      '--name', tombo.TOMBO_USER_ID,
+      '--name', self.TOMBO_USER_ID,
       '--duration-seconds', '129600',
       '--policy', json.dumps({
         'Version': '2012-10-17',
@@ -118,11 +136,11 @@ class tombo(BrowserCore):
             'Action': [
               's3:ListBucket'
             ],
-            'Resource': 'arn:aws:s3:::{}'.format(tombo.S3_BUCKET_NAME),
+            'Resource': 'arn:aws:s3:::{}'.format(self.S3_BUCKET_NAME),
             'Condition': {
               'StringLike': {
                 's3:prefix': [
-                  tombo.S3_USER_BASE_PATH + '*'
+                  self.S3_USER_BASE_PATH + '*'
                 ]
               }
             }
@@ -134,7 +152,7 @@ class tombo(BrowserCore):
               's3:GetObject*',
               's3:DeleteObject*'
             ],
-            'Resource': 'arn:aws:s3:::{}/{}/*'.format(tombo.S3_BUCKET_NAME, tombo.TOMBO_USER_ID)
+            'Resource': 'arn:aws:s3:::{}/{}/*'.format(self.S3_BUCKET_NAME, self.TOMBO_USER_ID)
           }
         ]
       })
@@ -145,25 +163,59 @@ class tombo(BrowserCore):
     self.federation_session_token = credentials['SessionToken']
     self.federation_expiration = credentials['Expiration']
 
+class tombo(BrowserCore):
+  PRE_JS_TOMBOFS = ['--pre-js', 'tombofs-parameters.js']
+
+  @classmethod
+  def setUpClass(self):
+    super(tombo, self).setUpClass()
+    self.browser_timeout = 30
+
+    def run_platform_server():
+      platform_httpd = BaseHTTPServer.HTTPServer(('localhost', 11111), PlatformHandler)
+      platform_httpd.serve_forever()
+
+    PlatformHandler.initialize()
+    self.platform_server = multiprocessing.Process(target=run_platform_server)
+    self.platform_server.start()
+
+    while True:
+      try:
+        conn = httplib.HTTPConnection('localhost', 11111)
+        conn.request('GET', '/')
+        r = conn.getresponse()
+        if r.status == 200:
+          break
+      except:
+        pass
+      print 'Waiting for launching a test platform server'
+      time.sleep(1)
+
+    print
+    print 'Running the browser tests. Make sure the browser allows popups from localhost.'
+    print
+
+  @classmethod
+  def tearDownClass(self):
+    super(tombo, self).tearDownClass()
+    self.platform_server.terminate()
+
   def setUp(self):
     super(tombo, self).setUp()
     self.write_tombofs_parameters_js()
-    self.initialize_s3()
+    PlatformHandler.initialize_s3()
 
   def write_tombofs_parameters_js(self):
-    open(os.path.join(self.get_dir(), 'tombofs-parameters.js'), 'w').write('Module.tombo = {}'.format(json.dumps({
-      'appId': tombo.TOMBO_APP_ID,
-      'userId': tombo.TOMBO_USER_ID,
-      'aws': {
-        'debugRemoteFileSystemBucket': tombo.S3_BUCKET_NAME,
-        'debugRemoteFileSystemRegion': tombo.AWS_REGION,
-        'debugRemoteFileSystemEndpoint': tombo.S3_ENDPOINT,
-        'debugAccessKeyId': tombo.federation_access_key_id,
-        'debugSecretAccessKey': tombo.federation_secret_access_key,
-        'debugSessionToken': tombo.federation_session_token,
-        'debugExpiration': tombo.federation_expiration
-      }
-    })))
+    open(os.path.join(self.get_dir(), 'tombofs-parameters.js'), 'w').write(
+      'Module.tombo = {}; document.cookie = {};'.format(
+        json.dumps({
+          'appId': PlatformHandler.TOMBO_APP_ID,
+          'userId': PlatformHandler.TOMBO_USER_ID,
+          'apiURI': 'http://localhost:11111/'
+        }),
+        json.dumps('user_jwt=user.jwt')
+      )
+    )
 
   def test_s3_policy(self):
     # Preparation
