@@ -737,7 +737,7 @@ module.exports = {
     console.groupEnd();
     // Directory is not saved on AWS
     if (FS.isDir(entry.mode)) {
-      return new Promise.resolve();
+      return Promise.resolve();
     }
     return TOMBOFS.AWSClient.putFile(path, entry);
   },

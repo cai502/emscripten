@@ -1,54 +1,127 @@
 import 'aws-sdk/dist/aws-sdk';
 const AWS = window.AWS;
+const Cookies = require('js-cookie');
 
 class TomboFSAWSClient {
-  constructor(userId, appId) {
-    this.userId = userId;
-    this.appId = appId;
+  constructor(userId, appId, apiURI) {
+    let guid_regex = /^[a-z0-9\-]+$/;
+    if (guid_regex.test(userId)) {
+      this.userId = userId;
+    }
+    if (guid_regex.test(appId)) {
+      this.appId = appId;
+    }
+    this.apiURI = apiURI;
+    this.expiration = 0;
   }
 
   setCredentials(
     bucket, region, endpoint,
     accessKeyId, secretAccessKey, sessionToken, expiration
   ) {
+    // expiration should be ISO-8601 format string.
+    // ex.) 2011-07-15T23:28:33.359Z
     this.bucket = bucket;
     this.region = region;
     this.endpoint = endpoint;
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
     this.sessionToken = sessionToken;
-    this.expiration = expiration;
+    this.expiration = Date.parse(expiration);
   }
 
   haveValidCredentials() {
-    // FIXME: implement expiration check
-    return (this.accessKeyId && this.secretAccessKey && this.sessionToken);
+    const now = Date.now();
+    // 60 secs is the margin to avoid errors.
+    const result = !!(now < (this.expiration - 60) && this.accessKeyId && this.secretAccessKey && this.sessionToken);
+    return result;
+  }
+
+  validS3Client() {
+    if (this.haveValidCredentials() && this.s3) {
+      // if credential is valid and there is an old S3 client instance,
+      // we can reuse it.
+      return this.s3;
+    }
+    this.s3 = null;
+    this.accessKeyId = null;
+    this.secretAccessKey = null;
+    this.sessionToken = null;
+    this.expiration = 0;
+    return null;
+  }
+
+  createS3Client() {
+    if (!this.accessKeyId || !this.secretAccessKey || !this.sessionToken) {
+      console.log('ERROR: invalid credentials');
+      return null;
+    }
+    const credentials = new AWS.Credentials(
+      this.accessKeyId,
+      this.secretAccessKey,
+      this.sessionToken
+    );
+    this.s3 = new AWS.S3({
+      credentials: credentials,
+      endpoint: this.endpoint,
+      region: this.region
+    });
+    return this.s3;
+  }
+
+  fetchCredentials() {
+    return new Promise((resolve, reject) => {
+      console.log('AWS fetchCredentials()')
+      if (!this.apiURI) {
+        return reject(new Error('Empty apiURI to fetch credentials for the remote file system.'));
+      }
+      const user_jwt = Cookies.get('user_jwt');
+      if (!user_jwt || /^[A-Za-z0-9_\-]+$/.test(user_jwt)) {
+        return reject(new Error('Cannot get user_jwt cookie.'));
+      }
+      fetch(this.apiURI + `file_systems/credential?user_jwt=${user_jwt}&application_id=${this.appId}`).then((response) => {
+        if (response.ok) {
+          return response.json();
+        }
+        return Promise.reject(new Error('API response is not ok'));
+      }).then((body) => {
+        if (
+          body['data']['type'] != 'credential' ||
+          !body['data']['attributes']['bucket'] ||
+          !body['data']['attributes']['region'] ||
+          !body['data']['attributes']['endpoint'] ||
+          !body['data']['attributes']['access_key_id'] ||
+          !body['data']['attributes']['secret_access_key'] ||
+          !body['data']['attributes']['session_token'] ||
+          !body['data']['attributes']['expiration']
+        ) {
+          return Promise.reject(new Error('Failed to parse the response from remote filesystem credential API.'));
+        }
+        this.setCredentials(
+          body['data']['attributes']['bucket'],
+          body['data']['attributes']['region'],
+          body['data']['attributes']['endpoint'],
+          body['data']['attributes']['access_key_id'],
+          body['data']['attributes']['secret_access_key'],
+          body['data']['attributes']['session_token'],
+          body['data']['attributes']['expiration']
+        );
+        resolve();
+      }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
   getClient() {
     return new Promise((resolve, reject) => {
-      if (this.haveValidCredentials()) {
-        // if credential is valid and there is an old S3 client instance,
-        // we can reuse it.
-        if (this.s3) {
-          return resolve(this.s3);
-        }
-      } else {
-        // FIXME: This method should be implemented by XHR
-        return reject(new Error('FIXME: implement fetching credentials from Tombo platform'));
-      }
-      console.log('creating AWS S3 client instance');
-      const credentials = new AWS.Credentials(
-        this.accessKeyId,
-        this.secretAccessKey,
-        this.sessionToken
-      );
-      this.s3 = new AWS.S3({
-        credentials: credentials,
-        endpoint: this.endpoint,
-        region: this.region
+      let s3client = this.validS3Client();
+      if (s3client) { return resolve(s3client); };
+      this.fetchCredentials().then(() => {
+        resolve(this.createS3Client());
+      }).catch((e) => {
+        reject(e);
       });
-      resolve(this.s3);
     });
   }
 
