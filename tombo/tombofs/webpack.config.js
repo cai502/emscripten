@@ -64,15 +64,19 @@ module.exports = {
       // Stop the message 'This seems to be a pre-built javascript file.'
       /aws\-sdk/
     ],
-    loaders: [
+    rules: [
       {
         test: /\.js$/,
-        loader: 'babel',
         exclude: /(node_modules|bower_components)/,
-        query: {
-          presets: ['es2015'],
-          plugins: babel_plugins,
-        },
+        use: [
+          {
+            loader: 'babel-loader',
+            query: {
+              presets: ['es2015'],
+              plugins: babel_plugins,
+            }
+          },
+        ]
       },
     ]
   },
