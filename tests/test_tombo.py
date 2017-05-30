@@ -220,7 +220,7 @@ class tombo(BrowserCore):
   def test_s3_policy(self):
     # Preparation
     FORBIDDEN_BUCKET_NAME = 'user.cannot.access'
-    self.execute_aws_command('s3api', [
+    PlatformHandler.execute_aws_command('s3api', [
       'put-object',
       '--bucket', FORBIDDEN_BUCKET_NAME,
       '--key', 'test.file',
@@ -237,7 +237,7 @@ class tombo(BrowserCore):
         '--body', os.path.realpath(__file__)
       ])
     # Can do put-object with IAM user
-    self.execute_aws_command('s3api', [
+    PlatformHandler.execute_aws_command('s3api', [
       'put-object',
       '--bucket', PlatformHandler.S3_BUCKET_NAME,
       '--key', OTHER_USER_TEST_FILE_PATH,
@@ -292,7 +292,7 @@ class tombo(BrowserCore):
     ])
 
     # Teardown
-    self.execute_aws_command('s3api', [
+    PlatformHandler.execute_aws_command('s3api', [
       'delete-object',
       '--bucket', PlatformHandler.S3_BUCKET_NAME,
       '--key', OTHER_USER_TEST_FILE_PATH
