@@ -1,0 +1,38 @@
+{
+  "extends": ["eslint:recommended"],
+  "plugins": [],
+  "parserOptions": {
+    "ecmaVersion": 6,
+    "sourceType": "module"
+  },
+  "env": {
+    "browser": true,
+    "commonjs": true,
+    "es6": true
+  },
+  "globals": {
+    "Module": true,
+    "FS": true,
+    "MEMFS": true,
+    "TOMBOFS": true,
+    "PATH": true,
+    "EMSCRIPTEN_CDEFINE_S_IFDIR": true,
+    "EMSCRIPTEN_CDEFINE_S_IFLNK": true,
+    "EMSCRIPTEN_CDEFINE_MAP_PRIVATE": true,
+    "ERRNO_CODES": true,
+    "_malloc": true,
+    "assert": true
+  },
+  "rules": {
+    "prefer-arrow-callback": ["error"],
+    "no-var": ["error"],
+    "no-console": 0,
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "object-curly-spacing": ["error", "always"],
+    "keyword-spacing": ["error", { "before": true }],
+    "func-call-spacing": ["error", "never"],
+    "func-style": ["error", "expression"],
+    "space-before-function-paren": "error",
+    "quotes": ["error", "single"]
+  }
+}

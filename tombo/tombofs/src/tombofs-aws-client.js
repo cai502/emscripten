@@ -3,7 +3,7 @@ const AWS = window.AWS;
 const Cookies = require('js-cookie');
 
 class TomboFSAWSClient {
-  constructor(userId, appId, apiURI) {
+  constructor (userId, appId, apiURI) {
     let guid_regex = /^[a-z0-9\-]+$/;
     if (guid_regex.test(userId)) {
       this.userId = userId;
@@ -15,7 +15,7 @@ class TomboFSAWSClient {
     this.expiration = 0;
   }
 
-  setCredentials(
+  setCredentials (
     bucket, region, endpoint,
     accessKeyId, secretAccessKey, sessionToken, expiration
   ) {
@@ -30,14 +30,14 @@ class TomboFSAWSClient {
     this.expiration = Date.parse(expiration);
   }
 
-  haveValidCredentials() {
+  haveValidCredentials () {
     const now = Date.now();
     // 60 secs is the margin to avoid errors.
     const result = !!(now < (this.expiration - 60) && this.accessKeyId && this.secretAccessKey && this.sessionToken);
     return result;
   }
 
-  validS3Client() {
+  validS3Client () {
     if (this.haveValidCredentials() && this.s3) {
       // if credential is valid and there is an old S3 client instance,
       // we can reuse it.
@@ -51,7 +51,7 @@ class TomboFSAWSClient {
     return null;
   }
 
-  createS3Client() {
+  createS3Client () {
     if (!this.accessKeyId || !this.secretAccessKey || !this.sessionToken) {
       console.log('ERROR: invalid credentials');
       return null;
@@ -69,7 +69,7 @@ class TomboFSAWSClient {
     return this.s3;
   }
 
-  fetchCredentials() {
+  fetchCredentials () {
     return new Promise((resolve, reject) => {
       console.log('AWS fetchCredentials()')
       if (!this.apiURI) {
@@ -113,10 +113,10 @@ class TomboFSAWSClient {
     });
   }
 
-  getClient() {
+  getClient () {
     return new Promise((resolve, reject) => {
       let s3client = this.validS3Client();
-      if (s3client) { return resolve(s3client); };
+      if (s3client) { return resolve(s3client); }
       this.fetchCredentials().then(() => {
         resolve(this.createS3Client());
       }).catch((e) => {
@@ -125,21 +125,21 @@ class TomboFSAWSClient {
     });
   }
 
-  userPathPrefix() {
+  userPathPrefix () {
     if (!this.userId) {
       throw new Error('AWS userPathPrefix(): empty userId');
     }
     return `${this.userId}/`;
   }
 
-  appPathPrefix() {
+  appPathPrefix () {
     if (!this.appId) {
       throw new Error('AWS appPathPrefix(): empty appId');
     }
     return `${this.userPathPrefix()}${this.appId}/`;
   }
 
-  getObject(key) {
+  getObject (key) {
     return this.getClient().then((client) => {
       const actualKey = this.appPathPrefix() + key;
 
@@ -160,7 +160,7 @@ class TomboFSAWSClient {
     });
   }
 
-  putObject(key, body) {
+  putObject (key, body) {
     return this.getClient().then((client) => {
       const actualKey = this.appPathPrefix() + key;
 
@@ -181,7 +181,7 @@ class TomboFSAWSClient {
     });
   }
 
-  deleteObject(key) {
+  deleteObject (key) {
     return this.getClient().then((client) => {
       const actualKey = this.appPathPrefix() + key;
 
@@ -200,13 +200,12 @@ class TomboFSAWSClient {
     });
   }
 
-  deleteObjects(keys) {
+  deleteObjects (keys) {
     return this.getClient().then((client) => {
-      const actualKey = this.appPathPrefix() + key;
-
       const objects = keys.map((key) => {
+        const actualKey = this.appPathPrefix() + key;
         return {
-          Key: key
+          Key: actualKey
           // TODO: Support VersionId
         };
       });
@@ -232,7 +231,7 @@ class TomboFSAWSClient {
     });
   }
 
-  listObjects(prefix) {
+  listObjects (prefix) {
     return this.getClient().then((client) => {
       let params = {
         Bucket: this.bucket,
@@ -252,13 +251,13 @@ class TomboFSAWSClient {
     });
   }
 
-  pathToKeyPrefix(path) {
+  pathToKeyPrefix (path) {
     // NOTE: for deletion
     // TODO: Handle directory correctly
     return `entries${path}/`;
   }
 
-  pathAndEntryToKey(path, entry) {
+  pathAndEntryToKey (path, entry) {
     // NOTE: Is the timestamp on a millisecond basis is enough?
     if (!entry.timestamp || typeof entry.timestamp.getTime !== 'function') {
       throw new Error('AWS pathAndEntryToKey: entry must have `timestamp` of Date object.');
@@ -266,24 +265,24 @@ class TomboFSAWSClient {
     return `entries${path}/${entry.timestamp.getTime()}`;
   }
 
-  getFile(path, entry) {
+  getFile (path, entry) {
     return this.getObject(this.pathAndEntryToKey(path, entry));
   }
 
-  putFile(path, entry) {
+  putFile (path, entry) {
     if (!entry.contents) {
       return Promise.reject(new Error('AWS putFile(): entry must have `contents`'));
     }
     return this.putObject(this.pathAndEntryToKey(path, entry), entry.contents);
   }
 
-  deleteFiles(paths) {
+  deleteFiles (paths) {
     // NOTE: paths is enough for deletion because all the file versions
     // under the path will be deleted.
     return this.deleteObjects(paths.map(this.pathToKeyPrefix));
   }
 
-  getManifest() {
+  getManifest () {
     console.log('AWS getManifest()');
     // This manifest file contains entries per mountpoint
     return this.getObject('tombofs.manifest').then((data) => {
@@ -306,7 +305,7 @@ class TomboFSAWSClient {
     });
   }
 
-  putManifest(content) {
+  putManifest (content) {
     console.groupCollapsed('AWS putManifest()');
     console.log(content);
     console.groupEnd();
