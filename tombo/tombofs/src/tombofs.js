@@ -907,13 +907,13 @@ module.exports = {
         });
       };
 
-      if (db) { idbtransaction(); }
       let storedTomboEntries = {}; // for deleting files in failure
       create.forEach((path) => {
         switch (dst.type) {
         case 'local':
           switch (src.type) {
           case 'remote':
+            idbtransaction();
             TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
               return TOMBOFS.storeLocalEntry(path, entry);
             }).then(() => {
@@ -939,6 +939,7 @@ module.exports = {
           switch (src.type) {
           case 'local':
             TOMBOFS.loadLocalEntry(path).then((entry) => {
+              idbtransaction();
               return TOMBOFS.storeRemoteEntry(store, path, entry);
             }).then(() => {
               done();
@@ -948,7 +949,7 @@ module.exports = {
             break;
           case 'tombo':
             TOMBOFS.loadTomboEntry(src.manifest, src.mountpoint, path).then((entry) => {
-              idbtransaction(); // must refresh idb transaction
+              idbtransaction();
               return TOMBOFS.storeRemoteEntry(store, path, entry);
             }).then(() => {
               done();
@@ -975,6 +976,7 @@ module.exports = {
             });
             break;
           case 'remote':
+            idbtransaction();
             TOMBOFS.loadRemoteEntry(store, path).then((entry) => {
               return TOMBOFS.storeTomboEntry(path, entry).then(() => {
                 return entry;
