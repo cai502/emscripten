@@ -1272,7 +1272,11 @@ mergeInto(LibraryManager.library, {
       FS.mkdir('/home/web_user/tmp');
       FS.mkdir('/a2o_application.app');
       if(ENVIRONMENT_IS_WEB) {
-        FS.mount(TOMBOFS, {}, '/home/web_user');
+        if(Module['tombo'] && Module['tombo']['enableTomboFS']) {
+          FS.mount(TOMBOFS, {}, '/home/web_user');
+        } else {
+          FS.mount(IDBFS, {}, '/home/web_user');
+        }
         addRunDependency('synchomefs');
         FS.syncfs(true, function (err) {
           if (err) throw err;

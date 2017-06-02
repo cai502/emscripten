@@ -211,7 +211,8 @@ class tombo(BrowserCore):
         json.dumps({
           'appId': PlatformHandler.TOMBO_APP_ID,
           'userId': PlatformHandler.TOMBO_USER_ID,
-          'apiURI': 'http://localhost:11111/'
+          'apiURI': 'http://localhost:11111/',
+          'enableTomboFS': true
         }),
         json.dumps('user_jwt=user.jwt')
       )
