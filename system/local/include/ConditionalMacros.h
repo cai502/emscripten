@@ -104,7 +104,7 @@
 
 ****************************************************************************************************/
 
-#if defined(__GNUC__) && (defined(__APPLE_CPP__) || defined(__APPLE_CC__) || defined(__NEXT_CPP__) || defined(__MACOS_CLASSIC__)) || defined(EMSCRIPTEN)
+#if defined(__GNUC__) && (defined(__APPLE_CPP__) || defined(__APPLE_CC__) || defined(__NEXT_CPP__) || defined(__MACOS_CLASSIC__)) || defined(EMSCRIPTEN) || defined(__EMSCRIPTEN__)
    /*
      gcc based compilers used on Mac OS X
    */
