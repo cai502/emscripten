@@ -321,7 +321,7 @@ var Runtime = {
 
   loadDynamicLibrary: function(lib) {
 #if BINARYEN
-    return fetch(lib).then(function(response) {
+    return fetch(lib, {credentials: 'same-origin'}).then(function(response) {
       return response.arrayBuffer();
     }).then(function(bin) {
       return Runtime.loadWebAssemblyModule(new Uint8Array(bin));
