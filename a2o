@@ -18,6 +18,7 @@ args = [
     '-s', 'STB_IMAGE=1',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
     '-D_BSD_SOURCE',
+    '-fmodules',
 ]
 
 if not "SIDE_MODULE=1" in sys.argv:
