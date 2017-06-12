@@ -72,11 +72,7 @@
 #endif
 
 #if OS_OBJECT_USE_OBJC
-#if defined(__DISPATCH_BUILDING_DISPATCH__)
 #import <objc/NSObject.h>
-#else
-#import <Foundation/NSObject.h>
-#endif
 #define OS_OBJECT_CLASS(name) OS_##name
 #define OS_OBJECT_DECL(name, ...) \
 		@protocol OS_OBJECT_CLASS(name) __VA_ARGS__ \
