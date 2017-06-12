@@ -43,7 +43,8 @@
 
 #include <stdbool.h>
 
-#include <sys/types.h>
+#include <sys/types.h> // libc
+#include <sys/_types.h> // darwin
 
 #include <Availability.h>
 
