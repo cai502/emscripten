@@ -61,6 +61,7 @@ extern "C" {
 #ifndef GL_ES_VERSION_2_0
 #define GL_ES_VERSION_2_0 1
 #include <KHR/khrplatform.h>
+#ifndef __OPENGL_FRAMEWORKS_GL_TYPES__
 typedef khronos_int8_t GLbyte;
 typedef khronos_float_t GLclampf;
 typedef khronos_int32_t GLfixed;
@@ -81,6 +82,7 @@ typedef int GLint;
 typedef unsigned char GLboolean;
 typedef int GLsizei;
 typedef khronos_uint8_t GLubyte;
+#endif
 #define GL_DEPTH_BUFFER_BIT               0x00000100
 #define GL_STENCIL_BUFFER_BIT             0x00000400
 #define GL_COLOR_BUFFER_BIT               0x00004000

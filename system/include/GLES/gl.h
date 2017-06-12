@@ -14,6 +14,7 @@ extern "C" {
  * 2.0. For details, see http://oss.sgi.com/projects/FreeB/ .
  */
 
+#ifndef __OPENGL_FRAMEWORKS_GL_TYPES__
 typedef void             GLvoid;
 typedef char             GLchar;
 typedef unsigned int     GLenum;
@@ -33,7 +34,7 @@ typedef khronos_int32_t  GLclampx;
 
 typedef khronos_intptr_t GLintptr;
 typedef khronos_ssize_t  GLsizeiptr;
-
+#endif
 
 /*************************************************************/
 
