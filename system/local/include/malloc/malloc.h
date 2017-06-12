@@ -2,6 +2,7 @@
 #define _MALLOC_MALLOC_H_
 
 #include <stdlib.h>
+#include <malloc.h>
 
 #define PAGE_MAX_SIZE 4096
 
