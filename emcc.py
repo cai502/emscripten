@@ -579,6 +579,8 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
           debug_level = max(1, debug_level)
           newargs[i] = ''
           newargs[i+1] = ''
+        elif newargs[i].startswith('-gmodules'):
+          continue
         elif newargs[i].startswith('-g'):
           requested_level = newargs[i][2:] or '3'
           debug_level = validate_arg_level(requested_level, 4, 'Invalid debug level: ' + newargs[i])
