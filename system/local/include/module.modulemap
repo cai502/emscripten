@@ -1,0 +1,153 @@
+module emscripten_system_local {
+    module bsd {
+        umbrella "bsd"
+        export *
+    }
+    module a2ofont_h {
+        header "a2ofont.h"
+        export *
+    }
+    module asl_h {
+        header "asl.h"
+        export *
+    }
+    module AssertMacros_h {
+        header "AssertMacros.h"
+        export *
+    }
+    module Availability_h {
+        textual header "Availability.h"
+        textual header "AvailabilityInternal.h"
+        textual header "AvailabilityMacros.h"
+        export *
+    }
+    module Block_h {
+        header "Block.h"
+        header "Block_private.h"
+        export *
+    }
+    module checkint_h {
+        header "checkint.h"
+        export *
+    }
+    module ConditionalMacros_h {
+        header "ConditionalMacros.h"
+        export *
+    }
+    module copyfile_h {
+        header "copyfile.h"
+        export *
+    }
+    module libkern__OSByteOrder_h {
+        header "libkern/_OSByteOrder.h"
+        export *
+    }
+    module libkern_machine_OSByteOrder_h {
+        header "libkern/machine/OSByteOrder.h"
+        export *
+    }
+    module libkern_OSAtomic_h {
+        header "libkern/OSAtomic.h"
+        export *
+    }
+    module libkern_OSByteOrder_h {
+        header "libkern/OSByteOrder.h"
+        export *
+    }
+    module mach_boolean_h {
+        header "mach/boolean.h"
+        export *
+    }
+    module mach_mach_time_h {
+        header "mach/mach_time.h"
+        export *
+    }
+    module mach_mach_types_h {
+        header "mach/mach_types.h"
+        export *
+    }
+    module mach_machine_boolean_h {
+        header "mach/machine/boolean.h"
+        export *
+    }
+    module mach_machine_vm_types_h {
+        header "mach/machine/vm_types.h"
+        export *
+    }
+    module mach_port_h {
+        header "mach/port.h"
+        export *
+    }
+    module machine__default_types_h {
+        header "machine/_default_types.h"
+        export *
+    }
+    module machine__types_h {
+        header "machine/_types.h"
+        export *
+    }
+    module MacTypes_h {
+        header "MacTypes.h"
+        export *
+    }
+    module malloc_malloc_h {
+        header "malloc/malloc.h"
+        export *
+    }
+    module NSSystemDirectories_h {
+        header "NSSystemDirectories.h"
+        export *
+    }
+    module os_base_h {
+        header "os/base.h"
+        export *
+    }
+    module os_object_h {
+        header "os/object.h"
+        export *
+    }
+    module sqlite3_h {
+        header "sqlite3.h"
+        export *
+    }
+    module sqlite3ext_h {
+        header "sqlite3ext.h"
+        export *
+    }
+    module sys__posix_availability_h {
+        header "sys/_posix_availability.h"
+        export *
+    }
+    module sys__pthread__pthread_types_h {
+        header "sys/_pthread/_pthread_types.h"
+        export *
+    }
+    module sys__symbol_aliasing_h {
+        header "sys/_symbol_aliasing.h"
+        export *
+    }
+    module sys__types__mach_port_t_h {
+        header "sys/_types/_mach_port_t.h"
+        export *
+    }
+    module sys__types_h {
+        header "sys/_types.h"
+        export *
+    }
+    module sys_cdefs_h {
+        header "sys/cdefs.h"
+        export *
+    }
+    module sys_event_h {
+        header "sys/event.h"
+        export *
+    }
+    module sys_queue_h {
+        header "sys/queue.h"
+        export *
+    }
+    module TargetConditionals_h {
+        textual header "TargetConditionals.h"
+        export *
+    }
+}

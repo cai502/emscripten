@@ -18,12 +18,12 @@ args = [
     '-s', 'STB_IMAGE=1',
     '-D__IPHONE_OS_VERSION_MIN_REQUIRED=70000',
     '-D_BSD_SOURCE',
-    '-fmodules',
-    '-Werror=incomplete-umbrella',
-    '-Wno-module-import-in-extern-c',
-    '-fmodules-prune-interval=1',
-    '-fmodules-prune-after=1',
-    '-Wnon-modular-include-in-framework-module',
+#    '-fmodules',
+#    '-Werror=incomplete-umbrella',
+#    '-Wno-module-import-in-extern-c',
+#    '-fmodules-prune-interval=1',
+#    '-fmodules-prune-after=1',
+#    '-Wnon-modular-include-in-framework-module',
 ]
 
 if not "SIDE_MODULE=1" in sys.argv:

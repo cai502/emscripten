@@ -1,0 +1,730 @@
+module emscripten_system {
+    module aio_h {
+        header "aio.h"
+        export *
+    }
+    module alloca_h {
+        header "alloca.h"
+        export *
+    }
+    module ar_h {
+        header "ar.h"
+        export *
+    }
+    module arpa_ftp_h {
+        header "arpa/ftp.h"
+        export *
+    }
+    module arpa_inet_h {
+        header "arpa/inet.h"
+        export *
+    }
+    module arpa_nameser_h {
+        header "arpa/nameser.h"
+        export *
+    }
+    module arpa_nameser_compat_h {
+        header "arpa/nameser_compat.h"
+        export *
+    }
+    module arpa_telnet_h {
+        header "arpa/telnet.h"
+        export *
+    }
+    module arpa_tftp_h {
+        header "arpa/tftp.h"
+        export *
+    }
+    module assert_h {
+        header "assert.h"
+        export *
+    }
+    module byteswap_h {
+        header "byteswap.h"
+        export *
+    }
+    module complex_h {
+        header "complex.h"
+        export *
+    }
+    module cpio_h {
+        header "cpio.h"
+        export *
+    }
+    module crypt_h {
+        header "crypt.h"
+        export *
+    }
+    module ctype_h {
+        header "ctype.h"
+        export *
+    }
+    module dirent_h {
+        header "dirent.h"
+        export *
+    }
+    module dlfcn_h {
+        header "dlfcn.h"
+        export *
+    }
+    module elf_h {
+        header "elf.h"
+        export *
+    }
+    module endian_h {
+        header "endian.h"
+        export *
+    }
+    module err_h {
+        header "err.h"
+        export *
+    }
+    module errno_h {
+        header "errno.h"
+        export *
+    }
+    module fcntl_h {
+        header "fcntl.h"
+        export *
+    }
+    module features_h {
+        header "features.h"
+        export *
+    }
+    module fenv_h {
+        header "fenv.h"
+        export *
+    }
+    module float_h {
+        header "float.h"
+        export *
+    }
+    module fmtmsg_h {
+        header "fmtmsg.h"
+        export *
+    }
+    module fnmatch_h {
+        header "fnmatch.h"
+        export *
+    }
+    module ftw_h {
+        header "ftw.h"
+        export *
+    }
+    module getopt_h {
+        header "getopt.h"
+        export *
+    }
+    module glob_h {
+        header "glob.h"
+        export *
+    }
+    module grp_h {
+        header "grp.h"
+        export *
+    }
+    module iconv_h {
+        header "iconv.h"
+        export *
+    }
+    module ifaddrs_h {
+        header "ifaddrs.h"
+        export *
+    }
+    module inttypes_h {
+        header "inttypes.h"
+        export *
+    }
+    module iso646_h {
+        header "iso646.h"
+        export *
+    }
+    module langinfo_h {
+        header "langinfo.h"
+        export *
+    }
+    module lastlog_h {
+        header "lastlog.h"
+        export *
+    }
+    module libgen_h {
+        header "libgen.h"
+        export *
+    }
+    module libintl_h {
+        header "libintl.h"
+        export *
+    }
+    module limits_h {
+        header "limits.h"
+        export *
+    }
+    module link_h {
+        header "link.h"
+        export *
+    }
+    module locale_h {
+        header "locale.h"
+        export *
+    }
+    module malloc_h {
+        header "malloc.h"
+        export *
+    }
+    module math_h {
+        header "math.h"
+        export *
+    }
+    module memory_h {
+        header "memory.h"
+        export *
+    }
+    module mntent_h {
+        header "mntent.h"
+        export *
+    }
+    module monetary_h {
+        header "monetary.h"
+        export *
+    }
+    module mqueue_h {
+        header "mqueue.h"
+        export *
+    }
+    module net_ethernet_h {
+        header "net/ethernet.h"
+        export *
+    }
+    module net_if_h {
+        header "net/if.h"
+        export *
+    }
+    module net_if_arp_h {
+        header "net/if_arp.h"
+        export *
+    }
+    module net_route_h {
+        header "net/route.h"
+        export *
+    }
+    module netdb_h {
+        header "netdb.h"
+        export *
+    }
+    module netinet_ether_h {
+        header "netinet/ether.h"
+        export *
+    }
+    module netinet_icmp6_h {
+        header "netinet/icmp6.h"
+        export *
+    }
+    module netinet_if_ether_h {
+        header "netinet/if_ether.h"
+        export *
+    }
+    module netinet_igmp_h {
+        header "netinet/igmp.h"
+        export *
+    }
+    module netinet_in_h {
+        header "netinet/in.h"
+        export *
+    }
+    module netinet_in_systm_h {
+        header "netinet/in_systm.h"
+        export *
+    }
+    module netinet_ip_h {
+        header "netinet/ip.h"
+        export *
+    }
+    module netinet_ip6_h {
+        header "netinet/ip6.h"
+        export *
+    }
+    module netinet_ip_icmp_h {
+        header "netinet/ip_icmp.h"
+        export *
+    }
+    module netinet_tcp_h {
+        header "netinet/tcp.h"
+        export *
+    }
+    module netinet_udp_h {
+        header "netinet/udp.h"
+        export *
+    }
+    module netinet6_in6_h {
+        header "netinet6/in6.h"
+        export *
+    }
+    module netpacket_packet_h {
+        header "netpacket/packet.h"
+        export *
+    }
+    module nl_types_h {
+        header "nl_types.h"
+        export *
+    }
+    module paths_h {
+        header "paths.h"
+        export *
+    }
+    module poll_h {
+        header "poll.h"
+        export *
+    }
+    module pthread_h {
+        header "pthread.h"
+        export *
+    }
+    module pty_h {
+        header "pty.h"
+        export *
+    }
+    module pwd_h {
+        header "pwd.h"
+        export *
+    }
+    module regex_h {
+        header "regex.h"
+        export *
+    }
+    module resolv_h {
+        header "resolv.h"
+        export *
+    }
+    module sched_h {
+        header "sched.h"
+        export *
+    }
+    module scsi_scsi_h {
+        header "scsi/scsi.h"
+        export *
+    }
+    module scsi_scsi_ioctl_h {
+        header "scsi/scsi_ioctl.h"
+        export *
+    }
+    module scsi_sg_h {
+        header "scsi/sg.h"
+        export *
+    }
+    module search_h {
+        header "search.h"
+        export *
+    }
+    module semaphore_h {
+        header "semaphore.h"
+        export *
+    }
+    module setjmp_h {
+        header "setjmp.h"
+        export *
+    }
+    module shadow_h {
+        header "shadow.h"
+        export *
+    }
+    module signal_h {
+        header "signal.h"
+        export *
+    }
+    module spawn_h {
+        header "spawn.h"
+        export *
+    }
+    module stdalign_h {
+        header "stdalign.h"
+        export *
+    }
+    module stdarg_h {
+        header "stdarg.h"
+        export *
+    }
+    module stdbool_h {
+        header "stdbool.h"
+        export *
+    }
+    module stdc_predef_h {
+        header "stdc-predef.h"
+        export *
+    }
+    module stddef_h {
+        header "stddef.h"
+        export *
+    }
+    module stdint_h {
+        header "stdint.h"
+        export *
+    }
+    module stdio_h {
+        header "stdio.h"
+        export *
+    }
+    module stdio_ext_h {
+        header "stdio_ext.h"
+        export *
+    }
+    module stdlib_h {
+        header "stdlib.h"
+        export *
+    }
+    module stdnoreturn_h {
+        header "stdnoreturn.h"
+        export *
+    }
+    module string_h {
+        header "string.h"
+        export *
+    }
+    module strings_h {
+        header "strings.h"
+        export *
+    }
+    module stropts_h {
+        header "stropts.h"
+        export *
+    }
+    module sys_acct_h {
+        header "sys/acct.h"
+        export *
+    }
+    module sys_auxv_h {
+        header "sys/auxv.h"
+        export *
+    }
+    module sys_cachectl_h {
+        header "sys/cachectl.h"
+        export *
+    }
+    module sys_dir_h {
+        header "sys/dir.h"
+        export *
+    }
+    module sys_epoll_h {
+        header "sys/epoll.h"
+        export *
+    }
+    module sys_errno_h {
+        header "sys/errno.h"
+        export *
+    }
+    module sys_eventfd_h {
+        header "sys/eventfd.h"
+        export *
+    }
+    module sys_fanotify_h {
+        header "sys/fanotify.h"
+        export *
+    }
+    module sys_fcntl_h {
+        header "sys/fcntl.h"
+        export *
+    }
+    module sys_file_h {
+        header "sys/file.h"
+        export *
+    }
+    module sys_fsuid_h {
+        header "sys/fsuid.h"
+        export *
+    }
+    module sys_inotify_h {
+        header "sys/inotify.h"
+        export *
+    }
+    module sys_io_h {
+        header "sys/io.h"
+        export *
+    }
+    module sys_ioctl_h {
+        header "sys/ioctl.h"
+        export *
+    }
+    module sys_ipc_h {
+        header "sys/ipc.h"
+        export *
+    }
+    module sys_kd_h {
+        header "sys/kd.h"
+        export *
+    }
+    module sys_klog_h {
+        header "sys/klog.h"
+        export *
+    }
+    module sys_mman_h {
+        header "sys/mman.h"
+        export *
+    }
+    module sys_mount_h {
+        header "sys/mount.h"
+        export *
+    }
+    module sys_msg_h {
+        header "sys/msg.h"
+        export *
+    }
+    module sys_mtio_h {
+        header "sys/mtio.h"
+        export *
+    }
+    module sys_param_h {
+        header "sys/param.h"
+        export *
+    }
+    module sys_personality_h {
+        header "sys/personality.h"
+        export *
+    }
+    module sys_poll_h {
+        header "sys/poll.h"
+        export *
+    }
+    module sys_prctl_h {
+        header "sys/prctl.h"
+        export *
+    }
+    module sys_procfs_h {
+        header "sys/procfs.h"
+        export *
+    }
+    module sys_ptrace_h {
+        header "sys/ptrace.h"
+        export *
+    }
+    module sys_quota_h {
+        header "sys/quota.h"
+        export *
+    }
+    module sys_reboot_h {
+        header "sys/reboot.h"
+        export *
+    }
+    module sys_reg_h {
+        header "sys/reg.h"
+        export *
+    }
+    module sys_resource_h {
+        header "sys/resource.h"
+        export *
+    }
+    module sys_select_h {
+        header "sys/select.h"
+        export *
+    }
+    module sys_sem_h {
+        header "sys/sem.h"
+        export *
+    }
+    module sys_sendfile_h {
+        header "sys/sendfile.h"
+        export *
+    }
+    module sys_shm_h {
+        header "sys/shm.h"
+        export *
+    }
+    module sys_signal_h {
+        header "sys/signal.h"
+        export *
+    }
+    module sys_signalfd_h {
+        header "sys/signalfd.h"
+        export *
+    }
+    module sys_socket_h {
+        header "sys/socket.h"
+        export *
+    }
+    module sys_soundcard_h {
+        header "sys/soundcard.h"
+        export *
+    }
+    module sys_stat_h {
+        header "sys/stat.h"
+        export *
+    }
+    module sys_statfs_h {
+        header "sys/statfs.h"
+        export *
+    }
+    module sys_statvfs_h {
+        header "sys/statvfs.h"
+        export *
+    }
+    module sys_stropts_h {
+        header "sys/stropts.h"
+        export *
+    }
+    module sys_swap_h {
+        header "sys/swap.h"
+        export *
+    }
+    module sys_syscall_h {
+        header "sys/syscall.h"
+        export *
+    }
+    module sys_sysinfo_h {
+        header "sys/sysinfo.h"
+        export *
+    }
+    module sys_syslog_h {
+        header "sys/syslog.h"
+        export *
+    }
+    module sys_sysmacros_h {
+        header "sys/sysmacros.h"
+        export *
+    }
+    module sys_termios_h {
+        header "sys/termios.h"
+        export *
+    }
+    module sys_time_h {
+        header "sys/time.h"
+        export *
+    }
+    module sys_timeb_h {
+        header "sys/timeb.h"
+        export *
+    }
+    module sys_timerfd_h {
+        header "sys/timerfd.h"
+        export *
+    }
+    module sys_times_h {
+        header "sys/times.h"
+        export *
+    }
+    module sys_timex_h {
+        header "sys/timex.h"
+        export *
+    }
+    module sys_ttydefaults_h {
+        header "sys/ttydefaults.h"
+        export *
+    }
+    module sys_types_h {
+        header "sys/types.h"
+        export *
+    }
+    module sys_ucontext_h {
+        header "sys/ucontext.h"
+        export *
+    }
+    module sys_uio_h {
+        header "sys/uio.h"
+        export *
+    }
+    module sys_un_h {
+        header "sys/un.h"
+        export *
+    }
+    module sys_user_h {
+        header "sys/user.h"
+        export *
+    }
+    module sys_utsname_h {
+        header "sys/utsname.h"
+        export *
+    }
+    module sys_vfs_h {
+        header "sys/vfs.h"
+        export *
+    }
+    module sys_vt_h {
+        header "sys/vt.h"
+        export *
+    }
+    module sys_wait_h {
+        header "sys/wait.h"
+        export *
+    }
+    module sys_xattr_h {
+        header "sys/xattr.h"
+        export *
+    }
+    module syscall_h {
+        header "syscall.h"
+        export *
+    }
+    module sysexits_h {
+        header "sysexits.h"
+        export *
+    }
+    module syslog_h {
+        header "syslog.h"
+        export *
+    }
+    module tar_h {
+        header "tar.h"
+        export *
+    }
+    module termios_h {
+        header "termios.h"
+        export *
+    }
+    module tgmath_h {
+        header "tgmath.h"
+        export *
+    }
+    module threads_h {
+        header "threads.h"
+        export *
+    }
+    module time_h {
+        header "time.h"
+        export *
+    }
+    module uchar_h {
+        header "uchar.h"
+        export *
+    }
+    module ucontext_h {
+        header "ucontext.h"
+        export *
+    }
+    module ulimit_h {
+        header "ulimit.h"
+        export *
+    }
+    module unistd_h {
+        header "unistd.h"
+        export *
+    }
+    module utime_h {
+        header "utime.h"
+        export *
+    }
+    module utmp_h {
+        header "utmp.h"
+        export *
+    }
+    module utmpx_h {
+        header "utmpx.h"
+        export *
+    }
+    module values_h {
+        header "values.h"
+        export *
+    }
+    module wait_h {
+        header "wait.h"
+        export *
+    }
+    module wchar_h {
+        header "wchar.h"
+        export *
+    }
+    module wctype_h {
+        header "wctype.h"
+        export *
+    }
+    module wordexp_h {
+        header "wordexp.h"
+        export *
+    }
+}
