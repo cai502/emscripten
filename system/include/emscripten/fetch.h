@@ -43,9 +43,10 @@ extern "C" {
 #define EMSCRIPTEN_FETCH_WAITABLE 128
 
 struct emscripten_fetch_t;
+typedef struct emscripten_fetch_t emscripten_fetch_t;
 
 // Specifies the parameters for a newly initiated fetch operation.
-struct emscripten_fetch_attr_t
+typedef struct emscripten_fetch_attr_t
 {
 	// 'POST', 'GET', etc.
 	char requestMethod[32];
@@ -98,7 +99,7 @@ struct emscripten_fetch_attr_t
 
 	// Specifies the length of the buffer pointed by 'requestData'. Leave as 0 if no request body needs to be sent.
 	size_t requestDataSize;
-};
+} emscripten_fetch_attr_t;
 
 struct emscripten_fetch_t
 {

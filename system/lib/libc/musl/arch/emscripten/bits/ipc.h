@@ -1,3 +1,8 @@
+#define __NEED_mode_t
+#define __NEED_key_t
+
+#include <bits/alltypes.h>
+
 struct ipc_perm
 {
 	key_t __ipc_perm_key;
