@@ -1,4 +1,4 @@
-module emscripten_system {
+module system {
     module aio_h {
         header "include/libc/aio.h"
         export *
@@ -39,12 +39,12 @@ module emscripten_system {
         header "include/libc/assert.h"
         export *
     }
-    module bits_alltypes_h {
+//    module bits_alltypes_h {
 //        umbrella "include/libc/bits"
-        textual header "include/libc/bits/alltypes.h"
+//        textual header "include/libc/bits/alltypes.h"
 //        textual header "include/libc/bits/ipc.h"
-        export *
-    }
+//        export *
+//    }
     module byteswap_h {
         header "include/libc/byteswap.h"
         export *
@@ -615,6 +615,7 @@ module emscripten_system {
         export *
     }
     module sys_types_h {
+        umbrella "include/libc/bits"
         header "include/libc/sys/types.h"
         export *
     }
@@ -875,27 +876,27 @@ module emscripten_system {
         textual header "local/include/TargetConditionals.h"
         export *
     }
-    module emscripten {
-        umbrella "include/emscripten"
+}
+module emscripten {
+    umbrella "include/emscripten"
+    export *
+
+    module emscripten_bind {
+        requires cplusplus11
+        header "include/emscripten/bind.h"
         export *
+    }
 
-        module emscripten_bind {
-            requires cplusplus11
-            header "include/emscripten/bind.h"
-            export *
-        }
+    module emscripten_val {
+        requires cplusplus11
+        header "include/emscripten/val.h"
+        export *
+    }
 
-        module emscripten_val {
-            requires cplusplus11
-            header "include/emscripten/val.h"
-            export *
-        }
-
-        module emscripten_wire {
-            requires cplusplus11
-            header "include/emscripten/wire.h"
-            export *
-        }
+    module emscripten_wire {
+        requires cplusplus11
+        header "include/emscripten/wire.h"
+        export *
     }
 }
 module os_object_h {
