@@ -1,3 +1,5 @@
+#include <dispatch/queue.h>
+
 #if defined(__cplusplus)
 #define XHR_EXTERN extern "C"
 #else
