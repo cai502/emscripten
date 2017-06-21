@@ -9,7 +9,9 @@ extern "C" {
 #include <bits/alltypes.h>
 
 #define CTL_KERN 1
+#define CTL_HW 6
 #define KERN_BOOTTIME 1
+#define HW_MACHINE 1
 
 int sysctl (int *, int, void *, size_t *, void *, size_t);
 int sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
