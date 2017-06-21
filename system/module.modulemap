@@ -177,10 +177,10 @@ module system {
         header "include/libc/malloc.h"
         export *
     }
-    module math_h {
-        header "include/libc/math.h"
-        export *
-    }
+//    module math_h {
+//        header "include/libc/math.h"
+//        export *
+//    }
     module memory_h {
         header "include/libc/memory.h"
         export *
@@ -822,10 +822,6 @@ module system {
     }
     module malloc_malloc_h {
         header "local/include/malloc/malloc.h"
-        export *
-    }
-    module NSSystemDirectories_h {
-        header "local/include/NSSystemDirectories.h"
         export *
     }
     module os_base_h {
