@@ -1,3 +1,7 @@
+#define __NEED_size_t
+#define __NEED_sigset_t
+#include <bits/alltypes.h>
+
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 
@@ -120,4 +124,3 @@ typedef struct __ucontext {
 #define SIGUNUSED SIGSYS
 
 #define _NSIG 65
-
