@@ -44,6 +44,9 @@ extern "C" {
 #define __NEED_pthread_key_t
 #define __NEED_pthread_once_t
 #define __NEED_useconds_t
+#define __NEED_mbstate_t
+#define __NEED_wint_t
+#define __NEED_wctype_t
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 #define __NEED_int8_t
