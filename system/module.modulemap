@@ -1,901 +1,925 @@
-module system {
-    module aio_h {
-        header "include/libc/aio.h"
-        export *
-    }
-    module alloca_h {
-        header "include/libc/alloca.h"
-        export *
-    }
-    module ar_h {
-        header "include/libc/ar.h"
-        export *
-    }
-    module arpa_ftp_h {
-        header "include/libc/arpa/ftp.h"
-        export *
-    }
-    module arpa_inet_h {
-        header "include/libc/arpa/inet.h"
-        export *
-    }
-    module arpa_nameser_h {
-        header "include/libc/arpa/nameser.h"
-        export *
-    }
-    module arpa_nameser_compat_h {
-        header "include/libc/arpa/nameser_compat.h"
-        export *
-    }
-    module arpa_telnet_h {
-        header "include/libc/arpa/telnet.h"
-        export *
-    }
-    module arpa_tftp_h {
-        header "include/libc/arpa/tftp.h"
-        export *
-    }
-    module assert_h {
-        header "include/libc/assert.h"
-        export *
-    }
-//    module bits_alltypes_h {
-//        umbrella "include/libc/bits"
-//        textual header "include/libc/bits/alltypes.h"
-//        textual header "include/libc/bits/ipc.h"
-//        export *
-//    }
-    module byteswap_h {
-        header "include/libc/byteswap.h"
-        export *
-    }
-    module complex_h {
-        header "include/libc/complex.h"
-        export *
-    }
-    module cpio_h {
-        header "include/libc/cpio.h"
-        export *
-    }
-    module crypt_h {
-        header "include/libc/crypt.h"
-        export *
-    }
-    module ctype_h {
-        header "include/libc/ctype.h"
-        export *
-    }
-    module dirent_h {
-        header "include/libc/dirent.h"
-        export *
-    }
-    module dlfcn_h {
-        header "include/libc/dlfcn.h"
-        export *
-    }
-    module elf_h {
-        header "include/libc/elf.h"
-        export *
-    }
-    module endian_h {
-        header "include/libc/endian.h"
-        export *
-    }
-    module err_h {
-        header "include/libc/err.h"
-        export *
-    }
-    module errno_h {
-        header "include/libc/errno.h"
-        export *
-    }
-    module fcntl_h {
-        header "include/libc/fcntl.h"
-        export *
-    }
-    module features_h {
-        header "include/libc/features.h"
-        export *
-    }
-    module fenv_h {
-        header "include/libc/fenv.h"
-        export *
-    }
-    module float_h {
-        header "include/libc/float.h"
-        export *
-    }
-    module fmtmsg_h {
-        header "include/libc/fmtmsg.h"
-        export *
-    }
-    module fnmatch_h {
-        header "include/libc/fnmatch.h"
-        export *
-    }
-    module ftw_h {
-        header "include/libc/ftw.h"
-        export *
-    }
-    module getopt_h {
-        header "include/libc/getopt.h"
-        export *
-    }
-    module glob_h {
-        header "include/libc/glob.h"
-        export *
-    }
-    module grp_h {
-        header "include/libc/grp.h"
-        export *
-    }
-    module iconv_h {
-        header "include/libc/iconv.h"
-        export *
-    }
-    module ifaddrs_h {
-        header "include/libc/ifaddrs.h"
-        export *
-    }
-    module inttypes_h {
-        header "include/libc/inttypes.h"
-        export *
-    }
-    module iso646_h {
-        header "include/libc/iso646.h"
-        export *
-    }
-    module langinfo_h {
-        header "include/libc/langinfo.h"
-        export *
-    }
-    module lastlog_h {
-        header "include/libc/lastlog.h"
-        export *
-    }
-    module libgen_h {
-        header "include/libc/libgen.h"
-        export *
-    }
-    module libintl_h {
-        header "include/libc/libintl.h"
-        export *
-    }
-    module limits_h {
-        header "include/libc/limits.h"
-        export *
-    }
-    module link_h {
-        header "include/libc/link.h"
-        export *
-    }
-    module locale_h {
-        header "include/libc/locale.h"
-        export *
-    }
-    module malloc_h {
-        header "include/libc/malloc.h"
-        export *
-    }
-//    module math_h {
-//        header "include/libc/math.h"
-//        export *
-//    }
-    module memory_h {
-        header "include/libc/memory.h"
-        export *
-    }
-    module mntent_h {
-        header "include/libc/mntent.h"
-        export *
-    }
-    module monetary_h {
-        header "include/libc/monetary.h"
-        export *
-    }
-    module mqueue_h {
-        header "include/libc/mqueue.h"
-        export *
-    }
-    module net_ethernet_h {
-        header "include/libc/net/ethernet.h"
-        export *
-    }
-    module net_if_h {
-        header "include/libc/net/if.h"
-        export *
-    }
-    module net_if_arp_h {
-        header "include/libc/net/if_arp.h"
-        export *
-    }
-    module net_route_h {
-        header "include/libc/net/route.h"
-        export *
-    }
-    module netdb_h {
-        header "include/libc/netdb.h"
-        export *
-    }
-    module netinet_ether_h {
-        header "include/libc/netinet/ether.h"
-        export *
-    }
-    module netinet_icmp6_h {
-        header "include/libc/netinet/icmp6.h"
-        export *
-    }
-    module netinet_if_ether_h {
-        header "include/libc/netinet/if_ether.h"
-        export *
-    }
-    module netinet_igmp_h {
-        header "include/libc/netinet/igmp.h"
-        export *
-    }
-    module netinet_in_h {
-        header "include/libc/netinet/in.h"
-        export *
-    }
-    module netinet_in_systm_h {
-        header "include/libc/netinet/in_systm.h"
-        export *
-    }
-    module netinet_ip_h {
-        header "include/libc/netinet/ip.h"
-        export *
-    }
-    module netinet_ip6_h {
-        header "include/libc/netinet/ip6.h"
-        export *
-    }
-    module netinet_ip_icmp_h {
-        header "include/libc/netinet/ip_icmp.h"
-        export *
-    }
-    module netinet_tcp_h {
-        header "include/libc/netinet/tcp.h"
-        export *
-    }
-    module netinet_udp_h {
-        header "include/libc/netinet/udp.h"
-        export *
-    }
-    module netinet6_in6_h {
-        header "include/libc/netinet6/in6.h"
-        export *
-    }
-    module netpacket_packet_h {
-        header "include/libc/netpacket/packet.h"
-        export *
-    }
-    module nl_types_h {
-        header "include/libc/nl_types.h"
-        export *
-    }
-    module paths_h {
-        header "include/libc/paths.h"
-        export *
-    }
-    module poll_h {
-        header "include/libc/poll.h"
-        export *
-    }
-    module pthread_h {
-        header "include/libc/pthread.h"
-        export *
-    }
-    module pty_h {
-        header "include/libc/pty.h"
-        export *
-    }
-    module pwd_h {
-        header "include/libc/pwd.h"
-        export *
-    }
-    module regex_h {
-        header "include/libc/regex.h"
-        export *
-    }
-    module resolv_h {
-        header "include/libc/resolv.h"
-        export *
-    }
-    module sched_h {
-        header "include/libc/sched.h"
-        export *
-    }
-    module scsi_scsi_h {
-        header "include/libc/scsi/scsi.h"
-        export *
-    }
-    module scsi_scsi_ioctl_h {
-        header "include/libc/scsi/scsi_ioctl.h"
-        export *
-    }
-    module scsi_sg_h {
-        header "include/libc/scsi/sg.h"
-        export *
-    }
-    module search_h {
-        header "include/libc/search.h"
-        export *
-    }
-    module semaphore_h {
-        header "include/libc/semaphore.h"
-        export *
-    }
-    module setjmp_h {
-        header "include/libc/setjmp.h"
-        export *
-    }
-    module shadow_h {
-        header "include/libc/shadow.h"
-        export *
-    }
-    module signal_h {
-        header "include/libc/signal.h"
-        export *
-    }
-    module spawn_h {
-        header "include/libc/spawn.h"
-        export *
-    }
-    module stdalign_h {
-        header "include/libc/stdalign.h"
-        export *
-    }
-    module stdarg_h {
-        header "include/libc/stdarg.h"
-        export *
-    }
-    module stdbool_h {
-        header "include/libc/stdbool.h"
-        export *
-    }
-    module stdc_predef_h {
-        header "include/libc/stdc-predef.h"
-        export *
-    }
-    module stddef_h {
-        header "include/libc/stddef.h"
-        export *
-    }
-    module stdint_h {
-        header "include/libc/stdint.h"
-        export *
-    }
-    module stdio_h {
-        header "include/libc/stdio.h"
-        export *
-    }
-    module stdio_ext_h {
-        header "include/libc/stdio_ext.h"
-        export *
-    }
-    module stdlib_h {
-        header "include/libc/stdlib.h"
-        export *
-    }
-    module stdnoreturn_h {
-        header "include/libc/stdnoreturn.h"
-        export *
-    }
-    module string_h {
-        header "include/libc/string.h"
-        export *
-    }
-    module strings_h {
-        header "include/libc/strings.h"
-        export *
-    }
-    module stropts_h {
-        header "include/libc/stropts.h"
-        export *
-    }
-    module sys_acct_h {
-        header "include/libc/sys/acct.h"
-        export *
-    }
-    module sys_auxv_h {
-        header "include/libc/sys/auxv.h"
-        export *
-    }
-    module sys_cachectl_h {
-        header "include/libc/sys/cachectl.h"
-        export *
-    }
-    module sys_dir_h {
-        header "include/libc/sys/dir.h"
-        export *
-    }
-    module sys_epoll_h {
-        header "include/libc/sys/epoll.h"
-        export *
-    }
-    module sys_errno_h {
-        header "include/libc/sys/errno.h"
-        export *
-    }
-    module sys_eventfd_h {
-        header "include/libc/sys/eventfd.h"
-        export *
-    }
-    module sys_fanotify_h {
-        header "include/libc/sys/fanotify.h"
-        export *
-    }
-    module sys_fcntl_h {
-        header "include/libc/sys/fcntl.h"
-        export *
-    }
-    module sys_file_h {
-        header "include/libc/sys/file.h"
-        export *
-    }
-    module sys_fsuid_h {
-        header "include/libc/sys/fsuid.h"
-        export *
-    }
-    module sys_inotify_h {
-        header "include/libc/sys/inotify.h"
-        export *
-    }
-    module sys_io_h {
-        header "include/libc/sys/io.h"
-        export *
-    }
-    module sys_ioctl_h {
-        header "include/libc/sys/ioctl.h"
-        export *
-    }
-    module sys_ipc_h {
-        header "include/libc/sys/ipc.h"
-        textual header "include/libc/bits/ipc.h"
-        export *
-    }
-    module sys_kd_h {
-        header "include/libc/sys/kd.h"
-        export *
-    }
-    module sys_klog_h {
-        header "include/libc/sys/klog.h"
-        export *
-    }
-    module sys_mman_h {
-        header "include/libc/sys/mman.h"
-        export *
-    }
-    module sys_mount_h {
-        header "include/libc/sys/mount.h"
-        export *
-    }
-    module sys_msg_h {
-        header "include/libc/sys/msg.h"
-        export *
-    }
-    module sys_mtio_h {
-        header "include/libc/sys/mtio.h"
-        export *
-    }
-    module sys_param_h {
-        header "include/libc/sys/param.h"
-        export *
-    }
-    module sys_personality_h {
-        header "include/libc/sys/personality.h"
-        export *
-    }
-    module sys_poll_h {
-        header "include/libc/sys/poll.h"
-        export *
-    }
-    module sys_prctl_h {
-        header "include/libc/sys/prctl.h"
-        export *
-    }
-    module sys_procfs_h {
-        header "include/libc/sys/procfs.h"
-        export *
-    }
-    module sys_ptrace_h {
-        header "include/libc/sys/ptrace.h"
-        export *
-    }
-    module sys_quota_h {
-        header "include/libc/sys/quota.h"
-        export *
-    }
-    module sys_reboot_h {
-        header "include/libc/sys/reboot.h"
-        export *
-    }
-    module sys_reg_h {
-        header "include/libc/sys/reg.h"
-        export *
-    }
-    module sys_resource_h {
-        header "include/libc/sys/resource.h"
-        export *
-    }
-    module sys_select_h {
-        header "include/libc/sys/select.h"
-        export *
-    }
-    module sys_sem_h {
-        header "include/libc/sys/sem.h"
-        export *
-    }
-    module sys_sendfile_h {
-        header "include/libc/sys/sendfile.h"
-        export *
-    }
-    module sys_shm_h {
-        header "include/libc/sys/shm.h"
-        export *
-    }
-    module sys_signal_h {
-        header "include/libc/sys/signal.h"
-        export *
-    }
-    module sys_signalfd_h {
-        header "include/libc/sys/signalfd.h"
-        export *
-    }
-    module sys_socket_h {
-        header "include/libc/sys/socket.h"
-        export *
-    }
-    module sys_soundcard_h {
-        header "include/libc/sys/soundcard.h"
-        export *
-    }
-    module sys_stat_h {
-        header "include/libc/sys/stat.h"
-        export *
-    }
-    module sys_statfs_h {
-        header "include/libc/sys/statfs.h"
-        export *
-    }
-    module sys_statvfs_h {
-        header "include/libc/sys/statvfs.h"
-        export *
-    }
-    module sys_stropts_h {
-        header "include/libc/sys/stropts.h"
-        export *
-    }
-    module sys_swap_h {
-        header "include/libc/sys/swap.h"
-        export *
-    }
-    module sys_syscall_h {
-        header "include/libc/sys/syscall.h"
-        export *
-    }
-    module sys_sysinfo_h {
-        header "include/libc/sys/sysinfo.h"
-        export *
-    }
-    module sys_syslog_h {
-        header "include/libc/sys/syslog.h"
-        export *
-    }
-    module sys_sysmacros_h {
-        header "include/libc/sys/sysmacros.h"
-        export *
-    }
-    module sys_termios_h {
-        header "include/libc/sys/termios.h"
-        export *
-    }
-    module sys_time_h {
-        header "include/libc/sys/time.h"
-        export *
-    }
-    module sys_timeb_h {
-        header "include/libc/sys/timeb.h"
-        export *
-    }
-    module sys_timerfd_h {
-        header "include/libc/sys/timerfd.h"
-        export *
-    }
-    module sys_times_h {
-        header "include/libc/sys/times.h"
-        export *
-    }
-    module sys_timex_h {
-        header "include/libc/sys/timex.h"
-        export *
-    }
-    module sys_ttydefaults_h {
-        header "include/libc/sys/ttydefaults.h"
-        export *
-    }
-    module sys_types_h {
-        umbrella "include/libc/bits"
-        header "include/libc/sys/types.h"
-        export *
-    }
-    module sys_ucontext_h {
-        header "include/libc/sys/ucontext.h"
-        export *
-    }
-    module sys_uio_h {
-        header "include/libc/sys/uio.h"
-        export *
-    }
-    module sys_un_h {
-        header "include/libc/sys/un.h"
-        export *
-    }
-    module sys_user_h {
-        header "include/libc/sys/user.h"
-        export *
-    }
-    module sys_utsname_h {
-        header "include/libc/sys/utsname.h"
-        export *
-    }
-    module sys_vfs_h {
-        header "include/libc/sys/vfs.h"
-        export *
-    }
-    module sys_vt_h {
-        header "include/libc/sys/vt.h"
-        export *
-    }
-    module sys_wait_h {
-        header "include/libc/sys/wait.h"
-        export *
-    }
-    module sys_xattr_h {
-        header "include/libc/sys/xattr.h"
-        export *
-    }
-    module syscall_h {
-        header "include/libc/syscall.h"
-        export *
-    }
-    module sysexits_h {
-        header "include/libc/sysexits.h"
-        export *
-    }
-    module syslog_h {
-        header "include/libc/syslog.h"
-        export *
-    }
-    module tar_h {
-        header "include/libc/tar.h"
-        export *
-    }
-    module termios_h {
-        header "include/libc/termios.h"
-        export *
-    }
-    module tgmath_h {
-        header "include/libc/tgmath.h"
-        export *
-    }
-    module threads_h {
-        header "include/libc/threads.h"
-        export *
-    }
-    module time_h {
-        header "include/libc/time.h"
-        export *
-    }
-    module uchar_h {
-        header "include/libc/uchar.h"
-        export *
-    }
-    module ucontext_h {
-        header "include/libc/ucontext.h"
-        export *
-    }
-    module ulimit_h {
-        header "include/libc/ulimit.h"
-        export *
-    }
-    module unistd_h {
-        header "include/libc/unistd.h"
-        export *
-    }
-    module utime_h {
-        header "include/libc/utime.h"
-        export *
-    }
-    module utmp_h {
-        header "include/libc/utmp.h"
-        export *
-    }
-    module utmpx_h {
-        header "include/libc/utmpx.h"
-        export *
-    }
-    module values_h {
-        header "include/libc/values.h"
-        export *
-    }
-    module wait_h {
-        header "include/libc/wait.h"
-        export *
-    }
-    module wchar_h {
-        header "include/libc/wchar.h"
-        export *
-    }
-    module wctype_h {
-        header "include/libc/wctype.h"
-        export *
-    }
-    module wordexp_h {
-        header "include/libc/wordexp.h"
-        export *
-    }
-    module bsd {
-        umbrella "local/include/bsd"
-        export *
-    }
-    module a2ofont_h {
-        header "local/include/a2ofont.h"
-        export *
-    }
-    module asl_h {
-        header "local/include/asl.h"
-        export *
-    }
-    module AssertMacros_h {
-        header "local/include/AssertMacros.h"
-        export *
-    }
-    module Availability_h {
-        textual header "local/include/Availability.h"
-        textual header "local/include/AvailabilityInternal.h"
-        textual header "local/include/AvailabilityMacros.h"
-        export *
-    }
-    module Block_h {
-        header "local/include/Block.h"
-        header "local/include/Block_private.h"
-        export *
-    }
-    module checkint_h {
-        header "local/include/checkint.h"
-        export *
-    }
-    module ConditionalMacros_h {
-        header "local/include/ConditionalMacros.h"
-        export *
-    }
-    module copyfile_h {
-        header "local/include/copyfile.h"
-        export *
-    }
-    module libkern_OSByteOrder_h {
-        header "local/include/libkern/OSByteOrder.h"
-        header "local/include/libkern/_OSByteOrder.h"
-        header "local/include/libkern/machine/OSByteOrder.h"
-        export *
-    }
-    module libkern_OSAtomic_h {
-        header "local/include/libkern/OSAtomic.h"
-        export *
-    }
-    module mach_boolean_h {
-        header "local/include/mach/boolean.h"
-        export *
-    }
-    module mach_mach_time_h {
-        header "local/include/mach/mach_time.h"
-        export *
-    }
-    module mach_mach_types_h {
-        header "local/include/mach/mach_types.h"
-        export *
-    }
-    module mach_machine_boolean_h {
-        header "local/include/mach/machine/boolean.h"
-        export *
-    }
-    module mach_machine_vm_types_h {
-        header "local/include/mach/machine/vm_types.h"
-        export *
-    }
-    module mach_port_h {
-        header "local/include/mach/port.h"
-        export *
-    }
-    module machine__default_types_h {
-        header "local/include/machine/_default_types.h"
-        export *
-    }
-    module machine__types_h {
-        header "local/include/machine/_types.h"
-        export *
-    }
-    module MacTypes_h {
-        header "local/include/MacTypes.h"
-        export *
-    }
-    module malloc_malloc_h {
-        header "local/include/malloc/malloc.h"
-        export *
-    }
-    module os_base_h {
-        header "local/include/os/base.h"
-        export *
-    }
-    module sqlite3_h {
-        header "local/include/sqlite3.h"
-        export *
-    }
-    module sqlite3ext_h {
-        header "local/include/sqlite3ext.h"
-        export *
-    }
-    module sys__posix_availability_h {
-        header "local/include/sys/_posix_availability.h"
-        export *
-    }
-    module sys__pthread__pthread_types_h {
-        header "local/include/sys/_pthread/_pthread_types.h"
-        export *
-    }
-    module sys__symbol_aliasing_h {
-        header "local/include/sys/_symbol_aliasing.h"
-        export *
-    }
-    module sys__types__mach_port_t_h {
-        header "local/include/sys/_types/_mach_port_t.h"
-        export *
-    }
-    module sys__types_h {
-        header "local/include/sys/_types.h"
-        export *
-    }
-    module sys_cdefs_h {
-        header "local/include/sys/cdefs.h"
-        export *
-    }
-    module sys_event_h {
-        header "local/include/sys/event.h"
-        export *
-    }
-    module sys_queue_h {
-        header "local/include/sys/queue.h"
-        export *
-    }
-    module TargetConditionals_h {
-        textual header "local/include/TargetConditionals.h"
-        export *
-    }
-}
-module emscripten {
-    umbrella "include/emscripten"
+module include_libc_aio_h {
+    header "include/libc/aio.h"
     export *
-
-    module emscripten_bind {
-        requires cplusplus11
-        header "include/emscripten/bind.h"
-        export *
-    }
-
-    module emscripten_val {
-        requires cplusplus11
-        header "include/emscripten/val.h"
-        export *
-    }
-
-    module emscripten_wire {
-        requires cplusplus11
-        header "include/emscripten/wire.h"
-        export *
-    }
 }
-module os_object_h {
+module include_libc_alloca_h {
+    header "include/libc/alloca.h"
+    export *
+}
+module include_libc_ar_h {
+    header "include/libc/ar.h"
+    export *
+}
+module include_libc_arpa_ftp_h {
+    header "include/libc/arpa/ftp.h"
+    export *
+}
+module include_libc_arpa_inet_h {
+    header "include/libc/arpa/inet.h"
+    export *
+}
+module include_libc_arpa_nameser_h {
+    header "include/libc/arpa/nameser.h"
+    export *
+}
+module include_libc_arpa_nameser_compat_h {
+    header "include/libc/arpa/nameser_compat.h"
+    export *
+}
+module include_libc_arpa_telnet_h {
+    header "include/libc/arpa/telnet.h"
+    export *
+}
+module include_libc_arpa_tftp_h {
+    header "include/libc/arpa/tftp.h"
+    export *
+}
+module include_libc_assert_h {
+    textual header "include/libc/assert.h"
+    export *
+}
+module include_libc_byteswap_h {
+    header "include/libc/byteswap.h"
+    export *
+}
+module include_libc_complex_h {
+    header "include/libc/complex.h"
+    export *
+}
+module include_libc_cpio_h {
+    header "include/libc/cpio.h"
+    export *
+}
+module include_libc_crypt_h {
+    header "include/libc/crypt.h"
+    export *
+}
+module include_libc_ctype_h {
+    header "include/libc/ctype.h"
+    export *
+}
+module include_libc_dirent_h {
+    header "include/libc/dirent.h"
+    export *
+}
+module include_libc_dlfcn_h {
+    header "include/libc/dlfcn.h"
+    export *
+}
+module include_libc_elf_h {
+    header "include/libc/elf.h"
+    export *
+}
+module include_libc_endian_h {
+    header "include/libc/endian.h"
+    export *
+}
+module include_libc_err_h {
+    header "include/libc/err.h"
+    export *
+}
+module include_libc_errno_h {
+    header "include/libc/errno.h"
+    export *
+}
+module include_libc_fcntl_h {
+    header "include/libc/fcntl.h"
+    export *
+}
+module include_libc_features_h {
+    header "include/libc/features.h"
+    export *
+}
+module include_libc_fenv_h {
+    header "include/libc/fenv.h"
+    export *
+}
+module include_libc_float_h {
+    header "include/libc/float.h"
+    export *
+}
+module include_libc_fmtmsg_h {
+    header "include/libc/fmtmsg.h"
+    export *
+}
+module include_libc_fnmatch_h {
+    header "include/libc/fnmatch.h"
+    export *
+}
+module include_libc_ftw_h {
+    header "include/libc/ftw.h"
+    export *
+}
+module include_libc_getopt_h {
+    header "include/libc/getopt.h"
+    export *
+}
+module include_libc_glob_h {
+    header "include/libc/glob.h"
+    export *
+}
+module include_libc_grp_h {
+    header "include/libc/grp.h"
+    export *
+}
+module include_libc_iconv_h {
+    header "include/libc/iconv.h"
+    export *
+}
+module include_libc_ifaddrs_h {
+    header "include/libc/ifaddrs.h"
+    export *
+}
+module include_libc_inttypes_h {
+    header "include/libc/inttypes.h"
+    export *
+}
+module include_libc_iso646_h {
+    header "include/libc/iso646.h"
+    export *
+}
+module include_libc_langinfo_h {
+    header "include/libc/langinfo.h"
+    export *
+}
+module include_libc_lastlog_h {
+    header "include/libc/lastlog.h"
+    export *
+}
+module include_libc_libgen_h {
+    header "include/libc/libgen.h"
+    export *
+}
+module include_libc_libintl_h {
+    header "include/libc/libintl.h"
+    export *
+}
+module include_libc_limits_h {
+    header "include/libc/limits.h"
+    export *
+}
+module include_libc_link_h {
+    header "include/libc/link.h"
+    export *
+}
+module include_libc_locale_h {
+    header "include/libc/locale.h"
+    export *
+}
+module include_libc_malloc_h {
+    header "include/libc/malloc.h"
+    export *
+}
+module include_libc_math_h {
+    header "include/libc/math.h"
+    export *
+}
+module include_libc_memory_h {
+    header "include/libc/memory.h"
+    export *
+}
+module include_libc_mntent_h {
+    header "include/libc/mntent.h"
+    export *
+}
+module include_libc_monetary_h {
+    header "include/libc/monetary.h"
+    export *
+}
+module include_libc_mqueue_h {
+    header "include/libc/mqueue.h"
+    export *
+}
+module include_libc_net_ethernet_h {
+    header "include/libc/net/ethernet.h"
+    export *
+}
+module include_libc_net_if_h {
+    header "include/libc/net/if.h"
+    export *
+}
+module include_libc_net_if_arp_h {
+    header "include/libc/net/if_arp.h"
+    export *
+}
+module include_libc_net_route_h {
+    header "include/libc/net/route.h"
+    export *
+}
+module include_libc_netdb_h {
+    header "include/libc/netdb.h"
+    export *
+}
+module include_libc_netinet_ether_h {
+    header "include/libc/netinet/ether.h"
+    export *
+}
+module include_libc_netinet_icmp6_h {
+    header "include/libc/netinet/icmp6.h"
+    export *
+}
+module include_libc_netinet_if_ether_h {
+    header "include/libc/netinet/if_ether.h"
+    export *
+}
+module include_libc_netinet_igmp_h {
+    header "include/libc/netinet/igmp.h"
+    export *
+}
+module include_libc_netinet_in_h {
+    header "include/libc/netinet/in.h"
+    export *
+}
+module include_libc_netinet_in_systm_h {
+    header "include/libc/netinet/in_systm.h"
+    export *
+}
+module include_libc_netinet_ip_h {
+    header "include/libc/netinet/ip.h"
+    export *
+}
+module include_libc_netinet_ip6_h {
+    header "include/libc/netinet/ip6.h"
+    export *
+}
+module include_libc_netinet_ip_icmp_h {
+    header "include/libc/netinet/ip_icmp.h"
+    export *
+}
+module include_libc_netinet_tcp_h {
+    header "include/libc/netinet/tcp.h"
+    export *
+}
+module include_libc_netinet_udp_h {
+    header "include/libc/netinet/udp.h"
+    export *
+}
+module include_libc_netinet6_in6_h {
+    header "include/libc/netinet6/in6.h"
+    export *
+}
+module include_libc_netpacket_packet_h {
+    header "include/libc/netpacket/packet.h"
+    export *
+}
+module include_libc_nl_types_h {
+    header "include/libc/nl_types.h"
+    export *
+}
+module include_libc_paths_h {
+    header "include/libc/paths.h"
+    export *
+}
+module include_libc_poll_h {
+    header "include/libc/poll.h"
+    export *
+}
+module include_libc_pthread_h {
+    header "include/libc/pthread.h"
+    export *
+}
+module include_libc_pty_h {
+    header "include/libc/pty.h"
+    export *
+}
+module include_libc_pwd_h {
+    header "include/libc/pwd.h"
+    export *
+}
+module include_libc_regex_h {
+    header "include/libc/regex.h"
+    export *
+}
+module include_libc_resolv_h {
+    header "include/libc/resolv.h"
+    export *
+}
+module include_libc_sched_h {
+    header "include/libc/sched.h"
+    export *
+}
+module include_libc_scsi_scsi_h {
+    header "include/libc/scsi/scsi.h"
+    export *
+}
+module include_libc_scsi_scsi_ioctl_h {
+    header "include/libc/scsi/scsi_ioctl.h"
+    export *
+}
+module include_libc_scsi_sg_h {
+    header "include/libc/scsi/sg.h"
+    export *
+}
+module include_libc_search_h {
+    header "include/libc/search.h"
+    export *
+}
+module include_libc_semaphore_h {
+    header "include/libc/semaphore.h"
+    export *
+}
+module include_libc_setjmp_h {
+    header "include/libc/setjmp.h"
+    export *
+}
+module include_libc_shadow_h {
+    header "include/libc/shadow.h"
+    export *
+}
+module include_libc_signal_h {
+    header "include/libc/signal.h"
+    export *
+}
+module include_libc_spawn_h {
+    header "include/libc/spawn.h"
+    export *
+}
+module include_libc_stdalign_h {
+    header "include/libc/stdalign.h"
+    export *
+}
+module include_libc_stdarg_h {
+    header "include/libc/stdarg.h"
+    export *
+}
+module include_libc_stdbool_h {
+    header "include/libc/stdbool.h"
+    export *
+}
+module include_libc_stdc_predef_h {
+    header "include/libc/stdc-predef.h"
+    export *
+}
+module include_libc_stddef_h {
+    header "include/libc/stddef.h"
+    export *
+}
+module include_libc_stdint_h {
+    header "include/libc/stdint.h"
+    export *
+}
+module include_libc_stdio_h {
+    header "include/libc/stdio.h"
+    export *
+}
+module include_libc_stdio_ext_h {
+    header "include/libc/stdio_ext.h"
+    export *
+}
+module include_libc_stdlib_h {
+    header "include/libc/stdlib.h"
+    textual header "include/compat/stdlib.h"
+    header "include/libcxx/stdlib.h"
+    export *
+}
+module include_libc_stdnoreturn_h {
+    header "include/libc/stdnoreturn.h"
+    export *
+}
+module include_libc_string_h {
+    header "include/libc/string.h"
+    export *
+}
+module include_libc_strings_h {
+    header "include/libc/strings.h"
+    export *
+}
+module include_libc_stropts_h {
+    header "include/libc/stropts.h"
+    export *
+}
+module include_libc_sys_acct_h {
+    header "include/libc/sys/acct.h"
+    export *
+}
+module include_libc_sys_auxv_h {
+    header "include/libc/sys/auxv.h"
+    export *
+}
+module include_libc_sys_cachectl_h {
+    header "include/libc/sys/cachectl.h"
+    export *
+}
+module include_libc_sys_dir_h {
+    header "include/libc/sys/dir.h"
+    export *
+}
+module include_libc_sys_epoll_h {
+    header "include/libc/sys/epoll.h"
+    export *
+}
+module include_libc_sys_errno_h {
+    header "include/libc/sys/errno.h"
+    export *
+}
+module include_libc_sys_eventfd_h {
+    header "include/libc/sys/eventfd.h"
+    export *
+}
+module include_libc_sys_fanotify_h {
+    header "include/libc/sys/fanotify.h"
+    export *
+}
+module include_libc_sys_fcntl_h {
+    header "include/libc/sys/fcntl.h"
+    export *
+}
+module include_libc_sys_file_h {
+    header "include/libc/sys/file.h"
+    export *
+}
+module include_libc_sys_fsuid_h {
+    header "include/libc/sys/fsuid.h"
+    export *
+}
+module include_libc_sys_inotify_h {
+    header "include/libc/sys/inotify.h"
+    export *
+}
+module include_libc_sys_io_h {
+    header "include/libc/sys/io.h"
+    export *
+}
+module include_libc_sys_ioctl_h {
+    header "include/libc/sys/ioctl.h"
+    export *
+}
+module include_libc_sys_ipc_h {
+    header "include/libc/sys/ipc.h"
+    export *
+}
+module include_libc_sys_kd_h {
+    header "include/libc/sys/kd.h"
+    export *
+}
+module include_libc_sys_klog_h {
+    header "include/libc/sys/klog.h"
+    export *
+}
+module include_libc_sys_mman_h {
+    header "include/libc/sys/mman.h"
+    export *
+}
+module include_libc_sys_mount_h {
+    header "include/libc/sys/mount.h"
+    export *
+}
+module include_libc_sys_msg_h {
+    header "include/libc/sys/msg.h"
+    export *
+}
+module include_libc_sys_mtio_h {
+    header "include/libc/sys/mtio.h"
+    export *
+}
+module include_libc_sys_param_h {
+    header "include/libc/sys/param.h"
+    export *
+}
+module include_libc_sys_personality_h {
+    header "include/libc/sys/personality.h"
+    export *
+}
+module include_libc_sys_poll_h {
+    header "include/libc/sys/poll.h"
+    export *
+}
+module include_libc_sys_prctl_h {
+    header "include/libc/sys/prctl.h"
+    export *
+}
+module include_libc_sys_procfs_h {
+    header "include/libc/sys/procfs.h"
+    export *
+}
+module include_libc_sys_ptrace_h {
+    header "include/libc/sys/ptrace.h"
+    export *
+}
+module include_libc_sys_quota_h {
+    header "include/libc/sys/quota.h"
+    export *
+}
+module include_libc_sys_reboot_h {
+    header "include/libc/sys/reboot.h"
+    export *
+}
+module include_libc_sys_reg_h {
+    header "include/libc/sys/reg.h"
+    export *
+}
+module include_libc_sys_resource_h {
+    header "include/libc/sys/resource.h"
+    export *
+}
+module include_libc_sys_select_h {
+    header "include/libc/sys/select.h"
+    export *
+}
+module include_libc_sys_sem_h {
+    header "include/libc/sys/sem.h"
+    export *
+}
+module include_libc_sys_sendfile_h {
+    header "include/libc/sys/sendfile.h"
+    export *
+}
+module include_libc_sys_shm_h {
+    header "include/libc/sys/shm.h"
+    export *
+}
+module include_libc_sys_signal_h {
+    header "include/libc/sys/signal.h"
+    export *
+}
+module include_libc_sys_signalfd_h {
+    header "include/libc/sys/signalfd.h"
+    export *
+}
+module include_libc_sys_socket_h {
+    header "include/libc/sys/socket.h"
+    export *
+}
+module include_libc_sys_soundcard_h {
+    header "include/libc/sys/soundcard.h"
+    export *
+}
+module include_libc_sys_stat_h {
+    header "include/libc/sys/stat.h"
+    export *
+}
+module include_libc_sys_statfs_h {
+    header "include/libc/sys/statfs.h"
+    export *
+}
+module include_libc_sys_statvfs_h {
+    header "include/libc/sys/statvfs.h"
+    export *
+}
+module include_libc_sys_stropts_h {
+    header "include/libc/sys/stropts.h"
+    export *
+}
+module include_libc_sys_swap_h {
+    header "include/libc/sys/swap.h"
+    export *
+}
+module include_libc_sys_syscall_h {
+    header "include/libc/sys/syscall.h"
+    export *
+}
+module include_libc_sys_sysinfo_h {
+    header "include/libc/sys/sysinfo.h"
+    export *
+}
+module include_libc_sys_syslog_h {
+    header "include/libc/sys/syslog.h"
+    export *
+}
+module include_libc_sys_sysmacros_h {
+    header "include/libc/sys/sysmacros.h"
+    export *
+}
+module include_libc_sys_termios_h {
+    header "include/libc/sys/termios.h"
+    export *
+}
+module include_libc_sys_time_h {
+    header "include/libc/sys/time.h"
+    export *
+}
+module include_libc_sys_timeb_h {
+    header "include/libc/sys/timeb.h"
+    export *
+}
+module include_libc_sys_timerfd_h {
+    header "include/libc/sys/timerfd.h"
+    export *
+}
+module include_libc_sys_times_h {
+    header "include/libc/sys/times.h"
+    export *
+}
+module include_libc_sys_timex_h {
+    header "include/libc/sys/timex.h"
+    export *
+}
+module include_libc_sys_ttydefaults_h {
+    header "include/libc/sys/ttydefaults.h"
+    export *
+}
+module include_libc_sys_types_h {
+    header "include/libc/sys/types.h"
+    export *
+}
+module include_libc_sys_ucontext_h {
+    header "include/libc/sys/ucontext.h"
+    export *
+}
+module include_libc_sys_uio_h {
+    header "include/libc/sys/uio.h"
+    export *
+}
+module include_libc_sys_un_h {
+    header "include/libc/sys/un.h"
+    export *
+}
+module include_libc_sys_user_h {
+    header "include/libc/sys/user.h"
+    export *
+}
+module include_libc_sys_utsname_h {
+    header "include/libc/sys/utsname.h"
+    export *
+}
+module include_libc_sys_vfs_h {
+    header "include/libc/sys/vfs.h"
+    export *
+}
+module include_libc_sys_vt_h {
+    header "include/libc/sys/vt.h"
+    export *
+}
+module include_libc_sys_wait_h {
+    header "include/libc/sys/wait.h"
+    export *
+}
+module include_libc_sys_xattr_h {
+    header "include/libc/sys/xattr.h"
+    export *
+}
+module include_libc_syscall_h {
+    header "include/libc/syscall.h"
+    export *
+}
+module include_libc_sysexits_h {
+    header "include/libc/sysexits.h"
+    export *
+}
+module include_libc_syslog_h {
+    header "include/libc/syslog.h"
+    export *
+}
+module include_libc_tar_h {
+    header "include/libc/tar.h"
+    export *
+}
+module include_libc_termios_h {
+    header "include/libc/termios.h"
+    export *
+}
+module include_libc_tgmath_h {
+    header "include/libc/tgmath.h"
+    export *
+}
+module include_libc_threads_h {
+    header "include/libc/threads.h"
+    export *
+}
+module include_libc_time_h {
+    header "include/libc/time.h"
+    export *
+}
+module include_libc_uchar_h {
+    header "include/libc/uchar.h"
+    export *
+}
+module include_libc_ucontext_h {
+    header "include/libc/ucontext.h"
+    export *
+}
+module include_libc_ulimit_h {
+    header "include/libc/ulimit.h"
+    export *
+}
+module include_libc_unistd_h {
+    header "include/libc/unistd.h"
+    export *
+}
+module include_libc_utime_h {
+    header "include/libc/utime.h"
+    export *
+}
+module include_libc_utmp_h {
+    header "include/libc/utmp.h"
+    export *
+}
+module include_libc_utmpx_h {
+    header "include/libc/utmpx.h"
+    export *
+}
+module include_libc_values_h {
+    header "include/libc/values.h"
+    export *
+}
+module include_libc_wait_h {
+    header "include/libc/wait.h"
+    export *
+}
+module include_libc_wchar_h {
+    header "include/libc/wchar.h"
+    export *
+}
+module include_libc_wctype_h {
+    header "include/libc/wctype.h"
+    export *
+}
+module include_libc_wordexp_h {
+    header "include/libc/wordexp.h"
+    export *
+}
+module include_compat_ctype_h {
+    header "include/compat/ctype.h"
+    export *
+}
+module include_compat_malloc_h {
+    header "include/compat/malloc.h"
+    export *
+}
+module include_compat_math_h {
+    header "include/compat/math.h"
+    export *
+}
+module include_compat_netdb_h {
+    header "include/compat/netdb.h"
+    export *
+}
+module include_compat_stdarg_h {
+    header "include/compat/stdarg.h"
+    export *
+}
+module include_compat_string_h {
+    header "include/compat/string.h"
+    export *
+}
+module include_compat_sys_socketvar_h {
+    header "include/compat/sys/socketvar.h"
+    export *
+}
+module include_compat_sys_stat_h {
+    header "include/compat/sys/stat.h"
+    export *
+}
+module include_compat_sys_sysctl_h {
+    header "include/compat/sys/sysctl.h"
+    export *
+}
+module include_compat_sys_timeb_h {
+    header "include/compat/sys/timeb.h"
+    export *
+}
+module include_compat_sys_unistd_h {
+    header "include/compat/sys/unistd.h"
+    export *
+}
+module include_compat_time_h {
+    header "include/compat/time.h"
+    export *
+}
+module include_compat_wchar_h {
+    header "include/compat/wchar.h"
+    export *
+}
+module include_compat_wctype_h {
+    header "include/compat/wctype.h"
+    export *
+}
+module include_compat_xlocale_h {
+    header "include/compat/xlocale.h"
+    export *
+}
+module local_include_a2ofont_h {
+    header "local/include/a2ofont.h"
+    export *
+}
+module local_include_asl_h {
+    header "local/include/asl.h"
+    export *
+}
+module local_include_AssertMacros_h {
+    header "local/include/AssertMacros.h"
+    export *
+}
+module local_include_Availability_h {
+    header "local/include/Availability.h"
+    header "local/include/AvailabilityInternal.h"
+    header "local/include/AvailabilityMacros.h"
+    export *
+}
+module local_include_checkint_h {
+    header "local/include/checkint.h"
+    export *
+}
+module local_include_ConditionalMacros_h {
+    header "local/include/ConditionalMacros.h"
+    export *
+}
+module local_include_copyfile_h {
+    header "local/include/copyfile.h"
+    export *
+}
+module local_include_libkern__OSByteOrder_h {
+    header "local/include/libkern/_OSByteOrder.h"
+    export *
+}
+module local_include_libkern_machine_OSByteOrder_h {
+    header "local/include/libkern/machine/OSByteOrder.h"
+    export *
+}
+module local_include_libkern_OSAtomic_h {
+    header "local/include/libkern/OSAtomic.h"
+    export *
+}
+module local_include_libkern_OSByteOrder_h {
+    header "local/include/libkern/OSByteOrder.h"
+    export *
+}
+module local_include_mach_boolean_h {
+    header "local/include/mach/boolean.h"
+    export *
+}
+module local_include_mach_mach_time_h {
+    header "local/include/mach/mach_time.h"
+    export *
+}
+module local_include_mach_mach_types_h {
+    header "local/include/mach/mach_types.h"
+    export *
+}
+module local_include_mach_machine_boolean_h {
+    header "local/include/mach/machine/boolean.h"
+    export *
+}
+module local_include_mach_machine_vm_types_h {
+    header "local/include/mach/machine/vm_types.h"
+    export *
+}
+module local_include_mach_port_h {
+    header "local/include/mach/port.h"
+    export *
+}
+module local_include_machine__default_types_h {
+    header "local/include/machine/_default_types.h"
+    export *
+}
+module local_include_machine__types_h {
+    header "local/include/machine/_types.h"
+    export *
+}
+module local_include_MacTypes_h {
+    header "local/include/MacTypes.h"
+    export *
+}
+module local_include_malloc_malloc_h {
+    header "local/include/malloc/malloc.h"
+    export *
+}
+module local_include_os_base_h {
+    header "local/include/os/base.h"
+    export *
+}
+module local_include_os_object_h {
     header "local/include/os/object.h"
+    export *
+}
+module local_include_sqlite3_h {
+    header "local/include/sqlite3.h"
+    export *
+}
+module local_include_sqlite3ext_h {
+    header "local/include/sqlite3ext.h"
+    export *
+}
+module local_include_sys__posix_availability_h {
+    export *
+}
+module local_include_sys__pthread__pthread_types_h {
+    header "local/include/sys/_pthread/_pthread_types.h"
+    export *
+}
+module local_include_sys__types__mach_port_t_h {
+    header "local/include/sys/_types/_mach_port_t.h"
+    export *
+}
+module local_include_sys__types_h {
+    header "local/include/sys/_types.h"
+    export *
+}
+module local_include_sys_cdefs_h {
+    textual header "local/include/sys/cdefs.h"
+    textual header "local/include/sys/_symbol_aliasing.h"
+    textual header "local/include/sys/_posix_availability.h"
+    export *
+}
+module local_include_sys_event_h {
+    header "local/include/sys/event.h"
+    export *
+}
+module local_include_sys_queue_h {
+    header "local/include/sys/queue.h"
+    export *
+}
+module local_include_TargetConditionals_h {
+    header "local/include/TargetConditionals.h"
     export *
 }
