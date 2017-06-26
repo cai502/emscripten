@@ -290,11 +290,12 @@
         #define TARGET_CPU_SPARC  0
         #define TARGET_CPU_ALPHA  0
     #endif
-    #define TARGET_OS_EMSCRIPTEN         1
-    #define TARGET_OS_MAC                0
+    #define TARGET_OS_MAC                1
     #define TARGET_OS_WIN32              0
     #define TARGET_OS_UNIX               0
-    #define TARGET_OS_EMBEDDED           0
+    #define TARGET_OS_EMBEDDED           1
+    #define TARGET_OS_IPHONE             1
+    #define TARGET_OS_EMSCRIPTEN         1
     #if TARGET_CPU_PPC || TARGET_CPU_PPC64
         #define TARGET_RT_BIG_ENDIAN     1
         #define TARGET_RT_LITTLE_ENDIAN  0

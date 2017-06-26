@@ -21,7 +21,7 @@
 #ifndef __OS_OBJECT__
 #define __OS_OBJECT__
 
-#if defined(__APPLE__) || defined(__EMSCRIPTEN__)
+#if defined(__APPLE__) || defined(A2O_EMSCRIPTEN)
 #include <Availability.h>
 #endif
 #include <os/base.h>
