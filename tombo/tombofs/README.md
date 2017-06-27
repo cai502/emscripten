@@ -3,6 +3,7 @@
 ## setup
 
 ```console
+eval "$(a2obrew init -)" # for adding a2o's node into $PATH
 npm install
 ```
 
