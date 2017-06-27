@@ -219,14 +219,7 @@ class tombo(BrowserCore):
     )
 
   def test_s3_policy(self):
-    # Preparation
     FORBIDDEN_BUCKET_NAME = 'user.cannot.access'
-    PlatformHandler.execute_aws_command('s3api', [
-      'put-object',
-      '--bucket', FORBIDDEN_BUCKET_NAME,
-      '--key', 'test.file',
-      '--body', os.path.realpath(__file__)
-    ])
     OTHER_USER_NAME = 'tombo-other-user'
     OTHER_USER_TEST_FILE_PATH = '{}/test.file'.format(OTHER_USER_NAME)
     # Cannot do put-object under other user's path with federation user
