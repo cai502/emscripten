@@ -21,6 +21,7 @@ class TomboFSAWSClient {
   ) {
     // expiration should be ISO-8601 format string.
     // ex.) 2011-07-15T23:28:33.359Z
+    console.log(`setCredentials(${bucket}, ${region}, ${endpoint}, ${accessKeyId}, ${secretAccessKey}, ${sessionToken}, ${expiration})`);
     this.bucket = bucket;
     this.region = region;
     this.endpoint = endpoint;
@@ -34,6 +35,7 @@ class TomboFSAWSClient {
     const now = Date.now();
     // 60 secs is the margin to avoid errors.
     const result = !!(now < (this.expiration - 60) && this.accessKeyId && this.secretAccessKey && this.sessionToken);
+    console.log(`haveValidCredentials() -> ${result}`);
     return result;
   }
 
