@@ -310,7 +310,7 @@ Module['preRun'] = function(){
   FS.mount(NODEFS, { root: '.' }, dir);
   FS.chdir(dir);
 };
-'''
+''' if src and 'fopen' in src and '"w"' in src else ''
         open(target, 'w').write('#!' + full_node + '\n' + nodefs_mount + '\n' + src) # add shebang
         import stat
         try:
