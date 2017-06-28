@@ -13,3 +13,4 @@ ogg
 vorbis
 sqlite*.h
 libxml2
+tiff*
