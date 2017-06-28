@@ -213,7 +213,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
   CONFIGURE_CONFIG = (os.environ.get('EMMAKEN_JUST_CONFIGURE') or 'conftest.c' in sys.argv) and not os.environ.get('EMMAKEN_JUST_CONFIGURE_RECURSE')
   CMAKE_CONFIG = 'CMakeFiles/cmTryCompileExec.dir' in ' '.join(sys.argv)# or 'CMakeCCompilerId' in ' '.join(sys.argv)
   if CONFIGURE_CONFIG or CMAKE_CONFIG:
-    debug_configure = 1 # XXX use this to debug configure stuff. ./configure's generally hide our normal output including stderr so we write to a file
+    debug_configure = 0 # XXX use this to debug configure stuff. ./configure's generally hide our normal output including stderr so we write to a file
 
     # Whether we fake configure tests using clang - the local, native compiler - or not. if not we generate JS and use node with a shebang
     # Beither approach is perfect, you can try both, but may need to edit configure scripts in some cases
