@@ -979,7 +979,7 @@ mergeInto(LibraryManager.library, {
         }, true);
         node = lookup && lookup.node;
       } catch (e) {
-        console.log("Ignored:", e);
+        // console.log("Ignored:", e);
         // ignore
       }
       return node;

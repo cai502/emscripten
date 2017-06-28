@@ -243,11 +243,6 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
       elif arg == '-E' or arg == '-M' or arg == '-MM':
         if use_js == 1: use_js = 0
 
-    if src:
-      if 'fopen' in src and '"w"' in src:
-        if use_js == 1: use_js = 0 # we cannot write to files from js!
-        if debug_configure: open(tempout, 'a').write('Forcing clang since uses fopen to write\n')
-
     compiler = os.environ.get('CONFIGURE_CC') or (shared.CLANG if not use_js else shared.EMCC) # if CONFIGURE_CC is defined, use that. let's you use local gcc etc. if you need that
     if not ('CXXCompiler' in ' '.join(sys.argv) or EMCC_CXX):
       compiler = shared.to_cc(compiler)
@@ -307,7 +302,16 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
         full_node = ' '.join(shared.NODE_JS)
         if os.path.sep not in full_node:
           full_node = '/usr/bin/' + full_node # TODO: use whereis etc. And how about non-*NIX?
-        open(target, 'w').write('#!' + full_node + '\n' + src) # add shebang
+        nodefs_mount ='''
+var Module = {};
+Module['preRun'] = function(){
+  var dir = "/configure_dir";
+  FS.mkdir(dir);
+  FS.mount(NODEFS, { root: '.' }, dir);
+  FS.chdir(dir);
+};
+'''
+        open(target, 'w').write('#!' + full_node + '\n' + nodefs_mount + '\n' + src) # add shebang
         import stat
         try:
           os.chmod(target, stat.S_IMODE(os.stat(target).st_mode) | stat.S_IXUSR) # make executable
