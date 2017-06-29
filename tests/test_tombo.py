@@ -101,7 +101,7 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
   def execute_aws_command(self, service, commands):
     if not hasattr(self, 'aws_access_key_id'):
       if not os.path.exists(self.AWS_CREDENTIALS_PATH):
-        raise 'Cannot find {0}'.format(self.AWS_CREDENTIALS_PATH)
+        raise Exception('Cannot find {0}'.format(self.AWS_CREDENTIALS_PATH))
       p = ConfigParser.SafeConfigParser()
       p.read(self.AWS_CREDENTIALS_PATH)
       self.aws_access_key_id = p.get('default', 'aws_access_key_id')
