@@ -12,6 +12,7 @@ args = [
     '-s', 'DEMANGLE_SUPPORT=1',
     '-s', 'ERROR_ON_UNDEFINED_SYMBOLS=0',
     '-s', 'USE_ZLIB=1',
+    '-s', 'USE_LIBPNG=1',
     '-s', 'ALIASING_FUNCTION_POINTERS=0',
     '-s', 'EMULATED_FUNCTION_POINTERS=1',
     '-s', 'DISABLE_EXCEPTION_CATCHING=0',
