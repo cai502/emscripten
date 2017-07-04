@@ -809,6 +809,32 @@ var SyscallsLibrary = {
     var stream = SYSCALLS.getStreamFromFD();
     return 0; // we can't do anything synchronously; the in-memory FS is already synced to
   },
+  __syscall149: function(which, varargs) { // _sysctl
+    var namep = SYSCALLS.get();
+    var namelen = SYSCALLS.get();
+    var oldp = SYSCALLS.get();
+    var oldlenp = SYSCALLS.get();
+    var newp = SYSCALLS.get();
+    var newlenp = SYSCALLS.get();
+    
+    var name = HEAP32.subarray(namep>>2, (namep>>2)+namelen);
+    assert(name[0] == 6); // CTL_HW
+    assert(name[1] == 1); // HW_MACHINE
+    assert(!newp);
+    assert(!newlenp);
+    
+    var machine_name = "iPhone6,1";
+    
+    if(oldp) {
+        assert(oldlenp >= machine_name.length+1);
+        writeAsciiToMemory(machine_name, oldp, false);
+    } else {
+        assert(oldlenp);
+        {{{ makeSetValue('oldlenp', '0', 'machine_name.length+1', 'i32') }}};
+    }
+    
+    return 0;
+  },
   __syscall150: '__syscall153',     // mlock
   __syscall151: '__syscall153',     // munlock
   __syscall152: '__syscall153',     // mlockall
@@ -1696,4 +1722,3 @@ SyscallsLibrary.emscripten_syscall = eval('(' + switcher + ')');
 #endif
 
 mergeInto(LibraryManager.library, SyscallsLibrary);
-
