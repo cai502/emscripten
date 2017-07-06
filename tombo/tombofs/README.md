@@ -7,16 +7,18 @@ eval "$(a2obrew init -)" # for adding a2o's node into $PATH
 npm install
 ```
 
-## build
+## watch
+
+Watch the directory.
+
+```console
+npm run watch
+```
+
+## production build
 
 ```console
 npm run build
-```
-
-Or watch the directory.
-
-```console
-npm run build -- --watch
 ```
 
 ## test
