@@ -322,38 +322,38 @@ var Runtime = {
   loadDynamicLibrary: function(lib) {
     var libModule;
 #if BINARYEN
-    var bin;
-    if (lib.buffer) {
-      // we were provided the binary, in a typed array
-      bin = lib;
-    } else {
-      // load the binary synchronously
-      bin = Module['readBinary'](lib);
-    }
-    libModule = Runtime.loadWebAssemblyModule(bin);
+    return fetch(lib, {credentials: 'same-origin'}).then(function(response) {
+      return response.arrayBuffer();
+    }).then(function(bin) {
+      return Runtime.loadWebAssemblyModule(new Uint8Array(bin));
+    })
 #else
-    var src = Module['read'](lib);
-    libModule = eval(src)(
-      Runtime.alignFunctionTables(),
-      Module
-    );
+    return new Promise(function(resolve) {
+      var src = Module['read'](lib);
+      resolve(eval(src)(
+        Runtime.alignFunctionTables(),
+        Module
+      ));
+    })
 #endif
-    // add symbols into global namespace TODO: weak linking etc.
-    for (var sym in libModule) {
-      if (!Module.hasOwnProperty(sym)) {
-        Module[sym] = libModule[sym];
-      }
-#if ASSERTIONS == 2
-      else if (sym[0] === '_') {
-        var curr = Module[sym], next = libModule[sym];
-        // don't warn on functions - might be odr, linkonce_odr, etc.
-        if (!(typeof curr === 'function' && typeof next === 'function')) {
-          Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+    .then(function(libModule) {
+      // add symbols into global namespace TODO: weak linking etc.
+      for (var sym in libModule) {
+        if (!Module.hasOwnProperty(sym)) {
+          Module[sym] = libModule[sym];
         }
-      }
+#if ASSERTIONS == 2
+        else if (sym[0] === '_') {
+          var curr = Module[sym], next = libModule[sym];
+          // don't warn on functions - might be odr, linkonce_odr, etc.
+          if (!(typeof curr === 'function' && typeof next === 'function')) {
+            Module.printErr("warning: trying to dynamically load symbol '" + sym + "' (from '" + lib + "') that already exists (duplicate symbol? or weak linking, which isn't supported yet?)"); // + [curr, ' vs ', next]);
+          }
+        }
 #endif
-    }
-    Runtime.loadedDynamicLibraries.push(libModule);
+      }
+      Runtime.loadedDynamicLibraries.push(libModule);
+    });
   },
 
 #if BINARYEN
