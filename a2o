@@ -30,7 +30,7 @@ args = [
     '-Wnon-modular-include-in-framework-module',
 ]
 
-if not "SIDE_MODULE=1" in sys.argv:
+if not "SIDE_MODULE=1" in sys.argv and not "-c" in sys.argv:
     args += [
         '-lbsd',
         '-lobjc4',
