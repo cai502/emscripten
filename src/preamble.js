@@ -1976,17 +1976,6 @@ addOnPreRun(function() { addRunDependency('pgo') });
 }}}
 
 addOnPreRun(function() {
-  function loadDynamicLibraries(libs) {
-    if (libs) {
-      libs.forEach(function(lib) {
-        Runtime.loadDynamicLibrary(lib);
-      });
-    }
-    if (Module['asm']['runPostSets']) {
-      Module['asm']['runPostSets']();
-    }
-  }
-#if BINARYEN
   addRunDependency('postsets');
   new Promise(function(resolve){
     if (Module['dynamicLibraries']) {
@@ -2002,9 +1991,6 @@ addOnPreRun(function() {
     }
     removeRunDependency('postsets');
   });
-#else
-  loadDynamicLibraries(Module['dynamicLibraries']);
-#endif
 });
 
 #if ASSERTIONS
