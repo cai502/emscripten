@@ -1282,7 +1282,10 @@ def create_exports(exported_implemented_functions, in_table, function_table_data
       exports.append(quote(str(k)) + ': ' + str(v))
     # aliases become additional exports
     for k, v in metadata['aliases'].iteritems():
-      exports.append(quote(str(k)) + ': ' + str(v))
+      if metadata['namedGlobals'].has_key(v):
+        exports.append(quote(str(k)) + ': ' + str(metadata['namedGlobals'][v]))
+      else:
+        exports.append(quote(str(k)) + ': ' + str(v))
   return '{ ' + ', '.join(exports) + ' }'
 
 
