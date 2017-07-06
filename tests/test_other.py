@@ -16,7 +16,7 @@ def multiprocess_task(c_file, cache_dir_name):
     print '------'
   sys.exit(1 if 'generating system library: libc.bc' in output else 0)
 
-class temp_directory:
+class temp_directory(object):
   def __enter__(self):
     self.directory = tempfile.mkdtemp(prefix='emsripten_temp_', dir=TEMP_DIR)
     self.prev_cwd = os.getcwd()
@@ -26,7 +26,7 @@ class temp_directory:
       os.chdir(self.prev_cwd) # On Windows, we can't have CWD in the directory we're deleting
       try_delete(self.directory)
 
-class clean_write_access_to_canonical_temp_dir:
+class clean_write_access_to_canonical_temp_dir(object):
   def clean_emcc_files_in_temp_dir(self):
     for x in os.listdir(CANONICAL_TEMP_DIR):
       if x.startswith('emcc-') or x.startswith('a.out'):
@@ -66,7 +66,7 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 
       # -v, without input files
       output = Popen([PYTHON, compiler, '-v'], stdout=PIPE, stderr=PIPE).communicate()
-      self.assertContained('''clang version %s.0 ''' % '.'.join(map(str, EXPECTED_LLVM_VERSION)), output[1].replace('\r', ''), output[1].replace('\r', ''))
+      self.assertContained('''clang version %s.0 ''' % expected_llvm_version(), output[1].replace('\r', ''), output[1].replace('\r', ''))
       self.assertContained('''GNU''', output[0])
       self.assertNotContained('this is dangerous', output[0])
       self.assertNotContained('this is dangerous', output[1])
@@ -410,11 +410,12 @@ f.close()
 
   def test_emcc_cflags(self):
     # see we print them out
-    output = Popen([PYTHON, EMCC, '--cflags'], stdout=PIPE, stderr=PIPE).communicate()
+    with clean_write_access_to_canonical_temp_dir(): # --cflags needs to set EMCC_DEBUG=1, which needs to create canonical temp directory.
+      output = Popen([PYTHON, EMCC, '--cflags'], stdout=PIPE, stderr=PIPE).communicate()
     flags = output[0].strip()
-    self.assertContained(' '.join(COMPILER_OPTS), flags)
+    self.assertContained(' '.join(Building.doublequote_spaces(COMPILER_OPTS)), flags)
     # check they work
-    cmd = [CLANG, path_from_root('tests', 'hello_world.cpp')] + flags.split(' ') + ['-c', '-emit-llvm', '-o', 'a.bc']
+    cmd = [CLANG, path_from_root('tests', 'hello_world.cpp')] + shlex.split(flags.replace('\\', '\\\\')) + ['-c', '-emit-llvm', '-o', 'a.bc']
     subprocess.check_call(cmd)
     subprocess.check_call([PYTHON, EMCC, 'a.bc'])
     self.assertContained('hello, world!', run_js(self.in_dir('a.out.js')))
@@ -520,8 +521,12 @@ f.close()
           # Run Cmake
           cmd = [emconfigure, 'cmake'] + cmake_args + ['-G', generator, cmakelistsdir]
 
+          env = os.environ.copy()
+          # https://github.com/kripken/emscripten/pull/5145: Check that CMake works even if EMCC_SKIP_SANITY_CHECK=1 is passed.
+          if test_dir == 'target_html':
+            env['EMCC_SKIP_SANITY_CHECK'] = '1'
           print str(cmd)
-          ret = Popen(cmd, stdout=None if EM_BUILD_VERBOSE_LEVEL >= 2 else PIPE, stderr=None if EM_BUILD_VERBOSE_LEVEL >= 1 else PIPE).communicate()
+          ret = Popen(cmd, env=env, stdout=None if EM_BUILD_VERBOSE_LEVEL >= 2 else PIPE, stderr=None if EM_BUILD_VERBOSE_LEVEL >= 1 else PIPE).communicate()
           if len(ret) > 1 and ret[1] != None and len(ret[1].strip()) > 0:
             logging.error(ret[1]) # If there were any errors, print them directly to console for diagnostics.
           if len(ret) > 1 and ret[1] != None and 'error' in ret[1].lower():
@@ -570,7 +575,9 @@ f.close()
     tempdirname_emscripten = tempfile.mkdtemp(prefix='emscripten_test_' + self.__class__.__name__ + '_', dir=TEMP_DIR)
     try:
       os.chdir(tempdirname_native)
-      native_features = Popen(['cmake', '-DCMAKE_C_COMPILER=' + CLANG_CC, '-DCMAKE_CXX_COMPILER=' + CLANG_CPP, path_from_root('tests', 'cmake', 'stdproperty')], stdout=PIPE).communicate()[0]
+      cmd = ['cmake', '-DCMAKE_C_COMPILER=' + CLANG_CC, '-DCMAKE_CXX_COMPILER=' + CLANG_CPP, path_from_root('tests', 'cmake', 'stdproperty')]
+      print str(cmd)
+      native_features = Popen(cmd, stdout=PIPE).communicate()[0]
     finally:
       os.chdir(tempdirname_emscripten)
       try:
@@ -583,7 +590,9 @@ f.close()
 
     try:
       os.chdir(tempdirname_emscripten)
-      emscripten_features = Popen([emconfigure, 'cmake', path_from_root('tests', 'cmake', 'stdproperty')], stdout=PIPE).communicate()[0]
+      cmd = [emconfigure, 'cmake', path_from_root('tests', 'cmake', 'stdproperty')]
+      print str(cmd)
+      emscripten_features = Popen(cmd, stdout=PIPE).communicate()[0]
     finally:
       os.chdir(path_from_root('tests'))
       try:
@@ -671,10 +680,14 @@ f.close()
       assert os.path.exists('this_output_file_should_never_exist.js') == False, 'Emcc should not produce an output file when build fails!'
 
   def test_use_cxx(self):
-    dash_xc = Popen([PYTHON, EMCC, '-v', '-xc', '/dev/null'], stdout=PIPE, stderr=PIPE).communicate()[1]
-    self.assertNotContained('-std=c++03', dash_xc)
-    dash_xcpp = Popen([PYTHON, EMCC, '-v', '-xc++', '/dev/null'], stdout=PIPE, stderr=PIPE).communicate()[1]
-    self.assertContained('-std=c++03', dash_xcpp)
+    open('empty_file', 'w').write(' ')
+    try:
+      dash_xc = Popen([PYTHON, EMCC, '-v', '-xc', 'empty_file'], stdout=PIPE, stderr=PIPE).communicate()[1]
+      self.assertNotContained('-std=c++03', dash_xc)
+      dash_xcpp = Popen([PYTHON, EMCC, '-v', '-xc++', 'empty_file'], stdout=PIPE, stderr=PIPE).communicate()[1]
+      self.assertContained('-std=c++03', dash_xcpp)
+    finally:
+      try_delete('empty_file')
 
   def test_cxx03(self):
     for compiler in [EMCC, EMXX]:
@@ -1266,9 +1279,9 @@ int f() {
         # (we'd use run_js() normally)
         try_delete('out.txt')
         if os.name == 'nt': # windows
-          os.system('type "in.txt" | {} >out.txt'.format(' '.join(make_js_command(os.path.normpath(exe), engine))))
+          os.system('type "in.txt" | {} >out.txt'.format(' '.join(Building.doublequote_spaces(make_js_command(os.path.normpath(exe), engine)))))
         else: # posix
-          os.system('cat in.txt | {} > out.txt'.format(' '.join(make_js_command(exe, engine))))
+          os.system('cat in.txt | {} > out.txt'.format(' '.join(Building.doublequote_spaces(make_js_command(exe, engine)))))
         self.assertContained('abcdef\nghijkl\neof', open('out.txt').read())
 
     Building.emcc(path_from_root('tests', 'module', 'test_stdin.c'), output_filename='a.out.js')
@@ -2293,7 +2306,7 @@ int f() {
           for tf in testFiles:
             f.write(open(tf, 'rb').read())
 
-        output = run_js(self.in_dir('a.out.js'), stdout=PIPE, stderr=PIPE, full_output=True, assert_returncode=0)
+        output = run_js(self.in_dir('a.out.js'), stdout=PIPE, stderr=PIPE, full_output=True, assert_returncode=0, engine=NODE_JS)
         assert "FAIL" not in output, output
 
   def test_llvm_nativizer(self):
@@ -5294,6 +5307,18 @@ int main(void) {
     Building.emcc(inname, output_filename='a.out.js')
     output = Popen(NODE_JS + ['-e', 'require("./a.out.js")'], stdout=PIPE, stderr=PIPE).communicate()
     assert output == ('hello, world!\n', ''), 'expected no output, got\n===\nSTDOUT\n%s\n===\nSTDERR\n%s\n===\n' % output
+  
+  def test_require_modularize(self):
+    Popen([PYTHON, EMCC, path_from_root('tests', 'hello_world.c'), '-s', 'MODULARIZE=1']).communicate()
+    src = open('a.out.js').read()
+    assert "module['exports'] = Module;" in src
+    output = Popen(NODE_JS + ['-e', 'var m = require("./a.out.js"); m();'], stdout=PIPE, stderr=PIPE).communicate()
+    assert output == ('hello, world!\n', ''), 'expected output, got\n===\nSTDOUT\n%s\n===\nSTDERR\n%s\n===\n' % output
+    Popen([PYTHON, EMCC, path_from_root('tests', 'hello_world.c'), '-s', 'MODULARIZE=1', '-s', 'EXPORT_NAME="NotModule"']).communicate()
+    src = open('a.out.js').read()
+    assert "module['exports'] = NotModule;" in src
+    output = Popen(NODE_JS + ['-e', 'var m = require("./a.out.js"); m();'], stdout=PIPE, stderr=PIPE).communicate()
+    assert output == ('hello, world!\n', ''), 'expected output, got\n===\nSTDOUT\n%s\n===\nSTDERR\n%s\n===\n' % output
 
   def test_native_optimizer(self):
     def test(args, expected):
@@ -5342,49 +5367,50 @@ int main(void) {
           del os.environ['EMCONFIGURE_JS']
 
   def test_emcc_c_multi(self):
-    def test(args, llvm_opts=None):
-      print args
-      lib = r'''
-        int mult() { return 1; }
-      '''
+    with clean_write_access_to_canonical_temp_dir():
+      def test(args, llvm_opts=None):
+        print args
+        lib = r'''
+          int mult() { return 1; }
+        '''
 
-      lib_name = 'libA.c'
-      open(lib_name, 'w').write(lib)
-      main = r'''
-        #include <stdio.h>
-        int mult();
-        int main() {
-          printf("result: %d\n", mult());
-          return 0;
-        }
-      '''
-      main_name = 'main.c'
-      open(main_name, 'w').write(main)
+        lib_name = 'libA.c'
+        open(lib_name, 'w').write(lib)
+        main = r'''
+          #include <stdio.h>
+          int mult();
+          int main() {
+            printf("result: %d\n", mult());
+            return 0;
+          }
+        '''
+        main_name = 'main.c'
+        open(main_name, 'w').write(main)
 
-      if os.environ.get('EMCC_DEBUG'): return self.skip('cannot run in debug mode')
-      try:
-        os.environ['EMCC_DEBUG'] = '1'
-        out, err = Popen([PYTHON, EMCC, '-c', main_name, lib_name] + args, stderr=PIPE).communicate()
-      finally:
-        del os.environ['EMCC_DEBUG']
+        if os.environ.get('EMCC_DEBUG'): return self.skip('cannot run in debug mode')
+        try:
+          os.environ['EMCC_DEBUG'] = '1'
+          out, err = Popen([PYTHON, EMCC, '-c', main_name, lib_name] + args, stderr=PIPE).communicate()
+        finally:
+          del os.environ['EMCC_DEBUG']
 
-      VECTORIZE = '-disable-loop-vectorization'
+        VECTORIZE = '-disable-loop-vectorization'
 
-      if args:
-        assert err.count(VECTORIZE) == 2, err # specified twice, once per file
+        if args:
+          assert err.count(VECTORIZE) == 2, err # specified twice, once per file
 
-        assert err.count('emcc: LLVM opts: ' + llvm_opts + ' ' + VECTORIZE) == 2, err # exactly once per invocation of optimizer
-      else:
-        assert err.count(VECTORIZE) == 0, err # no optimizations
+          assert err.count('emcc: LLVM opts: ' + llvm_opts + ' ' + VECTORIZE) == 2, err # exactly once per invocation of optimizer
+        else:
+          assert err.count(VECTORIZE) == 0, err # no optimizations
 
-      Popen([PYTHON, EMCC, main_name.replace('.c', '.o'), lib_name.replace('.c', '.o')]).communicate()
+        Popen([PYTHON, EMCC, main_name.replace('.c', '.o'), lib_name.replace('.c', '.o')]).communicate()
 
-      self.assertContained('result: 1', run_js(os.path.join(self.get_dir(), 'a.out.js')))
+        self.assertContained('result: 1', run_js(os.path.join(self.get_dir(), 'a.out.js')))
 
-    test([])
-    test(['-O2'], '-O3')
-    test(['-Oz'], '-Oz')
-    test(['-Os'], '-Os')
+      test([])
+      test(['-O2'], '-O3')
+      test(['-Oz'], '-Oz')
+      test(['-Os'], '-Os')
 
   def test_export_all_3142(self):
     open('src.cpp', 'w').write(r'''
@@ -5520,6 +5546,15 @@ int main() {
     try_delete('a.out.js')
     Popen([PYTHON, EMCC, 'src.cpp']).communicate()
     self.assertContained('exiting now, status 14', run_js('a.out.js', assert_returncode=14))
+
+  def test_underscore_exit(self):
+    open('src.cpp', 'w').write(r'''
+#include <unistd.h>
+int main() {
+  _exit(0); // should not end up in an infinite loop with non-underscore exit
+}    ''')
+    subprocess.check_call([PYTHON, EMCC, 'src.cpp'])
+    self.assertContained('', run_js('a.out.js', assert_returncode=0))
 
   def test_file_packager_huge(self):
     open('huge.dat', 'w').write('a'*(1024*1024*257))
@@ -7503,6 +7538,52 @@ int main() {
       print 'sizes:', sizes
       assert sizes[1] < sizes[0], 'ignoring implicit traps must reduce code size'
 
+  # test disabling of JS FFI legalization
+  def test_legalize_js_ffi(self):
+    with clean_write_access_to_canonical_temp_dir():
+      for (args,js_ffi) in [
+          (['-s', 'LEGALIZE_JS_FFI=1', '-s', 'SIDE_MODULE=1', '-O2', ], True),
+          (['-s', 'LEGALIZE_JS_FFI=0', '-s', 'SIDE_MODULE=1', '-O2', ], False),
+          (['-s', 'LEGALIZE_JS_FFI=0', '-s', 'SIDE_MODULE=1', '-O0', ], False),
+          (['-s', 'LEGALIZE_JS_FFI=0', '-s', 'SIDE_MODULE=0', '-O0'], False),
+        ]:
+        print args
+        try_delete('a.out.wasm')
+        try_delete('a.out.wast')
+        cmd = [PYTHON, EMCC, path_from_root('tests', 'other', 'ffi.c'), '-s', 'WASM=1', '-g', '-o', 'a.out.js'] + args
+        print ' '.join(cmd)
+        proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
+        output, err = proc.communicate()
+        assert proc.returncode == 0
+        text = open('a.out.wast').read()
+        #print "text: %s" % text
+        e_add_f32 = re.search('func \$_add_f \(param \$*. f32\) \(param \$*. f32\) \(result f32\)', text)
+        i_i64_i32 = re.search('import .*"_import_ll" .*\(param i32 i32\) \(result i32\)', text)
+        i_f32_f64 = re.search('import .*"_import_f" .*\(param f64\) \(result f64\)', text)
+        i_i64_i64 = re.search('import .*"_import_ll" .*\(param i64\) \(result i64\)', text)
+        i_f32_f32 = re.search('import .*"_import_f" .*\(param f32\) \(result f32\)', text)
+        e_i64_i32 = re.search('func \$_add_ll \(param \$*. i32\) \(param \$*. i32\) \(param \$*. i32\) \(param \$*. i32\) \(result i32\)', text)
+        e_f32_f64 = re.search('func \$legalstub\$_add_f \(param \$*. f64\) \(param \$*. f64\) \(result f64\)', text)
+        e_i64_i64 = re.search('func \$_add_ll \(param \$*. i64\) \(param \$*. i64\) \(result i64\)', text)
+        #print e_add_f32, i_i64_i32, i_f32_f64, i_i64_i64, i_f32_f32, e_i64_i32, e_f32_f64, e_i64_i64
+        assert e_add_f32, 'add_f export missing'
+        if js_ffi:
+          assert i_i64_i32,     'i64 not converted to i32 in imports'
+          assert i_f32_f64,     'f32 not converted to f64 in imports'
+          assert not i_i64_i64, 'i64 not converted to i32 in imports'
+          assert not i_f32_f32, 'f32 not converted to f64 in imports'
+          assert e_i64_i32,     'i64 not converted to i32 in exports'
+          assert e_f32_f64,     'f32 not converted to f64 in exports'
+          assert not e_i64_i64, 'i64 not converted to i32 in exports'
+        else:
+          assert not i_i64_i32, 'i64 converted to i32 in imports'
+          assert not i_f32_f64, 'f32 converted to f64 in imports'
+          assert i_i64_i64,     'i64 converted to i32 in imports'
+          assert i_f32_f32,     'f32 converted to f64 in imports'
+          assert not e_i64_i32, 'i64 converted to i32 in exports'
+          assert not e_f32_f64, 'f32 converted to f64 in exports'
+          assert e_i64_i64,     'i64 converted to i32 in exports'
+
   def test_sysconf_phys_pages(self):
     for args, expected in [
         ([], 1024),
@@ -7585,3 +7666,10 @@ int main() {
     process.communicate()
     # TODO: TEMPORARY: When -s ERROR_ON_MISSING_LIBRARIES=1 becomes the default, change the following line to expect failure instead of 0.
     assert process.returncode is 0, '-llsomenonexistingfile is not yet an error in non-strict mode'
+
+  # Tests that if user accidetally attempts to link natively compiled libraries together with Emscripten, that there should be a helpful error message that informs about what happened.
+  def test_native_link_error_message(self):
+    Popen([CLANG, '-c', path_from_root('tests', 'hello_world.c'), '-o', 'hello_world.o'] + get_clang_native_args(), env=get_clang_native_env(), stdout=PIPE, stderr=PIPE).communicate()
+    Popen([LLVM_AR, 'r', 'hello_world.a', 'hello_world.o'], env=get_clang_native_env(), stdout=PIPE, stderr=PIPE).communicate()
+    out, err = Popen([PYTHON, EMCC, 'hello_world.a', '-o', 'hello_world.js'], stdout=PIPE, stderr=PIPE).communicate()
+    assert 'exists but was not an LLVM bitcode file suitable for Emscripten. Perhaps accidentally mixing native built object files with Emscripten?' in err

@@ -27,7 +27,7 @@ def try_delete(filename):
   except:
     pass
 
-class TempFiles:
+class TempFiles(object):
   def __init__(self, tmp, save_debug_files=False):
     self.tmp = tmp
     self.save_debug_files = save_debug_files
@@ -48,7 +48,7 @@ class TempFiles:
     """Returns an object representing a RAII-like access to a temp file, that has convenient pythonesque
     semantics for being used via a construct 'with TempFiles.get_file(..) as filename:'. The file will be
     deleted immediately once the 'with' block is exited."""
-    class TempFileObject:
+    class TempFileObject(object):
       def __init__(self, save_debug_files=False):
         self.save_debug_files = save_debug_files
 

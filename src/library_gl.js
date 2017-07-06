@@ -447,7 +447,7 @@ var LibraryGL = {
           if (webGLContextAttributes['majorVersion'] == 1 && webGLContextAttributes['minorVersion'] == 0) {
             ctx = canvas.getContext("webgl", webGLContextAttributes) || canvas.getContext("experimental-webgl", webGLContextAttributes);
           } else if (webGLContextAttributes['majorVersion'] == 2 && webGLContextAttributes['minorVersion'] == 0) {
-            ctx = canvas.getContext("webgl2", webGLContextAttributes) || canvas.getContext("experimental-webgl2", webGLContextAttributes);
+            ctx = canvas.getContext("webgl2", webGLContextAttributes);
           } else {
             throw 'Unsupported WebGL context version ' + majorVersion + '.' + minorVersion + '!'
           }
@@ -2697,8 +2697,8 @@ var LibraryGL = {
     } else {
       for (var i = 0; i < data.length; i++) {
         switch (type) {
-          case 'Integer': {{{ makeSetValue('params', 'i', 'data[i]', 'i32') }}}; break;
-          case 'Float': {{{ makeSetValue('params', 'i', 'data[i]', 'float') }}}; break;
+          case 'Integer': {{{ makeSetValue('params', 'i*4', 'data[i]', 'i32') }}}; break;
+          case 'Float': {{{ makeSetValue('params', 'i*4', 'data[i]', 'float') }}}; break;
           default: throw 'internal emscriptenWebGLGetUniform() error, bad type: ' + type;
         }
       }
@@ -2795,9 +2795,9 @@ var LibraryGL = {
     } else {
       for (var i = 0; i < data.length; i++) {
         switch (type) {
-          case 'Integer': {{{ makeSetValue('params', 'i', 'data[i]', 'i32') }}}; break;
-          case 'Float': {{{ makeSetValue('params', 'i', 'data[i]', 'float') }}}; break;
-          case 'FloatToInteger': {{{ makeSetValue('params', 'i', 'Math.fround(data[i])', 'i32') }}}; break;
+          case 'Integer': {{{ makeSetValue('params', 'i*4', 'data[i]', 'i32') }}}; break;
+          case 'Float': {{{ makeSetValue('params', 'i*4', 'data[i]', 'float') }}}; break;
+          case 'FloatToInteger': {{{ makeSetValue('params', 'i*4', 'Math.fround(data[i])', 'i32') }}}; break;
           default: throw 'internal emscriptenWebGLGetVertexAttrib() error, bad type: ' + type;
         }
       }
@@ -7303,7 +7303,7 @@ var LibraryGL = {
   },
 
   glPopMatrix: function() {
-    if(GLImmediate.matrixStack[GLImmediate.currentMatrix].length == 0) {
+    if (GLImmediate.matrixStack[GLImmediate.currentMatrix].length == 0) {
       GL.recordError(0x0504/*GL_STACK_UNDERFLOW*/);
       return;
     }

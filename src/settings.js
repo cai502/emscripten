@@ -441,6 +441,7 @@ var EMSCRIPTEN_VERSION = ''; // this will contain the emscripten version. you sh
                              // RETAIN_COMPILER_SETTINGS
 var OPT_LEVEL = 0;           // this will contain the optimization level (-Ox). you should not modify it.
 var DEBUG_LEVEL = 0;         // this will contain the debug level (-gx). you should not modify it.
+var PROFILING_FUNCS = 0;     // Whether we are profiling functions. you should not modify it.
 
 
 // JS library elements (C functions implemented in JS)
@@ -726,6 +727,13 @@ var BINARYEN_ASYNC_COMPILATION = 1; // Whether to compile the wasm asynchronousl
                                     // required for all but the smallest modules to run in V8
 var BINARYEN_ROOT = ""; // Directory where we can find Binaryen. Will be automatically set for you,
                         // but you can set it to override if you are a Binaryen developer.
+
+var LEGALIZE_JS_FFI = 1; // Whether to legalize the JS FFI interfaces (imports/exports) by wrapping
+                         // them to automatically demote i64 to i32 and promote f32 to f64. This is
+                         // necessary in order to interface with JavaScript, both for asm.js and wasm.
+                         // For non-web/non-JS embeddings, setting this to 0 may be desirable.
+                         // LEGALIZE_JS_FFI=0 is incompatible with RUNNING_JS_OPTS and using
+                         // non-wasm BINARYEN_METHOD settings.
 
 var WASM = 0; // Alias for BINARYEN, the two are identical. Both make us compile code to WebAssembly.
 
