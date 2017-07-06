@@ -5,6 +5,7 @@
   "main": "src/tombofs.js",
   "scripts": {
     "build": "NODE_ENV=production webpack",
+    "watch": "webpack --watch",
     "prepublish": "npm run build"
   },
   "author": "Tasuku SUENAGA",
