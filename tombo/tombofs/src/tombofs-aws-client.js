@@ -45,12 +45,16 @@ class TomboFSAWSClient {
       // we can reuse it.
       return this.s3;
     }
+    this.invalidateS3Client();
+    return null;
+  }
+
+  invalidateS3Client () {
     this.s3 = null;
     this.accessKeyId = null;
     this.secretAccessKey = null;
     this.sessionToken = null;
     this.expiration = 0;
-    return null;
   }
 
   createS3Client () {
@@ -81,7 +85,7 @@ class TomboFSAWSClient {
       if (!user_jwt || /^[A-Za-z0-9_\-]+$/.test(user_jwt)) {
         return reject(new Error('Cannot get user_jwt cookie.'));
       }
-      fetch(this.apiURI + `file_systems/credential?user_jwt=${user_jwt}&application_id=${this.appId}`).then((response) => {
+      return fetch(this.apiURI + `file_systems/credential?user_jwt=${user_jwt}&application_id=${this.appId}`).then((response) => {
         if (response.ok) {
           return response.json();
         }
@@ -109,8 +113,6 @@ class TomboFSAWSClient {
           body['data']['attributes']['expiration']
         );
         resolve();
-      }).catch((error) => {
-        reject(error);
       });
     });
   }
@@ -313,6 +315,17 @@ class TomboFSAWSClient {
     console.groupEnd();
     return this.putObject('tombofs.manifest', JSON.stringify(content)).then((data) => {
       return data;
+    });
+  }
+
+  heartbeat () {
+    const user_jwt = Cookies.get('user_jwt');
+    return fetch(this.apiURI + `heartbeat?user_jwt=${user_jwt}&application_id=${this.appId}`).then((response) => {
+      if (response.ok) {
+        return response.json();
+      }
+      this.invalidateS3Client();
+      return Promise.reject(new Error('heartbeat response is not ok'));
     });
   }
 }

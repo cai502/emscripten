@@ -405,6 +405,7 @@ module.exports = {
       console.log(`syncfs: ${mount.mountpoint} ${populate}`);
 
       let promises = [
+        TOMBOFS.heartbeat(),
         TOMBOFS.getLocalSet(mount),
         TOMBOFS.getRemoteSet(mount),
       ];
@@ -416,25 +417,25 @@ module.exports = {
         if (populate) {
           if (TOMBOFS.AWSClient) {
             // Tombo => IndexedDB => Memory
-            return TOMBOFS.reconcile(values[2], values[1]).then(() => {
-              return TOMBOFS.reconcile(values[1], values[0]);
+            return TOMBOFS.reconcile(values[3], values[2]).then(() => {
+              return TOMBOFS.reconcile(values[2], values[1]);
             }).then(() => {
               TOMBOFS.syncingFS = false;
               callback(null);
             });
           } else {
             // IndexedDB => Memory
-            return TOMBOFS.reconcile(values[1], values[0]).then(() => {
+            return TOMBOFS.reconcile(values[2], values[1]).then(() => {
               TOMBOFS.syncingFS = false;
               callback(null);
             });
           }
         } else {
           // Memory => IndexedDB
-          return TOMBOFS.reconcile(values[0], values[1]).then(() => {
+          return TOMBOFS.reconcile(values[1], values[2]).then(() => {
             if (TOMBOFS.AWSClient) {
               // IndexedDB => Tombo
-              return TOMBOFS.reconcile(values[1], values[2], callback);
+              return TOMBOFS.reconcile(values[2], values[3], callback);
             } else {
               return null;
             }
@@ -784,6 +785,26 @@ module.exports = {
       });
     };
     return new Promise(lockedUploadTomboManifest);
+  },
+  heartbeat: function () {
+    if (!TOMBOFS.AWSClient) {
+      return Promise.resolve();
+    }
+
+    return TOMBOFS.AWSClient.heartbeat().then(() => {
+      // do nothing
+    }).catch((err) => {
+      TOMBOFS.AWSClient = null;
+      if (Module['_emscripten_pause_main_loop']) {
+        Module['_emscripten_pause_main_loop']();
+      }
+      if (Module['_audioPlayer_stopAll']) {
+        Module['_audioPlayer_stopAll']();
+      }
+      if (Module.printErr) {
+        Module.printErr('The network connection or Tombo Platform is down. Reload the page.');
+      }
+    });
   },
   reconcile: function (src, dst) {
     console.groupCollapsed(`reconcile: from ${src.type} (${Object.keys(src.entries).length}) to ${dst.type} (${Object.keys(dst.entries).length})`);
