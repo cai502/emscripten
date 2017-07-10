@@ -2,6 +2,7 @@ import BaseHTTPServer, multiprocessing, os, shutil, subprocess, unittest, zlib, 
 from runner import BrowserCore, path_from_root
 from tools.shared import *
 import ConfigParser # for reading AWS credentials
+import urlparse
 import json
 import re
 
@@ -34,28 +35,48 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     self.sts_credential()
 
   def do_GET(s):
-    s.send_response(200)
-    s.send_header('Access-Control-Allow-Origin', '*')
-    s.send_header('Access-Control-Request-Method', '*')
-    s.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    s.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
-    s.end_headers()
-    s.wfile.write(json.dumps(
-      {
-        'data': {
-          'type': 'credential',
-          'attributes': {
-            'access_key_id': PlatformHandler.federation_access_key_id,
-            'secret_access_key': PlatformHandler.federation_secret_access_key,
-            'session_token': PlatformHandler.federation_session_token,
-            'expiration': PlatformHandler.federation_expiration,
-            'bucket': PlatformHandler.S3_BUCKET_NAME,
-            'region': PlatformHandler.AWS_REGION,
-            'endpoint': PlatformHandler.S3_ENDPOINT
+    rp = urlparse.urlparse(s.path)
+
+    if rp.path == '/file_systems/credential':
+      s.send_response(200)
+      s.send_header('Access-Control-Allow-Origin', '*')
+      s.send_header('Access-Control-Request-Method', '*')
+      s.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      s.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
+      s.end_headers()
+
+      s.wfile.write(json.dumps(
+        {
+          'data': {
+            'type': 'credential',
+            'attributes': {
+              'access_key_id': PlatformHandler.federation_access_key_id,
+              'secret_access_key': PlatformHandler.federation_secret_access_key,
+              'session_token': PlatformHandler.federation_session_token,
+              'expiration': PlatformHandler.federation_expiration,
+              'bucket': PlatformHandler.S3_BUCKET_NAME,
+              'region': PlatformHandler.AWS_REGION,
+              'endpoint': PlatformHandler.S3_ENDPOINT
+            }
           }
         }
-      }
-    ))
+      ))
+    elif rp.path == '/heartbeat':
+      s.send_response(200)
+      s.send_header('Access-Control-Allow-Origin', '*')
+      s.send_header('Access-Control-Request-Method', '*')
+      s.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      s.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
+      s.end_headers()
+      s.wfile.write(json.dumps({}))
+    else:
+      s.send_response(404)
+      s.send_header('Access-Control-Allow-Origin', '*')
+      s.send_header('Access-Control-Request-Method', '*')
+      s.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      s.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
+      s.end_headers()
+      s.wfile.write('404')
 
   @classmethod
   def execute_aws_command_with_credentials(self, service, commands, access_key_id, secret_access_key, session_token=None):
@@ -182,7 +203,7 @@ class tombo(BrowserCore):
     while True:
       try:
         conn = httplib.HTTPConnection('localhost', 11111)
-        conn.request('GET', '/')
+        conn.request('GET', '/heartbeat')
         r = conn.getresponse()
         if r.status == 200:
           break
