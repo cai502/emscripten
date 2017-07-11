@@ -969,7 +969,7 @@ var HEAP,
 function updateGlobalBuffer(buf) {
   Module['buffer'] = buffer = buf;
 }
-
+#if MEMORY_OBSERVER_ADDRESS < 0
 function updateGlobalBufferViews() {
   Module['HEAP8'] = HEAP8 = new Int8Array(buffer);
   Module['HEAP16'] = HEAP16 = new Int16Array(buffer);
@@ -980,6 +980,43 @@ function updateGlobalBufferViews() {
   Module['HEAPF32'] = HEAPF32 = new Float32Array(buffer);
   Module['HEAPF64'] = HEAPF64 = new Float64Array(buffer);
 }
+#else
+function ArrayWrapper(arr) {
+    var ADDR = {{{ MEMORY_OBSERVER_ADDRESS }}};
+    return new Proxy(arr, {
+        get: function(target, name) {
+            if(name == ((ADDR / arr.BYTES_PER_ELEMENT)|0)) {
+//                console.log("Read access detected", new Error().stack);
+            }
+
+            if(typeof target[name] === "function") {
+                return function() {
+                    return target[name].apply(arr, arguments);
+                };
+            } else {
+                return target[name];
+            }
+        },
+        set: function(obj, prop, value) {
+            if(prop == ((ADDR / arr.BYTES_PER_ELEMENT)|0)) {
+                console.log("Write access detected", new Error().stack);
+            }
+            obj[prop] = value;
+        }
+    });
+}
+Module['ArrayWrapper'] = ArrayWrapper;
+function updateGlobalBufferViews() {
+  Module['HEAP8'] = HEAP8 = ArrayWrapper(new Int8Array(buffer));
+  Module['HEAP16'] = HEAP16 = ArrayWrapper(new Int16Array(buffer));
+  Module['HEAP32'] = HEAP32 = ArrayWrapper(new Int32Array(buffer));
+  Module['HEAPU8'] = HEAPU8 = ArrayWrapper(new Uint8Array(buffer));
+  Module['HEAPU16'] = HEAPU16 = ArrayWrapper(new Uint16Array(buffer));
+  Module['HEAPU32'] = HEAPU32 = ArrayWrapper(new Uint32Array(buffer));
+  Module['HEAPF32'] = HEAPF32 = ArrayWrapper(new Float32Array(buffer));
+  Module['HEAPF64'] = HEAPF64 = ArrayWrapper(new Float64Array(buffer));
+}
+#endif
 
 var STATIC_BASE, STATICTOP, staticSealed; // static area
 var STACK_BASE, STACKTOP, STACK_MAX; // stack area

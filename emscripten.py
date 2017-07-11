@@ -1536,6 +1536,8 @@ def create_asm_start_pre(asm_setup, the_global, sending, metadata, settings):
   shared_array_buffer = ''
   if settings['USE_PTHREADS']:
     shared_array_buffer = "Module.asmGlobalArg['Atomics'] = Atomics;"
+  if settings['MEMORY_OBSERVER_ADDRESS'] >= 0:
+    shared_array_buffer = "Module.asmGlobalArg['ArrayWrapper'] = ArrayWrapper;"
 
   module_get = 'Module{access} = {val};'
   module_global = module_get.format(access=access_quote('asmGlobalArg'), val=the_global)
@@ -1672,6 +1674,7 @@ def create_memory_views(settings):
   access_quote = access_quoter(settings)
   ret = '\n'
   grow_memory = settings['ALLOW_MEMORY_GROWTH']
+  observe_address = settings['MEMORY_OBSERVER_ADDRESS'] >= 0 and not settings['BINARYEN']
   for info in HEAP_TYPE_INFOS:
     access = access_quote('{}Array'.format(info.long_name))
     format_args = {
@@ -1682,6 +1685,8 @@ def create_memory_views(settings):
     if grow_memory:
       ret += ('  var {long}View = global{access};\n'
               '  var {heap} = new {long}View(buffer);\n').format(**format_args)
+    elif observe_address:
+      ret += '  var {heap} = global.ArrayWrapper(new global{access}(buffer));\n'.format(**format_args)
     else:
       ret += '  var {heap} = new global{access}(buffer);\n'.format(**format_args)
   if grow_memory:
