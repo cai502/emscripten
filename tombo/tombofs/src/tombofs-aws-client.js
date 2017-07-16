@@ -51,7 +51,8 @@ class TomboFSAWSClient {
 
   invalidateS3Client () {
     this.s3 = null;
-    this.accessKeyId = null;
+    // NOTE: Do not initialize accessKeyId for sending it on fetchCredentials()
+    // this.accessKeyId = null;
     this.secretAccessKey = null;
     this.sessionToken = null;
     this.expiration = 0;
@@ -85,7 +86,11 @@ class TomboFSAWSClient {
       if (!user_jwt || /^[A-Za-z0-9_\-]+$/.test(user_jwt)) {
         return reject(new Error('Cannot get user_jwt cookie.'));
       }
-      return fetch(this.apiURI + `file_systems/credential?user_jwt=${user_jwt}&application_id=${this.appId}`).then((response) => {
+      let params = '';
+      if (this.accessKeyId) {
+        params = '&access_key_id=${this.accessKeyId}';
+      }
+      return fetch(this.apiURI + `file_systems/credential?user_jwt=${user_jwt}&application_id=${this.appId}${params}`).then((response) => {
         if (response.ok) {
           return response.json();
         }
