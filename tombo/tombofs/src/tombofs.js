@@ -414,6 +414,11 @@ module.exports = {
       }
 
       Promise.all(promises).then((values) => {
+        if (TOMBOFS.AWSClient && !values[0]) {
+          // heartbeat fails with TOMBOFS.AWSClient
+          return callback(new Error('heartbeat fails'));
+        }
+
         if (populate) {
           if (TOMBOFS.AWSClient) {
             // Tombo => IndexedDB => Memory
@@ -788,11 +793,11 @@ module.exports = {
   },
   heartbeat: function () {
     if (!TOMBOFS.AWSClient) {
-      return Promise.resolve();
+      return Promise.resolve(false);
     }
 
     return TOMBOFS.AWSClient.heartbeat().then(() => {
-      // do nothing
+      return true;
     }).catch((err) => {
       TOMBOFS.AWSClient = null;
       if (Module['_emscripten_pause_main_loop']) {
@@ -804,6 +809,7 @@ module.exports = {
       if (Module.printErr) {
         Module.printErr('The network connection or Tombo Platform is down. Reload the page.');
       }
+      return false;
     });
   },
   reconcile: function (src, dst) {

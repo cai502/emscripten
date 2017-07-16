@@ -324,13 +324,15 @@ class TomboFSAWSClient {
   }
 
   heartbeat () {
-    const user_jwt = Cookies.get('user_jwt');
-    return fetch(this.apiURI + `heartbeat?user_jwt=${user_jwt}&application_id=${this.appId}&aws_access_key_id=${this.accessKeyId}`).then((response) => {
-      if (response.ok && !response.errors) {
-        return response.json();
-      }
-      this.invalidateS3Client();
-      return Promise.reject(new Error('heartbeat response is not ok'));
+    return this.getClient().then(() => {
+      const user_jwt = Cookies.get('user_jwt');
+      return fetch(this.apiURI + `heartbeat?user_jwt=${user_jwt}&application_id=${this.appId}&aws_access_key_id=${this.accessKeyId}`).then((response) => {
+        if (response.ok && !response.errors) {
+          return response.json();
+        }
+        this.invalidateS3Client();
+        return Promise.reject(new Error('heartbeat response is not ok'));
+      });
     });
   }
 }
