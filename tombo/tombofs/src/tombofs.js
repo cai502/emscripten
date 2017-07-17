@@ -800,15 +800,7 @@ module.exports = {
       return true;
     }).catch((err) => {
       TOMBOFS.AWSClient = null;
-      if (Module['_emscripten_pause_main_loop']) {
-        Module['_emscripten_pause_main_loop']();
-      }
-      if (Module['_audioPlayer_stopAll']) {
-        Module['_audioPlayer_stopAll']();
-      }
-      if (Module.printErr) {
-        Module.printErr('The network connection or Tombo Platform is down. Reload the page.');
-      }
+      Module.setStatusAndHalt('The network connection or Tombo Platform is down. Reload the page.');
       return false;
     });
   },
