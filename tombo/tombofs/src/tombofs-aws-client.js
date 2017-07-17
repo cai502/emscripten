@@ -13,6 +13,7 @@ class TomboFSAWSClient {
     }
     this.apiURI = apiURI;
     this.expiration = 0;
+    this.fetchingCredentials = false;
   }
 
   setCredentials (
@@ -77,10 +78,26 @@ class TomboFSAWSClient {
   }
 
   fetchCredentials () {
-    return new Promise((resolve, reject) => {
-      console.log('AWS fetchCredentials()')
+    console.log('AWS fetchCredentials()')
+
+    const lockedFetchCredentials = (resolve, reject) => {
       if (!this.apiURI) {
         return reject(new Error('Empty apiURI to fetch credentials for the remote file system.'));
+      }
+
+      // mutex
+      if (this.fetchingCredentials) {
+        setTimeout(() => {
+          lockedFetchCredentials(resolve, reject);
+        }, 0);
+        return;
+      }
+
+      this.fetchingCredentials = true;
+
+      if (haveValidCredentials()) {
+        console.log('already fetched credentials');
+        return resolve();
       }
       const user_jwt = Cookies.get('user_jwt');
       if (!user_jwt || /^[A-Za-z0-9_\-]+$/.test(user_jwt)) {
@@ -106,6 +123,7 @@ class TomboFSAWSClient {
           !body['data']['attributes']['session_token'] ||
           !body['data']['attributes']['expiration']
         ) {
+          this.fetchingCredentials = false;
           return Promise.reject(new Error('Failed to parse the response from remote filesystem credential API.'));
         }
         this.setCredentials(
@@ -117,9 +135,11 @@ class TomboFSAWSClient {
           body['data']['attributes']['session_token'],
           body['data']['attributes']['expiration']
         );
+        this.fetchingCredentials = false;
         resolve();
       });
-    });
+    };
+    return new Promise(lockedFetchCredentials);
   }
 
   getClient () {
