@@ -93,24 +93,28 @@ class TomboFSAWSClient {
         return;
       }
 
-      this.fetchingCredentials = true;
-
-      if (haveValidCredentials()) {
+      if (this.haveValidCredentials()) {
         console.log('already fetched credentials');
         return resolve();
       }
+
       const user_jwt = Cookies.get('user_jwt');
       if (!user_jwt || /^[A-Za-z0-9_\-]+$/.test(user_jwt)) {
         return reject(new Error('Cannot get user_jwt cookie.'));
       }
+
+      this.fetchingCredentials = true;
+
       let params = '';
       if (this.accessKeyId) {
         params = '&access_key_id=${this.accessKeyId}';
       }
-      return fetch(this.apiURI + `file_systems/credential?user_jwt=${user_jwt}&application_id=${this.appId}${params}`).then((response) => {
+      const url = this.apiURI + `file_systems/credential?user_jwt=${user_jwt}&application_id=${this.appId}${params}`;
+      return fetch(url).then((response) => {
         if (response.ok) {
           return response.json();
         }
+        this.fetchingCredentials = false;
         return Promise.reject(new Error('API response is not ok'));
       }).then((body) => {
         if (
@@ -149,6 +153,7 @@ class TomboFSAWSClient {
       this.fetchCredentials().then(() => {
         resolve(this.createS3Client());
       }).catch((e) => {
+        console.log('getClient() failed');
         reject(e);
       });
     });
@@ -344,10 +349,12 @@ class TomboFSAWSClient {
   }
 
   heartbeat () {
+    console.log('AWS heartbeat()');
     return this.getClient().then(() => {
       const user_jwt = Cookies.get('user_jwt');
       return fetch(this.apiURI + `heartbeat?user_jwt=${user_jwt}&application_id=${this.appId}&aws_access_key_id=${this.accessKeyId}`).then((response) => {
         if (response.ok && !response.errors) {
+          console.log('AWS heartbeat() OK');
           return response.json();
         }
         this.invalidateS3Client();
