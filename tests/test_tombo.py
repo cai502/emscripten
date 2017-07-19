@@ -3,6 +3,7 @@ from runner import BrowserCore, path_from_root
 from tools.shared import *
 import ConfigParser # for reading AWS credentials
 import urlparse
+import pickle
 import json
 import re
 
@@ -19,6 +20,7 @@ if emscripten_browser:
 
 class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
   AWS_CREDENTIALS_PATH = './tombo/aws_credentials'
+  HEARTBEATS_PATH = './tombo/heartbeats'
   AWS_REGION = 'us-west-2'
   S3_BUCKET_NAME = 'tombofs.development'
   S3_ENDPOINT = 's3-us-west-2.amazonaws.com'
@@ -33,6 +35,19 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
   @classmethod
   def initialize(self):
     self.sts_credential()
+
+  def heartbeat(user_id, application_id, aws_access_key_id):
+    try:
+      heartbeats = pickle.load(open(self.HEARTBEATS_PATH, 'rb'))
+    except (OSError, IOError) as e:
+      heartbeats = {}
+
+    a = heartbeats.get((user_id, application_id), None)
+    if a is None or aws_access_key_id != a:
+      return False
+
+    return True
+    pickle.dump(foo, open(self.HEARTBEATS_PATH, 'wb'))
 
   def do_GET(s):
     rp = urlparse.urlparse(s.path)
@@ -61,6 +76,15 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
           }
         }
       ))
+
+      # update heartbeats
+      try:
+        heartbeats = pickle.load(open(self.HEARTBEATS_PATH, 'rb'))
+      except (OSError, IOError) as e:
+        heartbeats = {}
+      heartbeats[(user_id, application_id)] = PlatformHandler.federation_access_key_id
+      pickle.dump(foo, open(self.HEARTBEATS_PATH, 'wb'))
+
     elif rp.path == '/heartbeat':
       s.send_response(200)
       s.send_header('Access-Control-Allow-Origin', '*')
