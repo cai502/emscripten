@@ -800,7 +800,14 @@ module.exports = {
       return true;
     }).catch((err) => {
       TOMBOFS.AWSClient = null;
-      Module.setStatusAndHalt('The network connection or Tombo Platform is down. Reload the page.');
+      let message = 'The network connection or Tombo Platform is down. Reload the page.';
+      if (Module.setStatusAndHalt) {
+        // Tombo shell has the function Module.setStatusAndHalt()
+        Module.setStatusAndHalt(message);
+      } else {
+        Module.setStatus(message);
+        throw new Error(message);
+      }
       return false;
     });
   },
