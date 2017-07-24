@@ -439,8 +439,10 @@ module.exports = {
           // Memory => IndexedDB
           return TOMBOFS.reconcile(values[1], values[2]).then(() => {
             if (TOMBOFS.AWSClient) {
-              // IndexedDB => Tombo
-              return TOMBOFS.reconcile(values[2], values[3], callback);
+              // Memory => Tombo
+              // Note: IndexedDB transaction may not have finished yet,
+              //       So reconcile from Memory, not IndexedDB.
+              return TOMBOFS.reconcile(values[1], values[3], callback);
             } else {
               return null;
             }
