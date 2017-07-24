@@ -2431,15 +2431,18 @@ class JS(object):
     legal_sig = JS.legalize_sig(sig) # TODO: do this in extcall, jscall?
     args = ','.join(['a' + str(i) for i in range(1, len(legal_sig))])
     args = 'index' + (',' if args else '') + args
+    trace = 'Module.printErr(e.stack);' if Settings.TRACE_CXX_EXCEPTIONS else ''
+
     # C++ exceptions are numbers, and longjmp is a string 'longjmp'
     ret = '''function%s(%s) {
   try {
     %sModule["dynCall_%s"](%s);
   } catch(e) {
+    %s
     if (e.constructor !== Error && e !== 'longjmp') throw e;
     Module["setThrew"](1, 0);
   }
-}''' % ((' invoke_' + sig) if named else '', args, 'return ' if sig[0] != 'v' else '', sig, args)
+}''' % ((' invoke_' + sig) if named else '', args, 'return ' if sig[0] != 'v' else '', sig, args, trace)
     return ret
 
   @staticmethod

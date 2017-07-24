@@ -425,6 +425,7 @@ var LIBRARY_IMPLEMENTED_FUNCTIONS = [];
 var EXPORT_EXTERNAL_SYMBOL_NAMES = 0;
 var EXPORTED_VARIABLES = [];
 var MEMORY_OBSERVER_ADDRESS = -1;
+var TRACE_CXX_EXCEPTIONS = 0;
 
 var EXPORT_ALL = 0; // If true, we export all the symbols. Note that this does *not* affect LLVM, so it can
                     // still eliminate functions as dead. This just exports them on the Module object.
