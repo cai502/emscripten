@@ -36,7 +36,7 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
   def initialize(self):
     self.sts_credential()
 
-  def heartbeat(user_id, application_id, aws_access_key_id):
+  def heartbeat(self, user_id, application_id, aws_access_key_id):
     try:
       heartbeats = pickle.load(open(self.HEARTBEATS_PATH, 'rb'))
     except (OSError, IOError) as e:
@@ -47,7 +47,6 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       return False
 
     return True
-    pickle.dump(foo, open(self.HEARTBEATS_PATH, 'wb'))
 
   def do_GET(s):
     rp = urlparse.urlparse(s.path)
@@ -79,11 +78,11 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
       # update heartbeats
       try:
-        heartbeats = pickle.load(open(self.HEARTBEATS_PATH, 'rb'))
+        heartbeats = pickle.load(open(PlatformHandler.HEARTBEATS_PATH, 'rb'))
       except (OSError, IOError) as e:
         heartbeats = {}
-      heartbeats[(user_id, application_id)] = PlatformHandler.federation_access_key_id
-      pickle.dump(foo, open(self.HEARTBEATS_PATH, 'wb'))
+      heartbeats[(PlatformHandler.TOMBO_USER_ID, PlatformHandler.TOMBO_APP_ID)] = PlatformHandler.federation_access_key_id
+      pickle.dump(heartbeats, open(PlatformHandler.HEARTBEATS_PATH, 'wb'))
 
     elif rp.path == '/heartbeat':
       s.send_response(200)
@@ -92,7 +91,12 @@ class PlatformHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       s.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
       s.send_header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
       s.end_headers()
-      s.wfile.write(json.dumps({}))
+      if s.heartbeat(PlatformHandler.TOMBO_USER_ID, PlatformHandler.TOMBO_APP_ID, PlatformHandler.federation_access_key_id):
+        s.wfile.write(json.dumps({}))
+      else:
+        s.wfile.write(json.dumps({
+          'errors': ['ng']
+        }))
     else:
       s.send_response(404)
       s.send_header('Access-Control-Allow-Origin', '*')
