@@ -353,11 +353,19 @@ class TomboFSAWSClient {
     return this.getClient().then(() => {
       const user_jwt = Cookies.get('user_jwt');
       return fetch(this.apiURI + `heartbeat?user_jwt=${user_jwt}&application_id=${this.appId}&aws_access_key_id=${this.accessKeyId}`).then((response) => {
-        if (response.ok && !response.errors) {
-          console.log('AWS heartbeat() OK');
-          return response.json();
+        if (response.ok) {
+          return response.json().then((json) => {
+            if (json.errors && json.errors[0]) {
+              console.log('AWS heartbeat() error');
+              return Promise.reject(new Error(json.errors[0]));
+            } else {
+              console.log('AWS heartbeat() OK');
+              return json;
+            }
+          });
         }
         this.invalidateS3Client();
+        console.log('AWS heartbeat() NG');
         return Promise.reject(new Error('heartbeat response is not ok'));
       });
     });
