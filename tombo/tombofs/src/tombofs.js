@@ -802,7 +802,7 @@ module.exports = {
       return true;
     }).catch((err) => {
       TOMBOFS.AWSClient = null;
-      let message = 'The network connection or Tombo Platform is down. Reload the page.';
+      let message = TOMBOFS.messages.failHeartbeat[ENV.LOCALE || 'en'];
       if (Module.setStatusAndHalt) {
         // Tombo shell has the function Module.setStatusAndHalt()
         Module.setStatusAndHalt(message);
@@ -1059,5 +1059,11 @@ module.exports = {
         break;
       }
     });
+  },
+  messages: {
+    failHeartbeat: {
+      en: 'This application is opened in another browser or the network connection is down. Reload the page.',
+      ja: '他のプラウザでこのアプリを使用したか、ネットワーク接続が切れました。ページをリロードしてください。'
+    }
   }
 }
