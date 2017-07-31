@@ -638,7 +638,7 @@ LibraryManager.library = {
       ENV['USER'] = ENV['LOGNAME'] = 'web_user';
       ENV['PATH'] = '/';
       ENV['PWD'] = '/';
-      ENV['HOME'] = '/home/web_user';
+      ENV['HOME'] = Module['HOME'];
       ENV['LANG'] = 'C';
       ENV['_'] = Module['thisProgram'];
       // Allocate memory.

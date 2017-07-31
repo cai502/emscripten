@@ -1263,19 +1263,31 @@ mergeInto(LibraryManager.library, {
     },
     createDefaultDirectories: function() {
       FS.mkdir('/tmp');
-      FS.mkdir('/home');
-      FS.mkdir('/home/web_user');
-      FS.mkdir('/home/web_user/Documents');
-      FS.mkdir('/home/web_user/Documents/Inbox');
-      FS.mkdir('/home/web_user/Library');
-      FS.mkdir('/home/web_user/Library/Cache');
-      FS.mkdir('/home/web_user/tmp');
+      var apps = '/Applications';
+      FS.mkdir(apps);
+
+      var home;
+      if (Module['tombo'] && Module['tombo']['enableTomboFS'] && Module['tombo']['appId']) {
+        home = apps + '/' + Module['tombo']['appId'];
+      } else {
+        home = apps + '/' + '00000000-0000-0000-0000-000000000000';
+      }
+
+      FS.mkdir(home);
+      FS.mkdir(home + '/Documents');
+      FS.mkdir(home + '/Documents/Inbox');
+      FS.mkdir(home + '/Library');
+      FS.mkdir(home + '/Library/Cache');
+      FS.mkdir(home + '/tmp');
       FS.mkdir('/a2o_application.app');
+
+      Module['HOME'] = home;
+
       if(ENVIRONMENT_IS_WEB) {
         if(Module['tombo'] && Module['tombo']['enableTomboFS']) {
-          FS.mount(TOMBOFS, {}, '/home/web_user');
+          FS.mount(TOMBOFS, {}, home);
         } else {
-          FS.mount(IDBFS, {}, '/home/web_user');
+          FS.mount(IDBFS, {}, home);
         }
         addRunDependency('synchomefs');
         FS.syncfs(true, function (err) {

@@ -11,6 +11,9 @@ module.exports = {
     if (Module.tombo && Module.tombo.userId && Module.tombo.appId) {
       // NOTE: Module.tombo.apiURI could be null when running without Tombo platform.
       TOMBOFS.AWSClient = new TomboFSAWSClient(Module.tombo.userId, Module.tombo.appId, Module.tombo.apiURI);
+      TOMBOFS.DB_STORE_NAME = 'TOMBOFS_' + Module.tombo.appId;
+    } else {
+      TOMBOFS.DB_STORE_NAME = 'TOMBOFS_' + '00000000-0000-0000-0000-000000000000';
     }
     return TOMBOFS.createNode(null, '/', EMSCRIPTEN_CDEFINE_S_IFDIR | 511 /* 0777 */, 0);
   },
@@ -388,8 +391,8 @@ module.exports = {
     assert(ret, 'TOMBOFS used, but indexedDB not supported');
     return ret;
   },
-  DB_VERSION: 21,
-  DB_STORE_NAME: 'FILE_DATA',
+  DB_VERSION: 1,
+  DB_STORE_NAME: 'TOMBOFS', // could be overwritten in mount()
   syncfs: function (mount, populate, callback) {
     // serialize syncfs() even if mount points are different
     const lockedSyncfs = () => {
