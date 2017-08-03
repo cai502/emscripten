@@ -127,6 +127,7 @@ var LibraryXHR = {
         }
     },
     _xhr_set_with_credentials: function(id, withCredentials) {
+        var xhr = XHRWrapper.xhrs[id];
         if(xhr.useProxy) {
             // ignored
         } else {
