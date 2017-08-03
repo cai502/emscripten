@@ -167,7 +167,8 @@ var LibraryManager = {
       'library_webview.js',
       'library_objc.js',
       'library_coreaudio.js',
-      'library_dispatch.js'
+      'library_dispatch.js',
+      'library_platform.js'
     ]);
 
     if (BOOTSTRAPPING_STRUCT_INFO) libraries = ['library_bootstrap_structInfo.js', 'library_formatString.js'];
