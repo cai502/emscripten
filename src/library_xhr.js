@@ -129,7 +129,7 @@ var LibraryXHR = {
         var xhr = XHRWrapper.xhrs[id];
         xhr.timeout = timeout;
     },
-    _xhr_send__deps: ['TomboPlatform'],
+    _xhr_send__deps: ['$TomboPlatform'],
     _xhr_send: function(id, data, length) {
         var xhr = XHRWrapper.xhrs[id];
         if(xhr.useProxy) {
