@@ -1,12 +1,22 @@
-var LibraryA2OPlatform = {
-    $A2OPlatform__deps: [],
-    $A2OPlatform__postset: "A2OPlatform.init();",
-    $A2OPlatform: {
+var LibraryTomboPlatform = {
+    $TomboPlatform__deps: [],
+    $TomboPlatform__postset: "TomboPlatform.init();",
+    $TomboPlatform: {
         init: function() {
-        }
+        },
+        getUserJwtFromCookie: function() {
+            var cookies = document.cookie.split("; ");
+            for(var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].split("=", 2);
+                if(cookie[0] == "user_jwt") {
+                    return cookie[1];
+                }
+            }
+            return null;
+        },
     },
     
-    a2oApiServerUrl: function() {
+    getTomboApiServerUrl: function() {
         var apiServerUrl = Module["apiServerUrl"] || "https://api.tombo.i";
         var length = apiServerUrl.length + 1;
         var buf = _malloc(length);
@@ -14,9 +24,8 @@ var LibraryA2OPlatform = {
         return buf;
     },
     
-    a2oGetUserJwt__deps: ["XHRWrapper"],
-    a2oGetUserJwt: function() {
-        var jwt = XHRWrapper.getUserJwt();
+    getUserJwt: function() {
+        var jwt = TomboPlatform.getUserJwtFromCookie();
         if(jwt) {
             var length = jwt.length + 1;
             var buf = _malloc(length);
@@ -28,5 +37,5 @@ var LibraryA2OPlatform = {
     }
 };
 
-autoAddDeps(LibraryA2OPlatform, '$A2OPlatform');
-mergeInto(LibraryManager.library, LibraryA2OPlatform);
+autoAddDeps(LibraryTomboPlatform, '$TomboPlatform');
+mergeInto(LibraryManager.library, LibraryTomboPlatform);

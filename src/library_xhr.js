@@ -3,16 +3,6 @@ var LibraryXHR = {
     $XHRWrapper: {
         nextId: 1,
         xhrs: {},
-        getUserJwt: function() {
-            var cookies = document.cookie.split("; ");
-            for(var i = 0; i < cookies.length; i++) {
-                var cookie = cookies[i].split("=", 2);
-                if(cookie[0] == "user_jwt") {
-                    return cookie[1];
-                }
-            }
-            return null;
-        },
         useProxy: function(url) {
             var prefixes = Module['httpProxyUrlPrefixes'] || [];
             for(var i = 0; i < prefixes.length; i++) {
@@ -139,6 +129,7 @@ var LibraryXHR = {
         var xhr = XHRWrapper.xhrs[id];
         xhr.timeout = timeout;
     },
+    _xhr_send__deps: ['TomboPlatform'],
     _xhr_send: function(id, data, length) {
         var xhr = XHRWrapper.xhrs[id];
         if(xhr.useProxy) {
@@ -151,7 +142,7 @@ var LibraryXHR = {
             }
 
             try {
-                var user_jwt = XHRWrapper.getUserJwt();
+                var user_jwt = TomboPlatform.getUserJwtFromCookie();
 
                 if(!Module["httpProxyServer"] && !user_jwt) {
                     XHRWrapper.logNetworkAccess("HTTP[Proxy] Trying to access platform proxy server but user_jwt doesn't exist");
