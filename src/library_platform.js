@@ -34,7 +34,19 @@ var LibraryTomboPlatform = {
         } else {
             return 0;
         }
-    }
+    },
+    
+    getApplicationId: function() {
+        var appId = Module['tombo']['appId'];
+        if(appId) {
+            var length = appId.length + 1;
+            var buf = _malloc(length);
+            writeAsciiToMemory(appId, buf, false);
+            return buf;
+        } else {
+            return 0;
+        }
+    },
 };
 
 autoAddDeps(LibraryTomboPlatform, '$TomboPlatform');
