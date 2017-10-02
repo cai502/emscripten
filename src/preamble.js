@@ -2016,9 +2016,11 @@ addOnPreRun(function() {
   addRunDependency('postsets');
   new Promise(function(resolve){
     if (Module['dynamicLibraries']) {
-      Promise.all(Module['dynamicLibraries'].map(function(lib) {
-        return Runtime.loadDynamicLibrary(lib);
-      })).then(resolve);
+      Module['dynamicLibraries'].reduce(function(current, lib) {
+        return current.then(function() {
+          return Runtime.loadDynamicLibrary(lib);
+        });
+      }, Promise.resolve()).then(resolve);
     } else {
       resolve();
     }
