@@ -433,7 +433,6 @@ var Runtime = {
     for (var x in Module) {
       if (!(x in env)) {
         if(typeof Module[x] === 'function' && Module['asm'][x]) {
-          if(x.indexOf("objc_") >= 0) console.log(x);
           env[x] = Module['asm'][x];
         } else {
           env[x] = Module[x];
