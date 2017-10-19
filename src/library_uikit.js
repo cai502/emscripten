@@ -58,6 +58,10 @@ var LibraryUIKit = {
         return Module['screenModes'][idx].scale;
     },
     
+    UIKit_shouldPreserveDrawingBuffer: function() {
+        return Module['shouldPreserveDrawingBuffer'] ? 1 : 0;
+    },
+
     UIKit_initScreen: function() {
         Module.useWebGL = true;
         Browser.moduleContextCreatedCallbacks.forEach(function(callback) { callback() });
