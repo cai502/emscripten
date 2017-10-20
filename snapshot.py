@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Prerequisites:
 #  - geckodriver https://github.com/mozilla/geckodriver/releases
 #  - chromedriver https://sites.google.com/a/chromium.org/chromedriver/getting-started
