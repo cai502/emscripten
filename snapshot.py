@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 # Prerequisites:
-#  - geckodriver https://github.com/mozilla/geckodriver/releases
-#  - chromedriver https://sites.google.com/a/chromium.org/chromedriver/getting-started
+#  - Chrome, Chrome Canary, Firefox, Firefox Nightly, Safari, Safari Technology Preview
+#  - pip install selenium pillow
+#  - place drivers to your search path
+#    - geckodriver https://github.com/mozilla/geckodriver/releases
+#    - chromedriver https://sites.google.com/a/chromium.org/chromedriver/getting-started
 
 import sys, os, time, subprocess, signal, base64
 from selenium import webdriver
@@ -50,7 +53,7 @@ def take_snapshot(browser, html_file, timeout, model):
   finally: 
     if driver:
       try:
-        driver.close()
+        driver.quit()
       except:
         pass
 
