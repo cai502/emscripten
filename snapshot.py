@@ -33,6 +33,18 @@ def get_driver(browser):
     driver = webdriver.Safari(desired_capabilities=caps, executable_path='/Applications/Safari Technology Preview.app/Contents/MacOS/safaridriver')
   return driver
 
+def flip_image(png):
+  import StringIO
+  img_src = StringIO.StringIO(png)
+  img_dest = StringIO.StringIO()
+  img = Image.open(img_src)
+  flip = img.transpose(Image.FLIP_TOP_BOTTOM)
+  flip.save(img_dest, format = 'PNG')
+  dat = img_dest.getvalue()
+  img_src.close()
+  img_dest.close()
+  return dat
+
 def take_snapshot(browser, html_file, timeout, model): 
   driver = None
   try:
@@ -47,8 +59,10 @@ def take_snapshot(browser, html_file, timeout, model):
     time.sleep(timeout)
     canvas = driver.find_element_by_id('app-canvas')
     canvas_base64 = driver.execute_script("return arguments[0].toDataURL('image/png').substring(21);", canvas)
-    return base64.b64decode(canvas_base64)
+    dat = base64.b64decode(canvas_base64)
+    return flip_image(dat) if browser == 'safari' or browser == 'safari_preview' else dat
   except:
+    #print "Unexpected error:", sys.exc_info()
     return None
   finally: 
     if driver:
