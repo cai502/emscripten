@@ -353,7 +353,7 @@ var Runtime = {
 #endif
       }
       Runtime.loadedDynamicLibraries.push(libModule);
-    });
+    }).catch(function(err) { setTimeout(function() { /* re-throw to outside promise chain */ throw err; }, 0); });
   },
 
 #if BINARYEN
