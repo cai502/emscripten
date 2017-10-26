@@ -4,6 +4,7 @@
 Module['asm'] = asm;
 
 {{{ maybeExport('FS') }}}
+{{{ maybeExport('GL') }}}
 
 #if MEM_INIT_METHOD == 2
 #if USE_PTHREADS
@@ -181,7 +182,13 @@ Module['callMain'] = Module.callMain = function callMain(args) {
     var start = Date.now();
 #endif
 
+#if PROXY_TO_PTHREAD
+    // User requested the PROXY_TO_PTHREAD option, so call a stub main which pthread_create()s a new thread
+    // that will call the user's real main() for the application.
+    var ret = Module['_proxy_main'](argc, argv, 0);
+#else
     var ret = Module['_main'](argc, argv, 0);
+#endif
 
 #if BENCHMARK
     Module.realPrint('main() took ' + (Date.now() - start) + ' milliseconds');
@@ -316,6 +323,10 @@ Module['exit'] = Module.exit = exit;
 var abortDecorators = [];
 
 function abort(what) {
+  if (Module['onAbort']) {
+    Module['onAbort'](what);
+  }
+
 #if USE_PTHREADS
   if (ENVIRONMENT_IS_PTHREAD) console.error('Pthread aborting at ' + new Error().stack);
 #endif

@@ -1913,7 +1913,8 @@ LibraryManager.library = {
     var winterOffset = start.getTimezoneOffset();
     var dstOffset = Math.min(winterOffset, summerOffset); // DST is in December in South
     if (dst < 0) {
-      {{{ makeSetValue('tmPtr', C_STRUCTS.tm.tm_isdst, 'Number(dstOffset == guessedOffset)', 'i32') }}};
+      // Attention: some regions don't have DST at all.
+      {{{ makeSetValue('tmPtr', C_STRUCTS.tm.tm_isdst, 'Number(summerOffset != winterOffset && dstOffset == guessedOffset)', 'i32') }}};
     } else if ((dst > 0) != (dstOffset == guessedOffset)) {
       var nonDstOffset = Math.max(winterOffset, summerOffset);
       var trueOffset = dst > 0 ? dstOffset : nonDstOffset;
@@ -1995,10 +1996,10 @@ LibraryManager.library = {
     {{{ makeSetValue('tmPtr', C_STRUCTS.tm.tm_yday, 'yday', 'i32') }}};
     {{{ makeSetValue('tmPtr', C_STRUCTS.tm.tm_gmtoff, '-(date.getTimezoneOffset() * 60)', 'i32') }}};
 
-    // DST is in December in South
+    // Attention: DST is in December in South, and some regions don't have DST at all.
     var summerOffset = new Date(2000, 6, 1).getTimezoneOffset();
     var winterOffset = start.getTimezoneOffset();
-    var dst = (date.getTimezoneOffset() == Math.min(winterOffset, summerOffset))|0;
+    var dst = (summerOffset != winterOffset && date.getTimezoneOffset() == Math.min(winterOffset, summerOffset))|0;
     {{{ makeSetValue('tmPtr', C_STRUCTS.tm.tm_isdst, 'dst', 'i32') }}};
 
     var zonePtr = {{{ makeGetValue(makeGlobalUse('_tzname'), 'dst ? Runtime.QUANTUM_SIZE : 0', 'i32') }}};
@@ -4298,12 +4299,6 @@ LibraryManager.library = {
 
   // USE_FULL_LIBRARY hacks
   realloc: function() { throw 'bad' },
-
-  // internal musl requirements that we do, for now
-  _pthread_cleanup_push: function(){},
-  _pthread_cleanup_pop: function(){},
-  __pthread_self: function() { abort() },
-  __pthread_setcancelstate: function() { return 0 },
 
   // libunwind
 
