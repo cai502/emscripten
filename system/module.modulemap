@@ -44,6 +44,7 @@ module include_libc_byteswap_h {
 }
 module include_libc_complex_h {
     header "include/libc/complex.h"
+    textual header "include/libcxx/complex.h"
     export *
 }
 module include_libc_cpio_h {
@@ -56,6 +57,8 @@ module include_libc_crypt_h {
 }
 module include_libc_ctype_h {
     header "include/libc/ctype.h"
+    textual header "include/compat/ctype.h"
+    textual header "include/libcxx/ctype.h"
     export *
 }
 module include_libc_dirent_h {
@@ -80,6 +83,7 @@ module include_libc_err_h {
 }
 module include_libc_errno_h {
     header "include/libc/errno.h"
+    textual header "include/libcxx/errno.h"
     export *
 }
 module include_libc_fcntl_h {
@@ -96,6 +100,7 @@ module include_libc_fenv_h {
 }
 module include_libc_float_h {
     header "include/libc/float.h"
+    textual header "include/libcxx/float.h"
     export *
 }
 module include_libc_fmtmsg_h {
@@ -132,6 +137,7 @@ module include_libc_ifaddrs_h {
 }
 module include_libc_inttypes_h {
     header "include/libc/inttypes.h"
+    textual header "include/libcxx/inttypes.h"
     export *
 }
 module include_libc_iso646_h {
@@ -156,6 +162,7 @@ module include_libc_libintl_h {
 }
 module include_libc_limits_h {
     header "include/libc/limits.h"
+    textual header "include/libcxx/limits.h"
     export *
 }
 module include_libc_link_h {
@@ -164,14 +171,18 @@ module include_libc_link_h {
 }
 module include_libc_locale_h {
     header "include/libc/locale.h"
+    textual header "include/libcxx/locale.h"
     export *
 }
 module include_libc_malloc_h {
     header "include/libc/malloc.h"
+    textual header "include/compat/malloc.h"
     export *
 }
 module include_libc_math_h {
     header "include/libc/math.h"
+    textual header "include/compat/math.h"
+    textual header "include/libcxx/math.h"
     export *
 }
 module include_libc_memory_h {
@@ -208,6 +219,7 @@ module include_libc_net_route_h {
 }
 module include_libc_netdb_h {
     header "include/libc/netdb.h"
+    textual header "include/compat/netdb.h"
     export *
 }
 module include_libc_netinet_ether_h {
@@ -320,6 +332,7 @@ module include_libc_semaphore_h {
 }
 module include_libc_setjmp_h {
     header "include/libc/setjmp.h"
+    textual header "include/libcxx/setjmp.h"
     export *
 }
 module include_libc_shadow_h {
@@ -340,10 +353,12 @@ module include_libc_stdalign_h {
 }
 module include_libc_stdarg_h {
     header "include/libc/stdarg.h"
+    header "include/compat/stdarg.h"
     export *
 }
 module include_libc_stdbool_h {
     header "include/libc/stdbool.h"
+    textual header "include/libcxx/stdbool.h"
     export *
 }
 module include_libc_stdc_predef_h {
@@ -352,14 +367,17 @@ module include_libc_stdc_predef_h {
 }
 module include_libc_stddef_h {
     header "include/libc/stddef.h"
+    textual header "include/libcxx/stddef.h"
     export *
 }
 module include_libc_stdint_h {
     header "include/libc/stdint.h"
+    textual header "include/libcxx/stdint.h"
     export *
 }
 module include_libc_stdio_h {
     header "include/libc/stdio.h"
+    textual header "include/libcxx/stdio.h"
     export *
 }
 module include_libc_stdio_ext_h {
@@ -369,7 +387,7 @@ module include_libc_stdio_ext_h {
 module include_libc_stdlib_h {
     header "include/libc/stdlib.h"
     textual header "include/compat/stdlib.h"
-    header "include/libcxx/stdlib.h"
+    textual header "include/libcxx/stdlib.h"
     export *
 }
 module include_libc_stdnoreturn_h {
@@ -378,6 +396,8 @@ module include_libc_stdnoreturn_h {
 }
 module include_libc_string_h {
     header "include/libc/string.h"
+    textual header "include/compat/string.h"
+    textual header "include/libcxx/string.h"
     export *
 }
 module include_libc_strings_h {
@@ -670,6 +690,7 @@ module include_libc_termios_h {
 }
 module include_libc_tgmath_h {
     header "include/libc/tgmath.h"
+    textual header "include/libcxx/tgmath.h"
     export *
 }
 module include_libc_threads_h {
@@ -678,6 +699,7 @@ module include_libc_threads_h {
 }
 module include_libc_time_h {
     header "include/libc/time.h"
+    textual header "include/compat/time.h"
     export *
 }
 module include_libc_uchar_h {
@@ -718,38 +740,18 @@ module include_libc_wait_h {
 }
 module include_libc_wchar_h {
     header "include/libc/wchar.h"
+    textual header "include/compat/wchar.h"
+    textual header "include/libcxx/wchar.h"
     export *
 }
 module include_libc_wctype_h {
     header "include/libc/wctype.h"
+    textual header "include/compat/wctype.h"
+    textual header "include/libcxx/wctype.h"
     export *
 }
 module include_libc_wordexp_h {
     header "include/libc/wordexp.h"
-    export *
-}
-module include_compat_ctype_h {
-    header "include/compat/ctype.h"
-    export *
-}
-module include_compat_malloc_h {
-    header "include/compat/malloc.h"
-    export *
-}
-module include_compat_math_h {
-    header "include/compat/math.h"
-    export *
-}
-module include_compat_netdb_h {
-    header "include/compat/netdb.h"
-    export *
-}
-module include_compat_stdarg_h {
-    header "include/compat/stdarg.h"
-    export *
-}
-module include_compat_string_h {
-    header "include/compat/string.h"
     export *
 }
 module include_compat_sys_socketvar_h {
@@ -770,18 +772,6 @@ module include_compat_sys_timeb_h {
 }
 module include_compat_sys_unistd_h {
     header "include/compat/sys/unistd.h"
-    export *
-}
-module include_compat_time_h {
-    header "include/compat/time.h"
-    export *
-}
-module include_compat_wchar_h {
-    header "include/compat/wchar.h"
-    export *
-}
-module include_compat_wctype_h {
-    header "include/compat/wctype.h"
     export *
 }
 module include_compat_xlocale_h {

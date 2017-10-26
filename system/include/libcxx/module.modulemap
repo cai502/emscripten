@@ -12,6 +12,7 @@ module std [system] {
   // export that issues a warning if a name from the submodule is used, and
   // use that to provide a 'strict mode' for libc++.
 
+/*
   // Deprecated C-compatibility headers. These can all be included from within
   // an 'extern "C"' context.
   module depr [extern_c] {
@@ -87,6 +88,7 @@ module std [system] {
       export *
     }
   }
+*/
 
   // <complex.h> and <tgmath.h> are not C headers in any real sense, do not
   // allow their use in extern "C" contexts.
