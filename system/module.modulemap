@@ -387,7 +387,7 @@ module include_libc_stdio_ext_h {
 module include_libc_stdlib_h {
     header "include/libc/stdlib.h"
     textual header "include/compat/stdlib.h"
-    textual header "include/libcxx/stdlib.h"
+    header "include/libcxx/stdlib.h"
     export *
 }
 module include_libc_stdnoreturn_h {
