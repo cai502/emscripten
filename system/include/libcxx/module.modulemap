@@ -488,6 +488,7 @@ module std [system] {
   module __tuple { header "__tuple" export * }
   module __undef_min_max { header "__undef_min_max" export * }
 
+/*
   module experimental {
     requires cplusplus11
 
@@ -605,4 +606,5 @@ module std [system] {
       export *
     }
   } // end experimental
+*/
 }
