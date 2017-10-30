@@ -429,10 +429,13 @@ var Runtime = {
       }
     });
 
+
+    var isSafari = navigator.userAgent.toLowerCase().indexOf('safari') != -1;
+
     // copy currently exported symbols so the new module can import them
     for (var x in Module) {
       if (!(x in env)) {
-        if(typeof Module[x] === 'function' && Module['asm'][x]) {
+        if(typeof Module[x] === 'function' && Module['asm'][x] && isSafari) {
           env[x] = Module['asm'][x];
         } else {
           env[x] = Module[x];
